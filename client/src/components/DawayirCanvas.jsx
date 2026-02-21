@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef } f
 
 const DawayirCanvas = forwardRef((props, ref) => {
     const canvasRef = useRef(null);
-    const [nodes, setNodes] = useState([
+    const nodesRef = useRef([
         { id: 1, x: window.innerWidth / 4, y: window.innerHeight / 2, radius: 60, color: '#FF5733', label: 'الوعي', pulse: 0 },
         { id: 2, x: window.innerWidth / 2, y: window.innerHeight / 2, radius: 70, color: '#33FF57', label: 'العلم', pulse: 0 },
         { id: 3, x: (3 * window.innerWidth) / 4, y: window.innerHeight / 2, radius: 80, color: '#3357FF', label: 'الحقيقة', pulse: 0 },
@@ -12,14 +12,14 @@ const DawayirCanvas = forwardRef((props, ref) => {
     // Expose methods to parent via ref
     useImperativeHandle(ref, () => ({
         updateNode: (id, updates) => {
-            setNodes(prev => prev.map(node =>
+            nodesRef.current = nodesRef.current.map(node =>
                 node.id === id ? { ...node, ...updates } : node
-            ));
+            );
         },
         pulseNode: (id) => {
-            setNodes(prev => prev.map(node =>
+            nodesRef.current = nodesRef.current.map(node =>
                 node.id === id ? { ...node, pulse: 1.0 } : node
-            ));
+            );
         }
     }));
 
@@ -30,27 +30,28 @@ const DawayirCanvas = forwardRef((props, ref) => {
 
         const render = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const currentNodes = nodesRef.current;
 
             // Update pulse animations
-            setNodes(prev => prev.map(node => ({
-                ...node,
-                pulse: node.pulse > 0 ? node.pulse - 0.02 : 0
-            })));
+            currentNodes.forEach(node => {
+                if (node.pulse > 0) node.pulse -= 0.02;
+                if (node.pulse < 0) node.pulse = 0;
+            });
 
             // Draw connections
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            for (let i = 0; i < nodes.length; i++) {
-                for (let j = i + 1; j < nodes.length; j++) {
-                    ctx.moveTo(nodes[i].x, nodes[i].y);
-                    ctx.lineTo(nodes[j].x, nodes[j].y);
+            for (let i = 0; i < currentNodes.length; i++) {
+                for (let j = i + 1; j < currentNodes.length; j++) {
+                    ctx.moveTo(currentNodes[i].x, currentNodes[i].y);
+                    ctx.lineTo(currentNodes[j].x, currentNodes[j].y);
                 }
             }
             ctx.stroke();
 
             // Draw nodes
-            nodes.forEach(node => {
+            currentNodes.forEach(node => {
                 const currentRadius = node.radius + (node.pulse * 20);
 
                 // Pulse ring
@@ -85,14 +86,14 @@ const DawayirCanvas = forwardRef((props, ref) => {
 
         render();
         return () => window.cancelAnimationFrame(animationFrameId);
-    }, [nodes]);
+    }, []);
 
     const handleMouseDown = (e) => {
         const rect = canvasRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        const clickedNode = nodes.find(node => {
+        const clickedNode = nodesRef.current.find(node => {
             const distance = Math.sqrt((x - node.x) ** 2 + (y - node.y) ** 2);
             return distance < node.radius;
         });
@@ -109,10 +110,8 @@ const DawayirCanvas = forwardRef((props, ref) => {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        setNodes(prevNodes =>
-            prevNodes.map(node =>
-                node.id === draggingNode ? { ...node, x, y } : node
-            )
+        nodesRef.current = nodesRef.current.map(node =>
+            node.id === draggingNode ? { ...node, x, y } : node
         );
     };
 
