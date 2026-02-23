@@ -406,7 +406,7 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
 // Catch-all to serve index.html
-app.get('*', (req, res) => {
+app.get('/{*any}', (req, res) => {
     res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
