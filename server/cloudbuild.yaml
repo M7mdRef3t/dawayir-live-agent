@@ -22,7 +22,13 @@ steps:
       - 'managed'
       - '--allow-unauthenticated'
       - '--update-env-vars'
-      - 'GOOGLE_PROJECT_ID=$PROJECT_ID'
+      - 'GOOGLE_PROJECT_ID=$PROJECT_ID,GEMINI_API_VERSION=v1alpha,GEMINI_LIVE_MODEL=models/gemini-2.5-flash-native-audio-latest'
+      - '--set-secrets'
+      - 'GEMINI_API_KEY=GEMINI_API_KEY:latest'
+      - '--port'
+      - '8080'
+      - '--timeout'
+      - '300'
 
 images:
   - 'gcr.io/$PROJECT_ID/dawayir-live-agent'
