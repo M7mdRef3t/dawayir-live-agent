@@ -1,35 +1,54 @@
-# Dawayir Live Demo Checklist
+# Dawayir Live Demo Pre-Flight Checklist
 
-## 1) Backend
-- Verify `server/.env` has:
-  - `GEMINI_API_KEY=...`
-  - Optional: `GEMINI_LIVE_MODEL=models/gemini-2.5-flash-native-audio-latest`
-- Start backend:
-  - `cd server`
-  - `npm start`
-- Validate health:
-  - `http://localhost:8080/health` returns `OK`
+Use this checklist before every recording, judging session, or live demo.
 
-## 2) Frontend
-- Optional cloud config:
-  - Create `client/.env.local`
-  - Add `VITE_BACKEND_WS_URL=wss://<your-backend-host>`
-- Start frontend:
-  - `cd client`
-  - `npm run dev`
+## A) Environment Lock
+- [ ] Browser profile is clean (no noisy extensions, mic blockers, or aggressive ad blockers)
+- [ ] Stable internet connection verified
+- [ ] Correct branch and latest code pulled
+- [ ] `client/.env.local` points to intended backend
 
-## 3) Pre-demo verification
-- Open app in browser.
-- Click `Start Gemini Live Journey`.
-- Allow microphone permission.
-- Confirm status changes to `Connected to Gemini Live`.
-- Speak a command like:
-  - "كبر دايرة الحقيقة وخليها صفراء"
-- Confirm both:
-  - Gemini speaks back with audio.
-  - At least one circle updates/pulses from tool calls.
+## B) Backend Health
+- [ ] `server/.env` contains `GEMINI_API_KEY`
+- [ ] Optional model confirmed: `GEMINI_LIVE_MODEL`
+- [ ] Backend started with `npm start`
+- [ ] `GET /health` returns `OK`
+- [ ] No fatal server logs
 
-## 4) Safety fallback if connection drops
-- Use `Disconnect`.
-- Reconnect from button.
-- Re-grant microphone permission if browser revoked it.
+## C) Frontend Health
+- [ ] Frontend started with `npm run dev`
+- [ ] UI loads without overlay errors
+- [ ] Debug line is visible (setup/mic/retries/tools/last)
+
+## D) Core Functional Checks
+- [ ] Click `Start Gemini Live Journey`
+- [ ] Microphone permission granted
+- [ ] Status reaches `Connected to Gemini Live`
+- [ ] Agent returns audio output
+- [ ] Tool call updates at least one circle
+
+## E) Reliability Checks
+- [ ] Interruption test passed (user interrupts and agent pivots)
+- [ ] Reconnect test passed (bounded retries, then clear message)
+- [ ] Manual disconnect and reconnect both work
+- [ ] Mic stop/start cycles do not break audio
+
+## F) Cloud Proof Capture
+- [ ] Cloud Run service URL captured
+- [ ] `/health` response screenshot captured
+- [ ] Cloud console service screenshot captured
+- [ ] Optional WebSocket setup proof captured
+
+## G) Video Recording Readiness
+- [ ] Final script loaded (`PITCH_SCRIPT.md`)
+- [ ] Shot list loaded (`VIDEO_SHOTLIST.md`)
+- [ ] Desktop notifications disabled
+- [ ] Sensitive data hidden (keys, private tabs)
+- [ ] Backup take planned
+
+## H) Submission Pack Completeness
+- [ ] `README.md` up to date
+- [ ] `ARCHITECTURE.md` up to date
+- [ ] `DEVPOST_SUBMISSION.md` filled and reviewed
+- [ ] `CLOUD_PROOF.md` updated with final evidence
+- [ ] Bonus evidence prepared (`BONUS_EXECUTION.md`)

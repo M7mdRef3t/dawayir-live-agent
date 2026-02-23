@@ -1,6 +1,10 @@
 :root {
-  --primary: #33ff57;
-  --bg: #0a0a0a;
+  --primary: #00f5ff;
+  --secondary: #00ff41;
+  --accent: #ff00e5;
+  --bg: #050505;
+  --overlay-bg: rgba(10, 10, 20, 0.7);
+  --border: rgba(255, 255, 255, 0.1);
 }
 
 body {
@@ -8,7 +12,7 @@ body {
   padding: 0;
   overflow: hidden;
   background-color: var(--bg);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   color: white;
 }
 
@@ -20,105 +24,175 @@ body {
 
 .overlay {
   position: absolute;
-  top: 20px;
-  left: 20px;
+  top: 30px;
+  left: 30px;
+  width: 380px;
   z-index: 10;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 20px;
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  pointer-events: auto;
+  background: var(--overlay-bg);
+  padding: 30px;
+  border-radius: 24px;
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
 }
 
-h1 {
-  margin: 0 0 10px 0;
-  font-size: 24px;
-  background: linear-gradient(135deg, #fff 0%, #aaa 100%);
+header h1 {
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: linear-gradient(to right, #fff, #888);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-p {
-  margin: 0 0 20px 0;
-  font-size: 14px;
-  color: #ccc;
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
 }
 
-.controls {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.status-badge.connected {
+  color: var(--secondary);
 }
 
-.backend {
-  font-size: 12px;
-  color: #9c9c9c;
-  max-width: 420px;
-  overflow-wrap: anywhere;
-}
-
-.hint {
-  margin-top: 4px;
-}
-
-.error-message {
-  color: #ff7a7a;
-  margin: 0;
-}
-
-span.connected {
-  color: var(--primary);
-  text-shadow: 0 0 10px var(--primary);
-}
-
-span.disconnected {
-  color: #ff4444;
-}
-
-span.connecting {
+.status-badge.connecting {
   color: #ffcc00;
 }
 
-span.error {
-  color: #ff7a7a;
+.status-badge.error {
+  color: #ff4d4d;
 }
 
-button {
-  background: var(--primary);
+.status-badge.disconnected {
+  color: #888;
+}
+
+.status-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.main-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, var(--primary), #00a2ff);
   color: #000;
   border: none;
-  padding: 10px 20px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 8px;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 700;
+  border-radius: 16px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: 'Outfit', sans-serif;
+}
+
+.primary-btn:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 245, 255, 0.4);
+}
+
+.activity-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.visualizer {
   width: 100%;
+  height: 60px;
+  border-radius: 8px;
 }
 
-button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(51, 255, 87, 0.4);
+.secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-button:active:not(:disabled) {
-  transform: translateY(0);
+.secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.hint {
+  font-size: 14px;
+  color: #999;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.error-message {
+  color: #ff4d4d;
+  font-size: 13px;
+  background: rgba(255, 77, 77, 0.1);
+  padding: 10px;
+  border-radius: 10px;
+  margin: 0;
+}
+
+.footer-info {
+  font-size: 11px;
+  color: #555;
+  border-top: 1px solid var(--border);
+  padding-top: 15px;
+  line-height: 1.6;
+}
+
+.footer-info span {
+  display: block;
 }
 
 button:disabled {
-  background: #333;
-  color: #666;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-button.secondary {
-  background: transparent;
-  color: #ddd;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
-button.secondary:hover:not(:disabled) {
-  box-shadow: 0 4px 18px rgba(255, 255, 255, 0.12);
+.status-badge.connected .dot {
+  animation: pulse 2s infinite;
 }

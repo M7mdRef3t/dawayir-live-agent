@@ -5,6 +5,8 @@ import './App.css';
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
 const MIC_WORKLET_NAME = 'dawayir-mic-processor';
+const MAX_RECONNECT_ATTEMPTS = 2;
+const RECONNECT_DELAY_MS = 1200;
 
 const arrayBufferToBase64 = (arrayBuffer) => {
   const bytes = new Uint8Array(arrayBuffer);
@@ -58,15 +60,108 @@ const tryParseJson = (text) => {
   }
 };
 
+const getInlineData = (part) => part?.inlineData ?? part?.inline_data;
+const getServerContent = (message) => message?.serverContent ?? message?.server_content;
+const getModelTurn = (message) =>
+  getServerContent(message)?.modelTurn ?? getServerContent(message)?.model_turn;
+const getParts = (message) => getModelTurn(message)?.parts ?? [];
+const getToolCall = (message) => message?.toolCall ?? message?.tool_call;
+const isSetupCompleteMessage = (message) =>
+  Boolean(message?.setupComplete || message?.setup_complete);
+const getServerErrorMessage = (message) =>
+  message?.serverError?.message ?? message?.server_error?.message;
+const isInterruptedMessage = (message) =>
+  Boolean(getServerContent(message)?.interrupted ?? getServerContent(message)?.is_interrupted);
+const isAudioMimeType = (mimeType = '') => mimeType.startsWith('audio/pcm');
+const normalizeBlob = (blob) => {
+  const data = blob?.data;
+  const mimeType = blob?.mimeType ?? blob?.mime_type;
+  if (typeof data !== 'string') return null;
+  return {
+    data,
+    mimeType: typeof mimeType === 'string' ? mimeType : 'audio/pcm',
+  };
+};
+const getTurnDataAudioBlobs = (message) => {
+  const turnData = message?.turn?.data;
+  if (!turnData) return [];
+
+  const candidates = Array.isArray(turnData) ? turnData : [turnData];
+  return candidates
+    .map((candidate) => (typeof candidate === 'string'
+      ? { data: candidate, mimeType: 'audio/pcm' }
+      : normalizeBlob(candidate)))
+    .filter((blob) => blob && isAudioMimeType(blob.mimeType));
+};
+
+const Visualizer = ({ stream, isConnected }) => {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (!stream || !isConnected) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    let animationFrameId;
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      analyser.getByteFrequencyData(dataArray);
+
+      const barWidth = (canvas.width / bufferLength) * 2.5;
+      let barHeight;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        barHeight = (dataArray[i] / 255) * canvas.height;
+        ctx.fillStyle = `rgba(0, 245, 255, ${dataArray[i] / 255})`;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+        x += barWidth + 1;
+      }
+
+      animationFrameId = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      analyser.disconnect();
+      source.disconnect();
+      audioContext.close();
+    };
+  }, [stream, isConnected]);
+
+  return <canvas ref={canvasRef} className="visualizer" width="300" height="60" />;
+};
+
 function App() {
   const [status, setStatus] = useState('Disconnected');
   const [errorMessage, setErrorMessage] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [isMicActive, setIsMicActive] = useState(false);
+  const [toolCallsCount, setToolCallsCount] = useState(0);
+  const [lastEvent, setLastEvent] = useState('none');
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
 
   const wsRef = useRef(null);
   const canvasRef = useRef(null);
   const setupCompleteRef = useRef(false);
+  const manualCloseRef = useRef(false);
+  const reconnectTimeoutRef = useRef(null);
+  const reconnectAttemptRef = useRef(0);
 
   const micStreamRef = useRef(null);
   const micContextRef = useRef(null);
@@ -248,6 +343,8 @@ function App() {
       }
       micContextRef.current = null;
     }
+
+    setIsMicActive(false);
   }, []);
 
   const sendRealtimeAudioChunk = useCallback((arrayBuffer, sampleRate) => {
@@ -340,10 +437,15 @@ function App() {
     micContextRef.current = micContext;
     micSourceRef.current = source;
     micSilentGainRef.current = silentGain;
+    setIsMicActive(true);
   }, [sendRealtimeAudioChunk, stopMicrophone]);
 
   const handleToolCall = useCallback((toolCall) => {
-    const functionCalls = Array.isArray(toolCall?.functionCalls) ? toolCall.functionCalls : [];
+    const functionCalls = Array.isArray(toolCall?.functionCalls)
+      ? toolCall.functionCalls
+      : Array.isArray(toolCall?.function_calls)
+        ? toolCall.function_calls
+        : [];
     if (functionCalls.length === 0) return;
 
     const responses = [];
@@ -375,6 +477,14 @@ function App() {
           }
 
           canvasRef.current?.pulseNode(id);
+        } else if (call.name === 'save_mental_map') {
+          const nodes = canvasRef.current?.getNodes() || [];
+          responses.push({
+            id: call.id,
+            name: call.name,
+            response: { result: { ok: true, nodes } },
+          });
+          continue; // Skip the default push at the end
         } else {
           throw new Error(`Unsupported tool: ${call.name}`);
         }
@@ -403,9 +513,18 @@ function App() {
         })
       );
     }
+    setToolCallsCount((prev) => prev + functionCalls.length);
+    setLastEvent(`tool_call:${functionCalls.length}`);
   }, []);
 
   const disconnect = useCallback(async () => {
+    manualCloseRef.current = true;
+    if (reconnectTimeoutRef.current) {
+      window.clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    reconnectAttemptRef.current = 0;
+    setReconnectAttempt(0);
     const socket = wsRef.current;
     wsRef.current = null;
 
@@ -428,14 +547,17 @@ function App() {
     }
 
     setStatus('Disconnected');
+    setLastEvent('manual_disconnect');
   }, [closeSpeakerContext, stopMicrophone, stopPlayback]);
 
   const connect = useCallback(async () => {
     if (isStarting || isConnected) return;
+    manualCloseRef.current = false;
 
     setErrorMessage('');
     setIsStarting(true);
     setStatus('Connecting...');
+    setLastEvent('connecting');
 
     try {
       await ensureSpeakerContext();
@@ -443,6 +565,7 @@ function App() {
       setStatus('Error');
       setErrorMessage(error.message);
       setIsStarting(false);
+      setLastEvent('speaker_context_error');
       return;
     }
 
@@ -451,9 +574,12 @@ function App() {
     wsRef.current = socket;
 
     socket.onopen = () => {
+      reconnectAttemptRef.current = 0;
+      setReconnectAttempt(0);
       setIsConnected(true);
       setIsStarting(false);
       setStatus('Connected (waiting setupComplete)');
+      setLastEvent('ws_open');
     };
 
     socket.onmessage = async (event) => {
@@ -484,9 +610,18 @@ function App() {
 
       if (!message) return;
 
-      if (message.setupComplete) {
+      const serverError = getServerErrorMessage(message);
+      if (serverError) {
+        setStatus('Error');
+        setErrorMessage(serverError);
+        setLastEvent('server_error');
+        return;
+      }
+
+      if (isSetupCompleteMessage(message)) {
         setupCompleteRef.current = true;
         setStatus('Connected to Gemini Live');
+        setLastEvent('setup_complete');
 
         try {
           await startMicrophone();
@@ -500,7 +635,9 @@ function App() {
                       role: 'user',
                       parts: [
                         {
-                          text: 'ابدأ بتحية قصيرة بالمصري للمستخدم، وبعدها نبهه يطلب تعديل الدواير بصوته.',
+                          text: `أهلًا بك! أنا "دوائر"، رفيقك في رحلة استكشاف مساحتك الذهنية. 
+                          ابدأ بالترحيب بالمستخدم بلهجة مصرية ودودة جداً وبأسلوب هادئ،
+                          واطلب منه أن يعبر عن مشاعره أو أفكاره الحالية بصوته لكي نراها سوياً في الدوائر التي أمامه.`,
                         },
                       ],
                     },
@@ -513,34 +650,53 @@ function App() {
         } catch (error) {
           setStatus('Error');
           setErrorMessage(error.message);
+          setLastEvent('mic_start_error');
         }
         return;
       }
 
-      if (message.toolCall) {
-        handleToolCall(message.toolCall);
+      const toolCall = getToolCall(message);
+      if (toolCall) {
+        handleToolCall(toolCall);
       }
 
-      if (message.serverContent?.interrupted) {
+      if (isInterruptedMessage(message)) {
         stopPlayback();
+        setLastEvent('server_interrupted');
       }
 
-      const parts = message.serverContent?.modelTurn?.parts;
-      if (!Array.isArray(parts)) return;
-
-      const audioParts = parts.filter(
-        (part) => part?.inlineData?.mimeType?.startsWith('audio/pcm') && part.inlineData?.data
-      );
+      const parts = getParts(message);
+      const audioParts = Array.isArray(parts)
+        ? parts.filter((part) =>
+          isAudioMimeType(getInlineData(part)?.mimeType)
+          || isAudioMimeType(getInlineData(part)?.mime_type)
+        )
+        : [];
 
       for (const part of audioParts) {
-        await playPcmChunk(base64ToArrayBuffer(part.inlineData.data));
+        const inline = getInlineData(part);
+        if (inline?.data) {
+          await playPcmChunk(base64ToArrayBuffer(inline.data));
+          setLastEvent('audio_chunk');
+        }
+      }
+
+      const turnAudioBlobs = getTurnDataAudioBlobs(message);
+      if (audioParts.length === 0 && turnAudioBlobs.length === 0) return;
+
+      for (const blob of turnAudioBlobs) {
+        if (blob?.data) {
+          await playPcmChunk(base64ToArrayBuffer(blob.data));
+          setLastEvent('audio_chunk_turn_data');
+        }
       }
     };
 
     socket.onerror = () => {
       setStatus('Error');
-      setErrorMessage('WebSocket error. Verify backend is running and URL is correct.');
+      setErrorMessage('WebSocket error. Retrying if possible.');
       setIsStarting(false);
+      setLastEvent('ws_error');
     };
 
     socket.onclose = async () => {
@@ -553,7 +709,27 @@ function App() {
       await stopMicrophone();
       stopPlayback();
 
+      if (manualCloseRef.current) {
+        setStatus((prev) => (prev === 'Error' ? prev : 'Disconnected'));
+        setLastEvent('ws_closed_manual');
+        return;
+      }
+
+      const nextAttempt = reconnectAttemptRef.current + 1;
+      if (nextAttempt <= MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttemptRef.current = nextAttempt;
+        setReconnectAttempt(nextAttempt);
+        setStatus(`Reconnecting (${nextAttempt}/${MAX_RECONNECT_ATTEMPTS})...`);
+        setLastEvent('ws_closed_retrying');
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          connect();
+        }, RECONNECT_DELAY_MS);
+        return;
+      }
+
       setStatus((prev) => (prev === 'Error' ? prev : 'Disconnected'));
+      setErrorMessage('Connection closed after retry attempts. Please reconnect manually.');
+      setLastEvent('ws_closed_giveup');
     };
   }, [
     backendUrl,
@@ -576,31 +752,47 @@ function App() {
   return (
     <div className="App">
       <div className="overlay">
-        <h1>Dawayir Live Agent</h1>
-        <p>
-          Status: <span className={statusClass}>{status}</span>
-        </p>
-        <p className="backend">Backend: {backendUrl}</p>
-        <div className="controls">
-          <button onClick={connect} disabled={isConnected || isStarting}>
+        <header>
+          <h1>Dawayir Live Agent</h1>
+          <div className={`status-badge ${statusClass}`}>
+            <span className="dot"></span> {isConnected ? 'Live Session Active' : status}
+          </div>
+        </header>
+
+        <section className="main-controls">
+          <button className="primary-btn" onClick={connect} disabled={isConnected || isStarting}>
             {isConnected
-              ? 'Live Interaction Active'
+              ? '✨ Connection Secured'
               : isStarting
-                ? 'Connecting...'
-                : 'Start Gemini Live Journey'}
+                ? 'Establishing Link...'
+                : 'Start Your Journey'}
           </button>
+
           {isConnected && (
-            <button className="secondary" onClick={disconnect}>
-              Disconnect
-            </button>
+            <div className="activity-container">
+              <Visualizer stream={micStreamRef.current} isConnected={isConnected} />
+              <button className="secondary disconnect-btn" onClick={disconnect}>
+                Finish Session
+              </button>
+            </div>
           )}
-          {isConnected && (
-            <p className="hint">
-              Speak naturally: Gemini will listen, respond with audio, and update the circles live.
-            </p>
-          )}
-          {errorMessage && <p className="error-message">{errorMessage}</p>}
-        </div>
+        </section>
+
+        {isConnected && !errorMessage && (
+          <p className="hint">
+            Speak naturally and explore your mental space.
+          </p>
+        )}
+
+        {errorMessage && <p className="error-message">⚠️ {errorMessage}</p>}
+
+        <footer className="footer-info">
+          <span>Backend: {backendUrl}</span>
+          <br />
+          <span>
+            Mic: {isMicActive ? 'on' : 'off'} | Retries: {reconnectAttempt}/{MAX_RECONNECT_ATTEMPTS} | Tools: {toolCallsCount} | Event: {lastEvent}
+          </span>
+        </footer>
       </div>
       <DawayirCanvas ref={canvasRef} />
     </div>

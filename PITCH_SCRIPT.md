@@ -1,38 +1,68 @@
-# Dawayir Live Agent: Video Demo Script (4 Minutes)
+# Dawayir Live Agent - Judge Demo Script (3:30)
 
-**Goal**: Demonstrate the "Breathing Engineering" and "Magical Interaction" of the Gemini Live Agent.
+Goal: show a reliable, real-time Live Agent that listens, speaks, handles interruption, and updates a visual world through tool calls.
 
----
+## 0:00-0:25 Hook: The Problem
+Voiceover:
+"Most AI assistants respond in text, but your mental state is not text-only. It is dynamic and emotional. Dawayir turns that into a live, visible space."
 
-### Phase 1: The Pitch (0:00 - 1:00)
-- **Visual**: Close-up of the narrator (Muhammad) or a beautiful splash screen.
-- **Narration**:
-  - "Hello! I'm Muhammad, a designer and life coach. We are often overwhelmed by life's complexities—Work, Wellbeing, Truth—represented here as 'Dawayir' or Circles."
-  - "Traditional AI is a chat box. But what if AI could *see* your mental model and physically manipulate it as you speak?"
-  - "Introducing **Dawayir Live Agent**, built with Gemini 2.0. It's not just a bot; it's a breathing system."
+Visual:
+- App home with circles visible
+- Quick zoom into canvas labels
 
-### Phase 2: Live Interaction & Autonomous Move (1:00 - 2:30)
-- **Visual**: Screen recording of the Dawayir Canvas.
-- **Narration/Action**:
-  - *Click 'Start Journey'*
-  - "Hey Gemini, I'm feeling a bit overwhelmed today. It feels like my 'Work' (Al-Ilm) is taking up too much space in my head."
-  - **AI Action**: Gemini responds verbally *and* calls `update_node` to enlarge the 'Al-Ilm' circle and change its color to a stressful red.
-  - "Notice how Gemini didn't just tell me it understood—it *changed the world* I'm looking at."
+## 0:25-0:55 What This Agent Does
+Voiceover:
+"Dawayir is a Gemini Live Agent. You speak naturally, it responds with live audio, and it can call tools to modify your circle map in real time."
 
-### Phase 3: The Interruption Stress Test (2:30 - 3:30)
-- **Visual**: Still on the Canvas, showing the "Pulse" animations.
-- **Narration/Action**:
-  - Gemini starts explaining a philosophical concept about 'Truth'.
-  - **User Interruption**: "Wait, wait! Actually, let's talk about 'Awareness' (Al-Wa'y) instead."
-  - **AI Action**: Gemini stops mid-sentence, acknowledges the interruption immediately, and highlights (Pulse) the Al-Wa'y circle.
-  - "This is the power of Gemini 2.0's VAD and low latency. The agent is truly alive and responsive to my immediate needs."
+Visual:
+- Show status badge and backend URL
+- Point to debug line briefly
 
-### Phase 4: Final Proof & Cloud Proof (3:30 - 4:00)
-- **Visual**: Quick cut to Google Cloud Console (Cloud Run) showing the 'dawayir-live-backend' service.
-- **Narration**:
-  - "Everything you see is powered by a Node.js Maestro running on Google Cloud Run, proxying real-time streams to Gemini's Multimodal Live API."
-  - "Dawayir is more than a demo; it's a scalable architecture for the next generation of AI companions."
-  - "Let's kill ignorance with science. Thank you."
+## 0:55-1:45 Live Interaction + Tool Call
+Action (user says):
+"Make the Truth circle larger and turn it yellow."
 
----
-*Pro Tip: Use a high-quality microphone and ensure your internet connection is stable for the lowest latency during the demo.*
+Expected:
+- Spoken response from agent
+- Circle mutation via `update_node`
+
+Voiceover:
+"This is not a static response. The agent changes the environment using function calls."
+
+## 1:45-2:25 Interruption Test
+Action:
+- Let agent speak
+- Interrupt: "Stop, focus on Awareness instead."
+
+Expected:
+- Agent pivots quickly
+- Highlight or update event on Awareness circle
+
+Voiceover:
+"Low-latency interruption handling is a core requirement for Live Agents, and this flow remains stable under interruption."
+
+## 2:25-2:55 Resilience Proof
+Action:
+- Briefly simulate a drop or reconnect scenario
+- Show bounded retry behavior and recovery
+
+Voiceover:
+"The client uses bounded reconnect attempts and clear fallback messaging, so failures are visible and recoverable."
+
+## 2:55-3:20 Cloud Proof
+Visual:
+- Cloud Run service page
+- Health endpoint returns OK
+
+Voiceover:
+"The backend is deployed on Google Cloud Run and proxies real-time WebSocket traffic to Gemini Live."
+
+## 3:20-3:30 Close
+Voiceover:
+"Dawayir demonstrates a practical future for live, multimodal coaching agents: spoken, interruptible, and world-changing in real time."
+
+## Recording Notes
+- Keep total duration under 4:00
+- Use clean audio and stable network
+- Keep one backup recording
+- Keep all claims aligned with actual behavior in the app

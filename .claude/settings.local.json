@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -i https://dawayir-live-agent-880073923613.europe-west1.run.app/health)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
