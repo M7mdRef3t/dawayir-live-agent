@@ -11,19 +11,20 @@ Just finalized our submission for the Google #GeminiLiveAgentChallenge! 🚀
 
 We built **Dawayir** (دوائر) — a real-time AI journey for mental clarity. 🧠✨
 
-Using the brand new **Gemini Multimodal Live API**, we created an agent that doesn't just talk; it **REMEMBERS**. Dawayir interprets your mental state and dynamically evolves a living canvas, while snapshotting your progress directly to **Google Cloud Storage** through autonomous Tool Calling.
+Using the brand new **Gemini Multimodal Live API**, we created an agent that doesn't just talk; it **SEES** and **REMEMBERS**. Dawayir starts with a **Visual Pulse Check** (Facial mood analysis), evolves a living mental canvas through real-time Tool Calling, and autonomously generates **Session Reports** to Google Cloud Storage.
 
 Key features:
-✅ Real-time Egyptian Arabic voice interaction
+✅ Real-time Egyptian Arabic voice interaction (Multimodal SDK)
+✅ Visual Pulse Check (Facial expression context)
 ✅ Low-latency visual state updates (Function Calling)
-✅ Cloud Memory Bank for persistent mental maps
-✅ Dynamic "Mental Space" UI on Google Cloud Run
+✅ Cloud Memory Bank & Session Reports on GCS
+✅ Enterprise-ready with CI/CD and Terraform
 
-Check out the demo and code here: [YOUR_GITHUB_LINK_HERE]
+Check out the demo and code here: https://github.com/M7mdRef3t/dawayir-live-agent
 
 Shoutout to the Google DeepMind team for the amazing SDK! @GoogleCloud @GoogleDevs
 
-#GeminiAI #GoogleCloud #LLMs #BuildWithAI #OpenSource
+#GeminiAI #GoogleCloud #LLMs #BuildWithAI #OpenSource #Rihlaty
 
 ---
 
@@ -33,14 +34,14 @@ Shoutout to the Google DeepMind team for the amazing SDK! @GoogleCloud @GoogleDe
 
 بنينا مشروع **"دوائر" (Dawayir)** — وكيل ذكاء اصطناعي تفاعلي بيساعدك تستكشف مساحتك الذهنية وترتب أفكارك في الوقت الفعلي. 🧠✨
 
-باستخدام **Gemini Live API**، قدرنا نبني تجربة مش بس بتتكلم معاك بلهجة مصرية ودودة، لكن كمان بتشوف وبتحرك "دوائر" (Circles) قدامك على الشاشة حسب كلامك ومشاعرك من خلال الـ Tool Calling.
+باستخدام **Gemini Live API**، قدرنا نبني تجربة بتبدأ بـ تحليل بصري لمودك (Visual Pulse Check)، وبتتكلم معاك بلهجة مصرية ودودة، وبتحرك "دوائر" (Circles) قدامك على الشاشة حسب مشاعرك، وفي النهاية بتطلع لك "روشتة وعي" (Session Report) بتتحفظ أوتوماتيك على جوجل كلاود.
 
 أهم المميزات:
-✅ محادثة صوتية حية وبرمجتها باستخدام Google GenAI SDK
-✅ واجهة بصرية بتتحرك وبتتفاعل مع صوتك في نفس اللحظة
-✅ استضافة كاملة على Google Cloud لضمان السرعة
+✅ محادثة صوتية حية وتحليل بصري مبدئي للمشاعر
+✅ واجهة بصرية (Mental Canvas) بتتفاعل مع صوتك لحظياً
+✅ ذاكرة سحابية (Memory Bank) لحفظ سجل جلساتك وتقاريرك
+✅ استضافة كاملة وأتمتة (CI/CD) على Google Cloud
 
-شكراً لكل فريق العمل ولجوجل على الأدوات القوية دي.
-تقدروا تشوفوا الكود والديمو من هنا: [YOUR_GITHUB_LINK_HERE]
+تقدروا تشوفوا الكود والديمو من هنا: https://github.com/M7mdRef3t/dawayir-live-agent
 
-#ذكاء_اصطناعي #جوجل #Gemini #تكنولوجيا #برمجة
+#ذكاء_اصطناعي #جوجل #Gemini #تكنولوجيا #برمجة #رحلتي

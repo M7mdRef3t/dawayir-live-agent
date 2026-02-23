@@ -35,6 +35,9 @@ echo "   PROJECT_ID=${PROJECT_ID}"
 echo "   REGION=${REGION}"
 echo "   BUCKET=${GOOGLE_CLOUD_STORAGE_BUCKET}"
 
+echo "Building React frontend..."
+cd ../client && npm install && npm run build && cd ../server
+
 echo "Building container image with Cloud Build..."
 gcloud builds submit --tag "${IMAGE}" .
 

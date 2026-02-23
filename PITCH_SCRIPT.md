@@ -41,25 +41,30 @@ Expected:
 Voiceover:
 "Low-latency interruption handling is a core requirement for Live Agents, and this flow remains stable under interruption."
 
-## 2:25-2:55 Resilience Proof
-Action:
-- Briefly simulate a drop or reconnect scenario
-- Show bounded retry behavior and recovery
+## 2:25-3:15 Cloud Persistence & Session Reports
+Action (user says):
+"Save this session and generate a mental clarity report."
+
+Expected:
+- Agent calls `save_mental_map`.
+- Agent calls `generate_session_report`.
+- Spoken confirmation of cloud backup.
 
 Voiceover:
-"The client uses bounded reconnect attempts and clear fallback messaging, so failures are visible and recoverable."
+"But Dawayir is more than a live chat; it is a persistent coaching engine. Sessions are snapshot to Google Cloud Storage as both JSON data and human-readable Markdown reports. This creates a tangible artifact of the user's mental journey."
 
-## 2:55-3:20 Cloud Proof
+## 3:15-3:45 Cloud Proof & The Rihlaty Vision
 Visual:
 - Cloud Run service page
-- Health endpoint returns OK
+- Google Cloud Storage Bucket showing the `.md` and `.json` files
+- Brief mention of Cloud Build / Terraform files
 
 Voiceover:
-"The backend is deployed on Google Cloud Run and proxies real-time WebSocket traffic to Gemini Live."
+"Behind the scenes, the system is enterprise-ready, with automated CI/CD and IaC. Dawayir is the real-time engine designed to power the upcoming **Rihlaty** platform—a comprehensive ecosystem for personal growth."
 
-## 3:20-3:30 Close
+## 3:45-4:00 Close
 Voiceover:
-"Dawayir demonstrates a practical future for live, multimodal coaching agents: spoken, interruptible, and world-changing in real time."
+"Dawayir: Spoken, interruptible, world-changing, and persistent. The future of live coaching on Google Cloud."
 
 ## Recording Notes
 - Keep total duration under 4:00

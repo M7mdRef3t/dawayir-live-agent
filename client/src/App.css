@@ -112,20 +112,54 @@ header h1 {
   box-shadow: 0 8px 25px rgba(0, 245, 255, 0.4);
 }
 
-.activity-container {
+.video-container {
+  width: 100%;
+  aspect-ratio: 4/3;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--primary);
+  box-shadow: 0 0 15px rgba(0, 245, 255, 0.2);
+  margin-bottom: 10px;
+}
+
+.video-container video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.visual-feedback {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  padding: 20px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 18px;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  width: 100%;
 }
 
-.visualizer {
-  width: 100%;
-  height: 60px;
-  border-radius: 8px;
+.snapshot-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.snapshot-preview img {
+  width: 50px;
+  height: 50px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--primary);
+}
+
+.snapshot-preview span {
+  font-size: 12px;
+  color: var(--primary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .secondary {
@@ -195,4 +229,262 @@ button:disabled {
 
 .status-badge.connected .dot {
   animation: pulse 2s infinite;
+}
+
+/* Dashboard Styles */
+.title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.icon-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  font-size: 20px;
+  padding: 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.1);
+}
+
+.dashboard-view {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 450px;
+}
+
+.dashboard-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 15px;
+}
+
+.dashboard-header h2 {
+  margin: 10px 0 0 0;
+  font-size: 22px;
+  color: var(--primary);
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.back-btn:hover {
+  color: #fff;
+}
+
+.reports-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 5px;
+}
+
+.reports-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.reports-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+.report-card {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.report-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--primary);
+  transform: translateX(5px);
+}
+
+.report-icon {
+  font-size: 24px;
+}
+
+.report-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.report-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: #fff;
+}
+
+.report-date {
+  font-size: 11px;
+  color: #777;
+}
+
+.report-content {
+  flex: 1;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 15px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.report-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #ccc;
+}
+
+.loader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: var(--primary);
+  font-style: italic;
+}
+
+/* ========== Quick UI Improvements ========== */
+
+/* Audio Visualizer */
+.visualizer {
+  width: 100% !important;
+  height: 80px !important;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 0 20px rgba(0, 245, 255, 0.05);
+  display: block;
+}
+
+.activity-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Loading Spinner */
+.loading-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+}
+
+.spinner-ring {
+  width: 100%;
+  height: 100%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+  animation: pulse-opacity 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-opacity {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .overlay {
+    width: calc(100vw - 60px);
+    left: 30px;
+    top: 20px;
+    padding: 25px;
+  }
+
+  header h1 {
+    font-size: 24px;
+  }
+
+  .status-badge {
+    font-size: 12px;
+    padding: 3px 10px;
+  }
+
+  .primary-btn {
+    font-size: 16px;
+    padding: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .overlay {
+    width: calc(100vw - 40px);
+    left: 20px;
+    top: 15px;
+    padding: 20px;
+    gap: 20px;
+  }
+
+  header h1 {
+    font-size: 22px;
+  }
+
+  .status-badge {
+    font-size: 11px;
+  }
+
+  .primary-btn {
+    font-size: 15px;
+    padding: 14px;
+  }
+
+  .footer-info {
+    font-size: 10px;
+  }
+
+  .visualizer {
+    height: 60px !important;
+  }
+
+  .video-container {
+    aspect-ratio: 3/4;
+  }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .overlay {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
 }

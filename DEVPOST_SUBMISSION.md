@@ -58,8 +58,8 @@ Compliance statement:
 - **Social Media Post:** [ADD_POST_URL_AFTER_PUBLISHING]
 
 ## Technologies Stack
-- **AI/ML:** Google GenAI SDK v1.42.0, Gemini Live API (gemini-2.5-flash-native-audio-latest)
-- **Cloud Infrastructure:** Google Cloud Run (europe-west1), Google Cloud Storage
+- **AI/ML:** Google GenAI SDK v1.42.0, Gemini Live API (gemini-2.0-flash-exp)
+- **Cloud Infrastructure:** Google Cloud Run, Google Cloud Storage, Cloud Build (CI/CD), Terraform (IaC)
 - **Backend:** Node.js 18+, Express 5.2, WebSocket (ws 8.19)
 - **Frontend:** React 19, Vite 7.3, Web Audio API, Canvas API
 - **Real-time Communication:** Full-duplex WebSocket streaming, PCM16 audio at 16kHz
@@ -71,11 +71,11 @@ Compliance statement:
 ✅ **Track: Live Agents** - Real-time voice interaction with interruption handling and multimodal output (voice + visual canvas)
 
 ## Unique Differentiators
-1. **Cultural Accessibility:** Egyptian Arabic language support for MENA region users
-2. **Real-time Visual Feedback:** Live canvas manipulation through AI tool calling (not just voice responses)
-3. **Cloud Memory Persistence:** Automatic mental map snapshots to Google Cloud Storage
-4. **Professional Monitoring:** Built-in debug telemetry and health checks for production reliability
-5. **Mental Clarity Focus:** Coaching-oriented use case addressing real user needs
+1. **Cultural Accessibility:** Egyptian Arabic language support for MENA region users.
+2. **Real-time Visual Feedback:** Live canvas manipulation through AI tool calling (not just voice responses).
+3. **Cloud Memory Persistence:** Automatic mental map snapshots and session reports saved to GCS.
+4. **Professional Monitoring:** Built-in debug telemetry, health checks, and CI/CD automation.
+5. **The Rihlaty Vision:** Positioning Dawayir as a core engine for a larger coaching platform, rather than a standalone hackathon demo.
 
 ## Submission Completeness Checklist
 - [x] Description finalized
@@ -87,8 +87,8 @@ Compliance statement:
 - [ ] Social media post published with #GeminiLiveAgentChallenge
 
 ## Additional Notes for Judges
-We automated the entire deployment pipeline with our `cloud-deploy.sh` script, enabling one-command deployment to Google Cloud Run. The system demonstrates production-ready reliability with bounded retry logic, health monitoring, and graceful error handling.
+We automated the entire deployment pipeline with Google Cloud Build and provided Terraform configurations to prove enterprise-readiness. The system demonstrates production-ready reliability with bounded retry logic and health monitoring.
 
-The mental clarity coaching domain was chosen to showcase how Live Agents can address emotional and relational complexity—areas where static text interfaces fall short. By combining real-time Arabic voice interaction with dynamic visual state manipulation, Dawayir creates an engaging, accessible experience for users navigating personal growth.
+The mental clarity coaching domain was chosen to showcase how Live Agents can address emotional and relational complexity—areas where static text interfaces fall short. By combining real-time Arabic voice interaction with dynamic visual state manipulation and **Session Report artifacts**, Dawayir creates a lasting, accessible experience for users navigating personal growth. This project serves as the real-time engine for the upcoming **Rihlaty** platform.
 
 All code is open-source under ISC license, well-documented, and includes comprehensive setup instructions for judges to run locally or deploy to their own Google Cloud projects.

@@ -143,33 +143,152 @@ const Visualizer = ({ stream, isConnected }) => {
     };
   }, [stream, isConnected]);
 
-  return <canvas ref={canvasRef} className="visualizer" width="300" height="60" />;
+  return <canvas ref={canvasRef} className="visualizer" width="300" height="80" />;
+}; const Dashboard = ({ onBack }) => {
+  const [reports, setReports] = useState([]);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/reports')
+      .then(res => res.json())
+      .then(data => {
+        setReports(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error fetching reports:', err);
+        setLoading(false);
+      });
+  }, []);
+
+  const viewReport = (filename) => {
+    fetch(`/api/reports/${filename}`)
+      .then(res => res.text())
+      .then(content => {
+        setSelectedReport({ filename, content });
+      });
+  };
+
+  return (
+    <div className="dashboard-view">
+      <header className="dashboard-header">
+        <button className="back-btn" onClick={selectedReport ? () => setSelectedReport(null) : onBack}>
+          {selectedReport ? '← Back to List' : '← Back to Live'}
+        </button>
+        <h2>{selectedReport ? 'Session Insight' : 'Memory Bank'}</h2>
+      </header>
+
+      {loading ? (
+        <div className="loader">Analyzing memories...</div>
+      ) : selectedReport ? (
+        <div className="report-content">
+          <pre>{selectedReport.content}</pre>
+        </div>
+      ) : (
+        <div className="reports-list">
+          {reports.length === 0 ? (
+            <p className="no-reports">No sessions recorded yet.</p>
+          ) : (
+            reports.map(report => (
+              <div key={report.name} className="report-card" onClick={() => viewReport(report.name)}>
+                <div className="report-icon">📄</div>
+                <div className="report-info">
+                  <span className="report-name">{report.name.replace('.md', '')}</span>
+                  <span className="report-date">{new Date(report.updated).toLocaleString()}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
 
 function App() {
   const [status, setStatus] = useState('Disconnected');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [isMicActive, setIsMicActive] = useState(false);
-  const [toolCallsCount, setToolCallsCount] = useState(0);
   const [lastEvent, setLastEvent] = useState('none');
+  const [toolCallsCount, setToolCallsCount] = useState(0);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [isMicActive, setIsMicActive] = useState(false);
+  const [appView, setAppView] = useState('live'); // 'live' or 'dashboard'
 
-  const wsRef = useRef(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [capturedImage, setCapturedImage] = useState(null);
+
   const canvasRef = useRef(null);
+  const videoRef = useRef(null);
+  const wsRef = useRef(null);
+  const micStreamRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const workletNodeRef = useRef(null);
+  const scriptProcessorRef = useRef(null);
+  const playbackContextRef = useRef(null);
+  const playbackQueueRef = useRef([]);
+  const isPlayingRef = useRef(false);
   const setupCompleteRef = useRef(false);
-  const manualCloseRef = useRef(false);
-  const reconnectTimeoutRef = useRef(null);
+  const bootstrapPromptSentRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
 
-  const micStreamRef = useRef(null);
-  const micContextRef = useRef(null);
-  const micSourceRef = useRef(null);
-  const micWorkletRef = useRef(null);
-  const micProcessorRef = useRef(null);
-  const micSilentGainRef = useRef(null);
-  const bootstrapPromptSentRef = useRef(false);
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setIsCameraActive(true);
+      }
+    } catch (err) {
+      console.error("Camera access denied", err);
+      setErrorMessage("Camera access denied. Visual Pulse Check skipped.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = videoRef.current.srcObject.getTracks();
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const captureSnapshot = () => {
+    if (!videoRef.current) return null;
+    const canvas = document.createElement('canvas');
+
+    // Scale down to max 640px height while maintaining aspect ratio
+    // (Smaller payload = faster bootstrap)
+    const MAX_DIM = 640;
+    let width = videoRef.current.videoWidth;
+    let height = videoRef.current.videoHeight;
+
+    if (width > height) {
+      if (width > MAX_DIM) {
+        height *= MAX_DIM / width;
+        width = MAX_DIM;
+      }
+    } else {
+      if (height > MAX_DIM) {
+        width *= MAX_DIM / height;
+        height = MAX_DIM;
+      }
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoRef.current, 0, 0, width, height);
+
+    // 0.7 quality is perfect for facial expression analysis
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+    setCapturedImage(dataUrl);
+    stopCamera();
+    return dataUrl.split(',')[1]; // Base64
+  };
 
   const speakerContextRef = useRef(null);
   const activeSourcesRef = useRef(new Set());
@@ -485,6 +604,22 @@ function App() {
             response: { result: { ok: true, nodes } },
           });
           continue; // Skip the default push at the end
+        } else if (call.name === 'generate_session_report') {
+          const { summary, insights, recommendations } = call.args;
+          responses.push({
+            id: call.id,
+            name: call.name,
+            response: {
+              result: {
+                ok: true,
+                summary,
+                insights,
+                recommendations,
+                timestamp: new Date().toISOString()
+              }
+            },
+          });
+          continue;
         } else {
           throw new Error(`Unsupported tool: ${call.name}`);
         }
@@ -627,19 +762,34 @@ function App() {
           await startMicrophone();
           if (!bootstrapPromptSentRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             bootstrapPromptSentRef.current = true;
+
+            const imageBase64 = captureSnapshot();
+            const parts = [
+              {
+                text: `أهلًا بك! أنا "دوائر"، رفيقك في رحلة استكشاف مساحتك الذهنية. 
+                لقد التقطت صورة سريعة لوجهك الآن (إذا سمحت بالكاميرا). 
+                ابدأ بالترحيب بالمستخدم بلهجة مصرية ودودة جداً وبأسلوب هادئ،
+                وحلل تعبير وجهه المبدئي (متوتر، سعيد، مرهق) واذكر ذلك بشكل لطيف جداً،
+                ثم اطلب منه أن يعبر عن مشاعره لكي نراها سوياً في الدوائر التي أمامه.`,
+              }
+            ];
+
+            if (imageBase64) {
+              parts.push({
+                inlineData: {
+                  mimeType: "image/jpeg",
+                  data: imageBase64
+                }
+              });
+            }
+
             wsRef.current.send(
               JSON.stringify({
                 clientContent: {
                   turns: [
                     {
                       role: 'user',
-                      parts: [
-                        {
-                          text: `أهلًا بك! أنا "دوائر"، رفيقك في رحلة استكشاف مساحتك الذهنية. 
-                          ابدأ بالترحيب بالمستخدم بلهجة مصرية ودودة جداً وبأسلوب هادئ،
-                          واطلب منه أن يعبر عن مشاعره أو أفكاره الحالية بصوته لكي نراها سوياً في الدوائر التي أمامه.`,
-                        },
-                      ],
+                      parts: parts,
                     },
                   ],
                   turnComplete: true,
@@ -752,47 +902,90 @@ function App() {
   return (
     <div className="App">
       <div className="overlay">
-        <header>
-          <h1>Dawayir Live Agent</h1>
-          <div className={`status-badge ${statusClass}`}>
-            <span className="dot"></span> {isConnected ? 'Live Session Active' : status}
-          </div>
-        </header>
+        {appView === 'dashboard' ? (
+          <Dashboard onBack={() => setAppView('live')} />
+        ) : (
+          <>
+            <header>
+              <div className="title-row">
+                <h1>Dawayir Live Agent</h1>
+                {!isConnected && !isStarting && (
+                  <button className="icon-btn" onClick={() => setAppView('dashboard')} title="Memory Bank">
+                    💾
+                  </button>
+                )}
+              </div>
+              <div className={`status-badge ${statusClass}`}>
+                <span className="dot"></span> {isConnected ? 'Live Session Active' : status}
+              </div>
+            </header>
 
-        <section className="main-controls">
-          <button className="primary-btn" onClick={connect} disabled={isConnected || isStarting}>
-            {isConnected
-              ? '✨ Connection Secured'
-              : isStarting
-                ? 'Establishing Link...'
-                : 'Start Your Journey'}
-          </button>
+            <section className="main-controls">
+              {!isConnected && !isStarting && (
+                <div className="camera-setup">
+                  {!isCameraActive ? (
+                    <button className="primary-btn" onClick={startCamera}>
+                      📸 Start Visual Pulse Check
+                    </button>
+                  ) : (
+                    <div className="video-container">
+                      <video ref={videoRef} autoPlay playsInline muted />
+                      <p className="hint">We'll take a quick snapshot to feel your energy.</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
-          {isConnected && (
-            <div className="activity-container">
-              <Visualizer stream={micStreamRef.current} isConnected={isConnected} />
-              <button className="secondary disconnect-btn" onClick={disconnect}>
-                Finish Session
+              <button className="primary-btn" onClick={connect} disabled={isConnected || isStarting}>
+                {isConnected ? (
+                  '✨ Connection Secured'
+                ) : isStarting ? (
+                  <div className="loading-container">
+                    <span className="loading-text">Establishing Link</span>
+                    <div className="spinner">
+                      <div className="spinner-ring"></div>
+                    </div>
+                  </div>
+                ) : (
+                  'Enter the Mental Space' + (isCameraActive ? ' (with Vision)' : '')
+                )}
               </button>
-            </div>
-          )}
-        </section>
 
-        {isConnected && !errorMessage && (
-          <p className="hint">
-            Speak naturally and explore your mental space.
-          </p>
+              {isConnected && (
+                <div className="activity-container">
+                  <div className="visual-feedback">
+                    <Visualizer stream={micStreamRef.current} isConnected={isConnected} />
+                    {capturedImage && (
+                      <div className="snapshot-preview">
+                        <img src={capturedImage} alt="Pulse Snapshot" />
+                        <span>Initial Mindset</span>
+                      </div>
+                    )}
+                  </div>
+                  <button className="secondary disconnect-btn" onClick={disconnect}>
+                    Finish Session
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {isConnected && !errorMessage && (
+              <p className="hint">
+                Speak naturally and explore your mental space.
+              </p>
+            )}
+
+            {errorMessage && <p className="error-message">⚠️ {errorMessage}</p>}
+
+            <footer className="footer-info">
+              <span>Backend: {backendUrl}</span>
+              <br />
+              <span>
+                Mic: {isMicActive ? 'on' : 'off'} | Retries: {reconnectAttempt}/{MAX_RECONNECT_ATTEMPTS} | Tools: {toolCallsCount} | Event: {lastEvent}
+              </span>
+            </footer>
+          </>
         )}
-
-        {errorMessage && <p className="error-message">⚠️ {errorMessage}</p>}
-
-        <footer className="footer-info">
-          <span>Backend: {backendUrl}</span>
-          <br />
-          <span>
-            Mic: {isMicActive ? 'on' : 'off'} | Retries: {reconnectAttempt}/{MAX_RECONNECT_ATTEMPTS} | Tools: {toolCallsCount} | Event: {lastEvent}
-          </span>
-        </footer>
       </div>
       <DawayirCanvas ref={canvasRef} />
     </div>
