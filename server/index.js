@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { Storage } from '@google-cloud/storage';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -402,12 +403,22 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const clientDistCandidates = [
+    path.join(__dirname, 'client/dist'),
+    path.join(__dirname, '../client/dist'),
+];
+const clientDistPath = clientDistCandidates.find((candidate) => fs.existsSync(candidate));
 
-app.use(express.static(path.join(__dirname, '../client/dist')));
+if (clientDistPath) {
+    app.use(express.static(clientDistPath));
+}
 
 // Catch-all to serve index.html
 app.get('/{*any}', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+    if (clientDistPath) {
+        return res.sendFile(path.join(clientDistPath, 'index.html'));
+    }
+    return res.status(503).send('Frontend build is missing. Backend is running.');
 });
 
 const PORT = process.env.PORT || 8080;
