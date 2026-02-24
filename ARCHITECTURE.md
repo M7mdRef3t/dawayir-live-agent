@@ -19,9 +19,15 @@ graph TD
         NB -->|Function Forward| RC
     end
 
+    subgraph "The Persistence (Google Cloud Storage)"
+        NB -->|Save Mental Map| GCS[GCS Bucket: Memory Bank]
+        NB -->|Generate Report| GCS
+        GCS -->|Context Recovery| NB
+    end
+
     subgraph "The Intelligence (Google AI)"
         GL[Gemini 2.0 Flash] -->|LLM Reasoning| TB[Tool Brain]
-        GL -->|Low-Latency Audio Audio| NB
+        GL -->|Low-Latency Audio| NB
     end
 
     style U fill:#00F5FF,stroke:#fff,stroke-width:2px,color:#000
@@ -34,20 +40,25 @@ graph TD
 
 ### 1. High-Fidelity Audio Streaming (The Pulse)
 - **Ingress:** The browser captures raw audio through an `AudioWorkletProcessor`, converts it to **PCM16** at **16kHz** (optimized for Gemini), and streams it via high-speed binary WebSockets.
-- **Egress:** Gemini returns low-latency audio chunks which are re-assembled and played through the `Web Audio API` using a precision playback queue. This ensures seamless audio delivery even during high-frequency interruptions.
+- **Egress:** Gemini returns low-latency audio chunks (24kHz) which are re-assembled and played through the `Web Audio API` using a precision playback queue. This ensures seamless audio delivery even during high-frequency interruptions.
 
 ### 2. The Interactive Orchestrator (Node.js Maestro)
 The server acts as a **full-duplex bridge** using the `Google GenAI SDK`. It manages the stateful session between the client and Google's servers, ensuring that tool calls are redirected to the frontend in milliseconds.
 - **Location:** Deployed on **Google Cloud Run** for sub-second scaling and high availability.
 - **Compliance:** 100% Google infrastructure, utilizing SDK-level session management.
 
-### 3. Visual Consciousness (React Canvas State Engine)
+### 3. The Memory Bank (GCS Grounding)
+Unlike standard chatbots, Dawayir has a **long-term memory**. 
+- **Mental Map Snapshots:** Using `save_mental_map`, the agent serializes the visual state of the user's mind and persists it to **Google Cloud Storage** as JSON.
+- **Therapeutic Artifacts:** `generate_session_report` creates Markdown-based insights stored in GCS, allowing users to track their mental clarity journey over time.
+- **Session Continuity:** A custom context relay mechanism ensures that if a connection is lost, Gemini resumes the conversation with full awareness of the previous 5 segments of dialogue and the exact state of the visual canvas.
+
+### 4. Visual Consciousness (React Canvas State Engine)
 - **Dynamic Mental Space:** A bespoke canvas renderer using `requestAnimationFrame` for buttery-smooth animations.
 - **Glassmorphism Mapping:** Every "node" (Awareness, Science, Truth) is a state-aware object with individual physics and glowing shaders.
 - **AI-Driven Mutations:** When Gemini invokes `update_node` or `highlight_node`, the canvas translates the model's logic into visual "living" changes (size, color, pulsing).
-- **Presence Feedback:** A real-time particle nebula and waveform provide the user with confirmation of the "AI's Presence," breaking the fourth wall of traditional chat boxes.
 
-### 4. Scalability & Deployment
+### 5. Scalability & Deployment
 ```mermaid
 graph LR
     FE[Browser Frontend] -->|WSS Relay| CR[Google Cloud Run]
@@ -58,4 +69,4 @@ graph LR
 - **Monitoring:** Real-time telemetry via custom debug pipes sent in each WebSocket event.
 
 ## Why This Architecture Wins
-By moving logic away from static text and into a **Live State Engine**, Dawayir demonstrates the full power of Gemini's low-latency reasoning. It’s not just an agent that talks; it’s an agent that **acts** on your visual world in real-time.
+By combining **Live Multimodal Feedback** with **Long-term Cloud Persistence**, Dawayir demonstrates the full power of Gemini's low-latency reasoning. It’s not just an agent that talks; it’s an agent that **acts, remembers, and visualizes** your world in real-time.

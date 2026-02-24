@@ -5,8 +5,8 @@ import './App.css';
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
 const MIC_WORKLET_NAME = 'dawayir-mic-processor';
-const MAX_RECONNECT_ATTEMPTS = 2;
-const RECONNECT_DELAY_MS = 1200;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY_MS = 2000;
 
 const arrayBufferToBase64 = (arrayBuffer) => {
   const bytes = new Uint8Array(arrayBuffer);
@@ -224,22 +224,37 @@ function App() {
   const videoRef = useRef(null);
   const wsRef = useRef(null);
   const micStreamRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const workletNodeRef = useRef(null);
-  const scriptProcessorRef = useRef(null);
-  const playbackContextRef = useRef(null);
-  const playbackQueueRef = useRef([]);
-  const isPlayingRef = useRef(false);
+  const micContextRef = useRef(null);
+  const micSourceRef = useRef(null);
+  const micWorkletRef = useRef(null);
+  const micProcessorRef = useRef(null);
+  const micSilentGainRef = useRef(null);
   const setupCompleteRef = useRef(false);
   const bootstrapPromptSentRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
+  const reconnectTimeoutRef = useRef(null);
+  const manualCloseRef = useRef(false);
+  const sessionContextRef = useRef([]); // Stores last few text segments for context preservation
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: 'user'
+        }
+      });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Force play for browsers that need it
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn("Autoplay prevented, user interaction needed", playErr);
+        }
         setIsCameraActive(true);
+        console.log("[Camera] Video stream started successfully");
       }
     } catch (err) {
       console.error("Camera access denied", err);
@@ -257,7 +272,11 @@ function App() {
   };
 
   const captureSnapshot = () => {
-    if (!videoRef.current) return null;
+    if (!videoRef.current) {
+      console.error("[Camera] Video ref not available");
+      return null;
+    }
+
     const canvas = document.createElement('canvas');
 
     // Scale down to max 640px height while maintaining aspect ratio
@@ -265,6 +284,14 @@ function App() {
     const MAX_DIM = 640;
     let width = videoRef.current.videoWidth;
     let height = videoRef.current.videoHeight;
+
+    console.log(`[Camera] Capturing snapshot - Video dimensions: ${width}x${height}`);
+
+    if (width === 0 || height === 0) {
+      console.error("[Camera] Video dimensions are 0. Camera may not be ready yet.");
+      setErrorMessage("Camera not ready. Please wait a moment and try again.");
+      return null;
+    }
 
     if (width > height) {
       if (width > MAX_DIM) {
@@ -287,6 +314,7 @@ function App() {
     const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
     setCapturedImage(dataUrl);
     stopCamera();
+    console.log("[Camera] Snapshot captured successfully");
     return dataUrl.split(',')[1]; // Base64
   };
 
@@ -582,41 +610,45 @@ function App() {
       try {
         if (call.name === 'update_node') {
           const id = Number(args.id);
-          if (!Number.isFinite(id)) {
-            throw new Error('Invalid node id for update_node.');
+          const currentNodes = canvasRef.current?.getNodes() || [];
+          if (!Number.isFinite(id) || !currentNodes.some(n => n.id === id)) {
+            throw new Error(`Invalid or non-existent node id: ${args.id}`);
           }
 
           const updates = { ...args };
           delete updates.id;
+          console.log(`[App] Updating node ${id}:`, updates);
           canvasRef.current?.updateNode(id, updates);
         } else if (call.name === 'highlight_node') {
           const id = Number(args.id);
-          if (!Number.isFinite(id)) {
-            throw new Error('Invalid node id for highlight_node.');
+          const currentNodes = canvasRef.current?.getNodes() || [];
+          if (!Number.isFinite(id) || !currentNodes.some(n => n.id === id)) {
+            throw new Error(`Invalid or non-existent node id: ${args.id}`);
           }
 
+          console.log(`[App] Highlighting node ${id}`);
           canvasRef.current?.pulseNode(id);
         } else if (call.name === 'save_mental_map') {
           const nodes = canvasRef.current?.getNodes() || [];
+          console.log(`[App] Saving mental map with ${nodes.length} nodes`);
           responses.push({
             id: call.id,
             name: call.name,
-            response: { result: { ok: true, nodes } },
+            response: { nodes, ok: true },
           });
-          continue; // Skip the default push at the end
+          continue;
         } else if (call.name === 'generate_session_report') {
-          const { summary, insights, recommendations } = call.args;
+          const { summary, insights, recommendations } = args;
+          console.log(`[App] Generating session report:`, { summary, insights });
           responses.push({
             id: call.id,
             name: call.name,
             response: {
-              result: {
-                ok: true,
-                summary,
-                insights,
-                recommendations,
-                timestamp: new Date().toISOString()
-              }
+              ok: true,
+              summary,
+              insights,
+              recommendations,
+              timestamp: new Date().toISOString()
             },
           });
           continue;
@@ -627,13 +659,14 @@ function App() {
         responses.push({
           id: call.id,
           name: call.name,
-          response: { result: { ok: true } },
+          response: { ok: true },
         });
       } catch (error) {
+        console.error(`[App] Tool error (${call.name}):`, error);
         responses.push({
           id: call.id,
           name: call.name,
-          response: { result: { ok: false, error: error.message } },
+          response: { ok: false, error: error.message },
         });
       }
     }
@@ -760,42 +793,49 @@ function App() {
 
         try {
           await startMicrophone();
-          if (!bootstrapPromptSentRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
-            bootstrapPromptSentRef.current = true;
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            const isReconnect = reconnectAttemptRef.current > 0;
+            const currentNodes = canvasRef.current?.getNodes() || [];
 
-            const imageBase64 = captureSnapshot();
-            const parts = [
-              {
-                text: `أهلًا بك! أنا "دوائر"، رفيقك في رحلة استكشاف مساحتك الذهنية. 
-                لقد التقطت صورة سريعة لوجهك الآن (إذا سمحت بالكاميرا). 
-                ابدأ بالترحيب بالمستخدم بلهجة مصرية ودودة جداً وبأسلوب هادئ،
-                وحلل تعبير وجهه المبدئي (متوتر، سعيد، مرهق) واذكر ذلك بشكل لطيف جداً،
-                ثم اطلب منه أن يعبر عن مشاعره لكي نراها سوياً في الدوائر التي أمامه.`,
-              }
-            ];
+            if (!bootstrapPromptSentRef.current) {
+              bootstrapPromptSentRef.current = true;
+              console.log('[App] Sending bootstrap prompt...');
 
-            if (imageBase64) {
-              parts.push({
-                inlineData: {
-                  mimeType: "image/jpeg",
-                  data: imageBase64
+              const parts = [
+                {
+                  text: `مهم جداً: ابدأ الكلام فوراً بدون انتظار المستخدم. 
+                  أهلًا بك! أنا "دوائر"، رفيقك في رحلة استكشاف مساحتك الذهنية. 
+                  ابدأ بالترحيب بالمستخدم بلهجة مصرية ودودة جداً وبأسلوب هادئ،
+                  وحلل تعبير وجهه المبدئي (متوتر، سعيد، مرهق) إذا وجدته في الصورة، 
+                  واذكر ذلك بشكل لطيف جداً، ثم اطلب منه أن يعبر عن مشاعره لكي نراها سوياً في الدوائر التي أمامه.`,
                 }
-              });
-            }
+              ];
 
-            wsRef.current.send(
-              JSON.stringify({
-                clientContent: {
-                  turns: [
-                    {
-                      role: 'user',
-                      parts: parts,
-                    },
-                  ],
-                  turnComplete: true,
-                },
-              })
-            );
+              if (capturedImage) {
+                const base64Data = capturedImage.split(',')[1];
+                parts.push({ inlineData: { mimeType: "image/jpeg", data: base64Data } });
+                console.log('[App] Including captured snapshot in bootstrap.');
+              }
+
+              wsRef.current.send(JSON.stringify({
+                clientContent: { turns: [{ role: 'user', parts }], turnComplete: true }
+              }));
+            } else if (isReconnect) {
+              const nodesContext = currentNodes.map(n => `- ${n.label} (id: ${n.id}, size: ${n.radius}, color: ${n.color})`).join('\n');
+              const lastConv = sessionContextRef.current.length > 0
+                ? `آخر حاجة كنا بنقولها كانت: "${sessionContextRef.current.join(' ... ')}"`
+                : "";
+              const promptText = `حصل انقطاع بسيط في الاتصال ورجعنا تاني. 
+                خليك فاكر إننا بنكمل نفس الجلسة. 
+                ${lastConv}
+                حالة الدوائر الحالية قدام المستخدم هي:
+                ${nodesContext}
+                كمل كلامك مع المستخدم من مكان ما وقفنا بأسلوب طبيعي جداً كأن مفيش حاجة حصلت، 
+                ومتقولش "أهلاً بك" تاني ولا تعتذر عن الانقطاع بشكل رسمي، ادخل في الموضوع فوراً بلهجة مصرية ودودة.`;
+              wsRef.current.send(JSON.stringify({
+                clientContent: { turns: [{ role: 'user', parts: [{ text: promptText }] }], turnComplete: true }
+              }));
+            }
           }
         } catch (error) {
           setStatus('Error');
@@ -831,6 +871,12 @@ function App() {
         }
       }
 
+      // Capture text for context preservation
+      const textParts = Array.isArray(parts) ? parts.filter(p => p.text).map(p => p.text) : [];
+      if (textParts.length > 0) {
+        sessionContextRef.current = [...sessionContextRef.current, ...textParts].slice(-5);
+      }
+
       const turnAudioBlobs = getTurnDataAudioBlobs(message);
       if (audioParts.length === 0 && turnAudioBlobs.length === 0) return;
 
@@ -852,7 +898,6 @@ function App() {
     socket.onclose = async () => {
       wsRef.current = null;
       setupCompleteRef.current = false;
-      bootstrapPromptSentRef.current = false;
       setIsConnected(false);
       setIsStarting(false);
 
@@ -883,6 +928,7 @@ function App() {
     };
   }, [
     backendUrl,
+    capturedImage,
     ensureSpeakerContext,
     handleToolCall,
     isConnected,
@@ -923,20 +969,47 @@ function App() {
             <section className="main-controls">
               {!isConnected && !isStarting && (
                 <div className="camera-setup">
-                  {!isCameraActive ? (
+                  {!isCameraActive && !capturedImage ? (
                     <button className="primary-btn" onClick={startCamera}>
                       📸 Start Visual Pulse Check
                     </button>
+                  ) : isCameraActive ? (
+                    <div className="video-capture-flow">
+                      <div className="video-container">
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </div>
+                      <div className="camera-actions-row">
+                        <button className="capture-btn" onClick={captureSnapshot}>
+                          🎯 Take Snapshot
+                        </button>
+                        <button className="cancel-btn" onClick={stopCamera}>
+                          ❌ Close Camera
+                        </button>
+                      </div>
+                    </div>
                   ) : (
-                    <div className="video-container">
-                      <video ref={videoRef} autoPlay playsInline muted />
-                      <p className="hint">We'll take a quick snapshot to feel your energy.</p>
+                    <div className="captured-preview-container">
+                      <div className="preview-heading">Your initial mindset:</div>
+                      <img src={capturedImage} className="pulse-preview-large" alt="Captured" />
+                      <button className="retake-btn" onClick={() => { setCapturedImage(null); startCamera(); }}>
+                        🔄 Retake Snapshot
+                      </button>
                     </div>
                   )}
                 </div>
               )}
 
-              <button className="primary-btn" onClick={connect} disabled={isConnected || isStarting}>
+              <button
+                className={`primary-btn ${isConnected ? 'secure-link' : ''}`}
+                onClick={connect}
+                disabled={isConnected || isStarting}
+              >
                 {isConnected ? (
                   '✨ Connection Secured'
                 ) : isStarting ? (
@@ -947,7 +1020,9 @@ function App() {
                     </div>
                   </div>
                 ) : (
-                  'Enter the Mental Space' + (isCameraActive ? ' (with Vision)' : '')
+                  capturedImage
+                    ? 'Enter the Mental Space (with Vision)'
+                    : 'Enter the Mental Space (Audio Only)'
                 )}
               </button>
 
@@ -962,9 +1037,38 @@ function App() {
                       </div>
                     )}
                   </div>
-                  <button className="secondary disconnect-btn" onClick={disconnect}>
-                    Finish Session
-                  </button>
+
+                  <div className="connected-actions">
+                    {!isCameraActive ? (
+                      <button className="secondary retake-live-btn" onClick={startCamera}>
+                        📸 Update Visual Context
+                      </button>
+                    ) : (
+                      <div className="live-camera-mini">
+                        <div className="video-container-mini">
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        </div>
+                        <div className="mini-camera-actions">
+                          <button className="mini-capture-btn" onClick={captureSnapshot}>
+                            🎯 Capture
+                          </button>
+                          <button className="mini-cancel-btn" onClick={stopCamera}>
+                            ❌ Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <button className="secondary disconnect-btn" onClick={disconnect}>
+                      Finish Session
+                    </button>
+                  </div>
                 </div>
               )}
             </section>
@@ -978,7 +1082,7 @@ function App() {
             {errorMessage && <p className="error-message">⚠️ {errorMessage}</p>}
 
             <footer className="footer-info">
-              <span>Backend: {backendUrl}</span>
+              <span>Backend: {backendUrl} | Client: v1.0.1</span>
               <br />
               <span>
                 Mic: {isMicActive ? 'on' : 'off'} | Retries: {reconnectAttempt}/{MAX_RECONNECT_ATTEMPTS} | Tools: {toolCallsCount} | Event: {lastEvent}

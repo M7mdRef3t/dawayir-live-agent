@@ -1,143 +1,93 @@
-# Dawayir Live Agent
+# Dawayir (دوائر) - Redefining Interaction 🧠✨
 
-Live, multimodal voice agent for relationship and mental-clarity coaching.
-Built for the Google Gemini Live Agent Challenge under the Live Agents track.
-Built with `Google GenAI SDK` + `Gemini Live API` + `Google Cloud Run`.
+> **"From Static Chatbots to Immersive, Multimodal Experiences"**
+> 
+> *Built for the [Gemini Live Agent Challenge](https://geminiliveagentchallenge.devpost.com/)*
 
-## Competition Positioning
-- Official track: Live Agents
-- Core value: Real-time spoken conversation + real-time visual world manipulation
-- Differentiator: The agent does not only respond with voice, it updates a live canvas through tool calls
+---
 
-## Problem
-Most AI experiences are text-first and static. Users describe emotional or relational complexity, but the interface does not change with them in real time.
+## 🌟 The Vision
+**Dawayir** is not just an AI agent; it is a **multimodal mental space**. We are moving beyond the "text-box" paradigm into an immersive realm where AI doesn't just talk—it **sees**, **visualizes**, and **remembers** your inner world in real-time.
 
-## Solution
-Dawayir introduces a "living canvas" where each circle represents a mental domain. While the user speaks, Gemini Live responds with low-latency audio and can invoke tools to resize, recolor, relabel, or highlight circles.
+By combining the **Gemini 2.0 Flash Live API** with a dynamic, glassmorphic visual canvas, Dawayir creates a living bridge between human speech and mental clarity.
 
-## Why This Is New
-- Full-duplex voice conversation with interruption handling
-- Function-calling driven visual state updates
-- Google GenAI SDK live-session bridge architecture ready for Cloud Run
-- Arabic-aware experience with clear English submission packaging
+---
 
-## Core Features
-- Real-time voice conversation over Gemini Live API
-- Interruption-aware interaction flow
-- Tool calls: `update_node`, `highlight_node`
-- Reconnect resilience with bounded retries on frontend
-- Debug status line for demo reliability and troubleshooting
+## 🚀 Key Multimodal Features
 
-## Architecture
-```mermaid
-graph TD
-    U[User Voice] --> F[React + Vite Frontend]
-    F -->|WebSocket| B[Node.js Backend]
-    B -->|Google GenAI SDK live.connect| G[Gemini Live API]
-    G -->|toolCall| B
-    B -->|toolCall forward| F
-    F -->|Canvas mutation| C[Dawayir Circles]
-```
+### 🗣️ Live Audio (The Pulse)
+- **Natural, Full-Duplex Conversation:** Talk to Dawayir naturally with seamless interruption handling (barge-in).
+- **Egyptian Arabic Persona:** A warm, empathetic Egyptian persona that understands the nuances of human emotion.
+- **Low-Latency Streaming:** Powered by the `Google GenAI SDK` for real-time audio bidirectional streaming.
 
-More detail: see `ARCHITECTURE.md`.
+### 👁️ Multimodal Vision (The Insight)
+- **Visual Pulse Check:** Users can activate the camera and take a snapshot before or during the conversation. This captured image is sent to Gemini to analyze facial expressions and understand the mental/emotional state.
+- **Pre-Session Snapshot:** Before starting, click "📸 Start Visual Pulse Check" → camera opens with live preview → click "🎯 Take Snapshot" to capture initial mindset.
+- **Live Session Update:** During an active conversation, click "📸 Update Visual Context" to send an updated snapshot to Gemini, allowing the agent to adapt to your current emotional state.
+- **Contextual Awareness:** The agent can see which "Mental Domains" (Circles) are largest on your screen and prioritize them in the dialogue.
 
-## Repository Structure
-- `client/`: React frontend, microphone/audio pipeline, canvas rendering
-- `server/`: Node.js backend with Google GenAI SDK live bridge
-- `DEMO_CHECKLIST.md`: pre-flight demo checklist
-- `PITCH_SCRIPT.md`: 3:30 competition demo script
-- `VIDEO_SHOTLIST.md`: shot-by-shot recording plan
-- `DEVPOST_SUBMISSION.md`: copy-ready submission draft
-- `CLOUD_PROOF.md`: cloud evidence and verification checklist
-- `BONUS_EXECUTION.md`: bonus-point execution assets
-- `ACCEPTANCE_SUITE.md`: final acceptance scenarios
-- `SUBMISSION_TIMELINE.md`: milestone and go/no-go gates
-- `submission-assets/`: folder for screenshots, diagrams, and final demo media
+### ☸️ Agentic UI Manipulation (The Living Canvas)
+- **Dynamic State Mutations:** Gemini uses real-time tool calling (`update_node`, `highlight_node`) to physically transform your mind-map based on what you share.
+- **Visual Feedback:** Watch your "Awareness," "Science," and "Truth" circles grow, change color, or pulse as you gain clarity.
 
-## Prerequisites
-- Node.js 18+ (22 recommended)
-- Google Gemini API key
-- Google Cloud project (for Cloud Run deployment)
+### 💾 The Memory Bank (Cloud Grounding)
+- **Long-term Persistence:** Your mental map isn't lost. Using `save_mental_map`, Dawayir serializes your state to **Google Cloud Storage**.
+- **Session Continuity:** Our custom context relay allows you to resume your journey even after a disconnection, with Gemini remembering the last 5 segments of conversation.
+- **Session Insights:** Generates a Markdown-based "Mental State Report" stored securely in the cloud.
 
-## Local Run (5 minutes)
-### 1) Backend
+---
+
+## 🛠️ Tech Stack & Proof of GCP
+Built 100% on **Google Cloud** to meet "Grand Prize" requirements:
+- **Model:** `gemini-2.0-flash-exp` (via Google GenAI SDK).
+- **Backend:** Node.js hosted on **Google Cloud Run**.
+- **Memory:** **Google Cloud Storage** for persistent session reports and mental maps.
+- **Frontend:** React + Vite + Canvas API (Glassmorphism shaders).
+- **IaC:** Automated deployment via **Terraform** (`main.tf`) and shell scripting.
+
+---
+
+## 📦 Local Setup (Reproduce in 5 Minutes)
+
+### 1️⃣ Prerequisites
+- Node.js 20+
+- Google Cloud Project with Gemini API access.
+
+### 2️⃣ Backend (Maestro)
 ```bash
 cd server
-cp .env.example .env
-# edit .env and set GEMINI_API_KEY
 npm install
+# Set your API Key in .env
+echo "GEMINI_API_KEY=your_key_here" > .env
+echo "GOOGLE_PROJECT_ID=your_project_id" >> .env
+echo "GOOGLE_CLOUD_STORAGE_BUCKET=your_bucket_name" >> .env
 npm start
 ```
-Expected:
-- Server listens on `http://localhost:8080`
-- Health endpoint: `http://localhost:8080/health` returns `OK`
 
-### 2) Frontend
+### 3️⃣ Frontend (Interface)
 ```bash
 cd client
-cp .env.example .env.local
-# optional: set VITE_BACKEND_WS_URL for cloud backend
 npm install
 npm run dev
 ```
-Expected:
-- Frontend runs on local Vite URL
-- Click `Start Gemini Live Journey`
-- Status reaches `Connected to Gemini Live`
 
-## Cloud Run Deployment
-From `server/`:
-```bash
-GEMINI_API_KEY=your_key_here ./cloud-deploy.sh
-```
-Optional overrides:
-```bash
-PROJECT_ID=your-project-id SERVICE_NAME=dawayir-live-agent REGION=europe-west1 GEMINI_API_KEY=your_key_here ./cloud-deploy.sh
-```
+---
 
-Script output includes:
-- `SERVICE_URL`
-- `HEALTH_CHECK`
+## 🏛️ Architecture & Documentation
+- **Architecture:** See [ARCHITECTURE.md](./ARCHITECTURE.md) for full system diagrams.
+- **Cloud Deployment:** See [main.tf](./main.tf) and `cloud-deploy.sh` for automation proof.
+- **Demo Script:** See [PITCH_SCRIPT.md](./PITCH_SCRIPT.md) for how we win.
 
-## Cloud URL Used For Demo
-`wss://dawayir-live-agent-880073923613.europe-west1.run.app`
+---
 
-## Environment Variables
-### Frontend (`client/.env.local`)
-- `VITE_BACKEND_WS_URL` optional; if absent falls back to `ws://localhost:8080` on localhost
+## 🏆 Submission Category
+**Track:** Live Agents 🗣️  
+**Primary Tech:** Gemini Live API / Google GenAI SDK
 
-### Backend (`server/.env`)
-- `GEMINI_API_KEY` required
-- `GEMINI_LIVE_MODEL` optional, default `models/gemini-2.5-flash-native-audio-latest`
-- `GEMINI_API_VERSION` optional, default `v1alpha`
-- `LOG_LEVEL` optional: `info` or `debug`
-- `PORT` optional, default `8080`
+---
 
-## Demo Quick Scenario
-1. Start session
-2. Say: "Make the Truth circle larger and yellow"
-3. Confirm voice response + visual mutation
-4. Interrupt mid-response and redirect topic
-5. Confirm immediate adaptation and continued conversation
+## 📄 License
+ISC © 2026 Mohammed Refaat
 
-## Acceptance Smoke Tests
-Use `ACCEPTANCE_SUITE.md` for the full set.
-Minimum pass before recording:
-- Cloud WS connect works
-- Local fallback works
-- Tool invocation mutates canvas
-- Interruption handling works
-- Reconnect behavior matches expected retries
-
-## Submission Assets
-All judge-facing assets are prepared in this repository:
-- `DEVPOST_SUBMISSION.md`
-- `ARCHITECTURE.md`
-- `PITCH_SCRIPT.md`
-- `VIDEO_SHOTLIST.md`
-- `CLOUD_PROOF.md`
-- `BONUS_EXECUTION.md`
-- `DEMO_CHECKLIST.md`
-
-## License
-ISC
+---
+*Created with ❤️ for the Gemini Live Agent Challenge #GeminiLiveAgentChallenge*

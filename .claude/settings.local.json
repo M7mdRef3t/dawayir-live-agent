@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl -i https://dawayir-live-agent-880073923613.europe-west1.run.app/health)"
+      "Bash(curl -i https://dawayir-live-agent-880073923613.europe-west1.run.app/health)",
+      "Bash(npm run dev)",
+      "Bash(ls -la \"c:\\Users\\moham\\Downloads\\dawayir-live-agent\\submission-assets\\architecture\"\" 2>/dev/null || echo \"Directory or files not found yet \")"
     ],
     "deny": [],
     "ask": []

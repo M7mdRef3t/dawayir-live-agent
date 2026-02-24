@@ -67,7 +67,7 @@ if (!API_KEY) {
     logError('GEMINI_API_KEY is not set in .env');
     process.exit(1);
 }
-const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || 'models/gemini-2.5-flash-native-audio-latest';
+const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || 'models/gemini-2.0-flash-exp';
 const LIVE_API_VERSION = process.env.GEMINI_API_VERSION || 'v1alpha';
 
 const ai = new GoogleGenAI({

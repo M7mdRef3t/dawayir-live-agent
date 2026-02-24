@@ -11,11 +11,11 @@ Just finalized our submission for the Google #GeminiLiveAgentChallenge! 🚀
 
 We built **Dawayir** (دوائر) — a real-time AI journey for mental clarity. 🧠✨
 
-Using the brand new **Gemini Multimodal Live API**, we created an agent that doesn't just talk; it **SEES** and **REMEMBERS**. Dawayir starts with a **Visual Pulse Check** (Facial mood analysis), evolves a living mental canvas through real-time Tool Calling, and autonomously generates **Session Reports** to Google Cloud Storage.
+Using the brand new **Gemini Multimodal Live API**, we created an agent that doesn't just talk; it **SEES** and **REMEMBERS**. Dawayir starts with an optional **Visual Pulse Check** (snapshot-based mood analysis), evolves a living mental canvas through real-time Tool Calling, and autonomously generates **Session Reports** to Google Cloud Storage.
 
 Key features:
 ✅ Real-time Egyptian Arabic voice interaction (Multimodal SDK)
-✅ Visual Pulse Check (Facial expression context)
+✅ Visual Pulse Check via snapshot (Initial mood context sent to Gemini)
 ✅ Low-latency visual state updates (Function Calling)
 ✅ Cloud Memory Bank & Session Reports on GCS
 ✅ Enterprise-ready with CI/CD and Terraform
@@ -34,7 +34,7 @@ Shoutout to the Google DeepMind team for the amazing SDK! @GoogleCloud @GoogleDe
 
 بنينا مشروع **"دوائر" (Dawayir)** — وكيل ذكاء اصطناعي تفاعلي بيساعدك تستكشف مساحتك الذهنية وترتب أفكارك في الوقت الفعلي. 🧠✨
 
-باستخدام **Gemini Live API**، قدرنا نبني تجربة بتبدأ بـ تحليل بصري لمودك (Visual Pulse Check)، وبتتكلم معاك بلهجة مصرية ودودة، وبتحرك "دوائر" (Circles) قدامك على الشاشة حسب مشاعرك، وفي النهاية بتطلع لك "روشتة وعي" (Session Report) بتتحفظ أوتوماتيك على جوجل كلاود.
+باستخدام **Gemini Live API**، قدرنا نبني تجربة بتبدأ بـ صورة اختيارية لوجهك (Visual Pulse Check) بتتبعت لـ Gemini عشان يفهم حالتك النفسية الأولية، وبعدين بتتكلم معاك بلهجة مصرية ودودة، وبتحرك "دوائر" (Circles) قدامك على الشاشة حسب مشاعرك، وفي النهاية بتطلع لك "روشتة وعي" (Session Report) بتتحفظ أوتوماتيك على جوجل كلاود.
 
 أهم المميزات:
 ✅ محادثة صوتية حية وتحليل بصري مبدئي للمشاعر
