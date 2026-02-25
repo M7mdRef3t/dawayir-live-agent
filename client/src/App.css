@@ -156,6 +156,13 @@ canvas {
   transform: scale(1.05);
 }
 
+.lang-toggle {
+  font-size: 12px;
+  font-weight: 800;
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.5px;
+}
+
 /* ============================
    STATUS BADGE
    ============================ */
@@ -629,6 +636,11 @@ button:disabled {
   direction: rtl;
   text-align: right;
   padding: 10px 0 0;
+}
+
+.hint.ltr {
+  direction: ltr;
+  text-align: left;
 }
 
 .error-message {

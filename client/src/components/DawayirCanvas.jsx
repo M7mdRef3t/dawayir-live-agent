@@ -1,11 +1,12 @@
 import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef } from 'react';
 
 const DawayirCanvas = forwardRef((props, ref) => {
+    const PANEL_WIDTH = 380; // Left sidebar width + padding
     const canvasRef = useRef(null);
     const nodesRef = useRef([
-        { id: 1, x: window.innerWidth / 4, y: window.innerHeight / 2, radius: 70, targetRadius: 70, color: '#00F5FF', targetColor: '#00F5FF', label: 'الوعي', pulse: 0, velocity: { x: 0.2, y: 0.1 } },
-        { id: 2, x: window.innerWidth / 2, y: window.innerHeight / 2, radius: 85, targetRadius: 85, color: '#00FF41', targetColor: '#00FF41', label: 'العلم', pulse: 0, velocity: { x: -0.15, y: 0.25 } },
-        { id: 3, x: (3 * window.innerWidth) / 4, y: window.innerHeight / 2, radius: 95, targetRadius: 95, color: '#FF00E5', targetColor: '#FF00E5', label: 'الحقيقة', pulse: 0, velocity: { x: 0.1, y: -0.2 } },
+        { id: 1, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.25, y: window.innerHeight / 2, radius: 70, targetRadius: 70, color: '#00F5FF', targetColor: '#00F5FF', label: 'Awareness', pulse: 0, velocity: { x: 0.2, y: 0.1 } },
+        { id: 2, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.5, y: window.innerHeight / 2, radius: 85, targetRadius: 85, color: '#00FF41', targetColor: '#00FF41', label: 'Science', pulse: 0, velocity: { x: -0.15, y: 0.25 } },
+        { id: 3, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.75, y: window.innerHeight / 2, radius: 95, targetRadius: 95, color: '#FF00E5', targetColor: '#FF00E5', label: 'Truth', pulse: 0, velocity: { x: 0.1, y: -0.2 } },
     ]);
     const particlesRef = useRef([]);
     const dashOffsetRef = useRef(0);
@@ -50,16 +51,15 @@ const DawayirCanvas = forwardRef((props, ref) => {
 
     useImperativeHandle(ref, () => ({
         updateNode: (id, updates) => {
-            nodesRef.current = nodesRef.current.map(node => {
-                if (node.id !== id) return node;
-                const newNode = { ...node };
-                if (updates.radius !== undefined) newNode.targetRadius = updates.radius;
-                if (updates.color !== undefined) newNode.targetColor = updates.color;
-                if (updates.label !== undefined) newNode.label = updates.label;
-                if (updates.x !== undefined) newNode.x = updates.x;
-                if (updates.y !== undefined) newNode.y = updates.y;
-                return newNode;
-            });
+            console.log(`[Canvas] updateNode called: id=${id}, updates=`, updates);
+            const node = nodesRef.current.find(n => n.id === id);
+            if (!node) return;
+            if (updates.radius !== undefined) node.targetRadius = Number(updates.radius);
+            if (updates.color !== undefined) node.targetColor = String(updates.color);
+            if (updates.label !== undefined) node.label = updates.label;
+            if (updates.x !== undefined) node.x = updates.x;
+            if (updates.y !== undefined) node.y = updates.y;
+            console.log(`[Canvas] Node ${id} MUTATED: targetRadius=${node.targetRadius}, targetColor=${node.targetColor}, currentRadius=${node.radius}`);
         },
         pulseNode: (id) => {
             nodesRef.current = nodesRef.current.map(node =>
@@ -173,8 +173,12 @@ const DawayirCanvas = forwardRef((props, ref) => {
                     node.y += node.velocity.y;
 
                     // Bounce off boundaries
-                    if (node.x - node.radius < 0 || node.x + node.radius > canvas.width) node.velocity.x *= -1;
+                    if (node.x - node.radius < PANEL_WIDTH || node.x + node.radius > canvas.width) node.velocity.x *= -1;
                     if (node.y - node.radius < 0 || node.y + node.radius > canvas.height) node.velocity.y *= -1;
+
+                    // Clamp to visible area
+                    node.x = Math.max(PANEL_WIDTH + node.radius, Math.min(canvas.width - node.radius, node.x));
+                    node.y = Math.max(node.radius, Math.min(canvas.height - node.radius, node.y));
                 }
             });
 

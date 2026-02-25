@@ -80,6 +80,8 @@ Compliance statement:
 3. **Cloud Memory Persistence:** Automatic mental map snapshots and session reports saved to GCS.
 4. **Professional Monitoring:** Built-in debug telemetry, health checks, and CI/CD automation.
 5. **The Rihlaty Vision:** Positioning Dawayir as a core engine for a larger coaching platform, rather than a standalone hackathon demo.
+6. **The UI as Therapy (Dynamic Equilibrium):** Dawayir is not a traditional chatbot; it acts as a real-time "mirror" of the user's mental space. The three visual nodes—Awareness (الوعي), Science (العلم), and Truth (الحقيقة)—dynamically shift in size, color, and spatial relationship based on the psychological depth of the conversation. This transforms the interface into a living cognitive canvas, reducing cognitive overload during crises and reflecting a state of visual 'Flow' when the user reaches mental clarity.
+7. **Bilingual Support (EN/AR):** Full English and Arabic support with a one-click language toggle, meeting competition requirements while showcasing multilingual Live Agent capability.
 
 ## Submission Completeness Checklist
 - [x] Description finalized

@@ -5,8 +5,60 @@ import './App.css';
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
 const MIC_WORKLET_NAME = 'dawayir-mic-processor';
-const MAX_RECONNECT_ATTEMPTS = 5;
-const RECONNECT_DELAY_MS = 2000;
+const MAX_RECONNECT_ATTEMPTS = 3;
+const RECONNECT_DELAY_MS = 5000;
+
+const STRINGS = {
+  en: {
+    brandName: 'Dawayir',
+    brandSub: 'Your Living Mental Space',
+    statusActive: 'Session Active',
+    statusDisconnected: 'Disconnected',
+    captureBtn: '📸 Visual Pulse Check',
+    capture: '🎯 Capture',
+    cancel: '✕ Cancel',
+    initialState: 'Your Initial State',
+    retake: '🔄 Retake',
+    connectedMsg: '✨ Connected to Your Mental Space',
+    connecting: 'Connecting',
+    enterSpace: 'Enter Mental Space 🧠',
+    enterSpaceVision: 'Enter Mental Space (with Vision)',
+    agentSpeaking: 'Dawayir is speaking...',
+    updateVisual: '📸 Update Visual Context',
+    endSession: 'End Session',
+    hint: 'Speak freely and explore your mental space. ✨',
+    liveChat: '💬 Live Conversation',
+    memoryBank: 'Memory Bank',
+    dashboardBtn: '💾',
+  },
+  ar: {
+    brandName: 'دوائر',
+    brandSub: 'مساحتك الذهنية الحية',
+    statusActive: 'الجلسة نشطة',
+    statusDisconnected: 'غير متصل',
+    captureBtn: '📸 فحص الحالة البصرية',
+    capture: '🎯 التقاط',
+    cancel: '✕ إغلاق',
+    initialState: 'حالتك المبدئية',
+    retake: '🔄 إعادة الالتقاط',
+    connectedMsg: '✨ متصل بمساحتك الذهنية',
+    connecting: 'جاري الاتصال',
+    enterSpace: 'ادخل المساحة الذهنية 🧠',
+    enterSpaceVision: 'ادخل المساحة الذهنية (مع الرؤية)',
+    agentSpeaking: 'دوائر يتكلم...',
+    updateVisual: '📸 تحديث السياق البصري',
+    endSession: 'إنهاء الجلسة',
+    hint: 'تحدث بحرية واستكشف مساحتك الذهنية. ✨',
+    liveChat: '💬 المحادثة الحية',
+    memoryBank: 'بنك الذاكرة',
+    dashboardBtn: '💾',
+  }
+};
+
+const NODE_LABELS = {
+  en: { 1: 'Awareness', 2: 'Science', 3: 'Truth' },
+  ar: { 1: 'الوعي', 2: 'العلم', 3: 'الحقيقة' }
+};
 
 const arrayBufferToBase64 = (arrayBuffer) => {
   const bytes = new Uint8Array(arrayBuffer);
@@ -207,6 +259,8 @@ const Visualizer = ({ stream, isConnected }) => {
 };
 
 function App() {
+  const [lang, setLang] = useState('en');
+  const t = STRINGS[lang];
   const [status, setStatus] = useState('Disconnected');
   const [errorMessage, setErrorMessage] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -218,6 +272,16 @@ function App() {
   const [appView, setAppView] = useState('live'); // 'live' or 'dashboard'
   const [transcript, setTranscript] = useState([]); // Live transcript entries
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
+
+  // Update canvas node labels when language changes
+  useEffect(() => {
+    const labels = NODE_LABELS[lang];
+    if (canvasRef.current) {
+      Object.entries(labels).forEach(([id, label]) => {
+        canvasRef.current.updateNode(Number(id), { label });
+      });
+    }
+  }, [lang]);
 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
@@ -647,16 +711,20 @@ function App() {
 
       try {
         if (call.name === 'update_node') {
-          const id = Number(args.id);
+          // Smart ID resolution — handle strings like "circle", "awareness", etc.
+          const NAME_TO_ID = { awareness: 1, science: 2, truth: 3, circle: 1, '1': 1, '2': 2, '3': 3 };
+          const rawId = args.id ?? args.node_id ?? args.nodeId ?? 1;
+          const resolvedId = NAME_TO_ID[String(rawId).toLowerCase()] ?? Number(rawId);
+          const id = Number.isFinite(resolvedId) ? resolvedId : 1;
           const currentNodes = canvasRef.current?.getNodes() || [];
-          if (!Number.isFinite(id) || !currentNodes.some(n => n.id === id)) {
-            throw new Error(`Invalid or non-existent node id: ${args.id}`);
-          }
+          const safeId = currentNodes.some(n => n.id === id) ? id : 1;
 
           const updates = { ...args };
-          delete updates.id;
-          console.log(`[App] Updating node ${id}:`, updates);
-          canvasRef.current?.updateNode(id, updates);
+          delete updates.id; delete updates.node_id; delete updates.nodeId;
+          console.log(`[App] Updating node ${safeId} (raw: ${rawId}):`, updates);
+          canvasRef.current?.updateNode(safeId, updates);
+          // Auto-pulse so the change is visually obvious
+          canvasRef.current?.pulseNode(safeId);
         } else if (call.name === 'highlight_node') {
           const id = Number(args.id);
           const currentNodes = canvasRef.current?.getNodes() || [];
@@ -843,22 +911,10 @@ function App() {
               bootstrapPromptSentRef.current = true;
               console.log('[App] Sending bootstrap prompt...');
 
-              const parts = [
-                {
-                  text: '\u0645\u0647\u0645 \u062c\u062f\u0627\u064b: \u0627\u0628\u062f\u0623 \u0627\u0644\u0643\u0644\u0627\u0645 \u0641\u0648\u0631\u0627\u064b \u0628\u062f\u0648\u0646 \u0627\u0646\u062a\u0638\u0627\u0631 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645. ' +
-                    '\u0623\u0647\u0644\u0627\u064b \u0628\u0643! \u0623\u0646\u0627 "\u062f\u0648\u0627\u0626\u0631"\u060c \u0631\u0641\u064a\u0642\u0643 \u0641\u064a \u0631\u062d\u0644\u0629 \u0627\u0633\u062a\u0643\u0634\u0627\u0641 \u0645\u0633\u0627\u062d\u062a\u0643 \u0627\u0644\u0630\u0647\u0646\u064a\u0629. ' +
-                    '\u0627\u0628\u062f\u0623 \u0628\u0627\u0644\u062a\u0631\u062d\u064a\u0628 \u0628\u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0628\u0644\u0647\u062c\u0629 \u0645\u0635\u0631\u064a\u0629 \u0648\u062f\u0648\u062f\u0629 \u062c\u062f\u0627\u064b \u0648\u0628\u0623\u0633\u0644\u0648\u0628 \u0647\u0627\u062f\u0626\u060c ' +
-                    '\u0648\u062d\u0644\u0644 \u062a\u0639\u0628\u064a\u0631 \u0648\u062c\u0647\u0647 \u0627\u0644\u0645\u0628\u062f\u0626\u064a (\u0645\u062a\u0648\u062a\u0631\u060c \u0633\u0639\u064a\u062f\u060c \u0645\u0631\u0647\u0642) \u0625\u0630\u0627 \u0648\u062c\u062f\u062a\u0647 \u0641\u064a \u0627\u0644\u0635\u0648\u0631\u0629\u060c ' +
-                    '\u0648\u0627\u0630\u0643\u0631 \u0630\u0644\u0643 \u0628\u0634\u0643\u0644 \u0644\u0637\u064a\u0641 \u062c\u062f\u0627\u064b\u060c \u062b\u0645 \u0627\u0637\u0644\u0628 \u0645\u0646\u0647 \u0623\u0646 \u064a\u0639\u0628\u0631 \u0639\u0646 \u0645\u0634\u0627\u0639\u0631\u0647 \u0644\u0643\u064a \u0646\u0631\u0627\u0647\u0627 \u0633\u0648\u064a\u0627\u064b \u0641\u064a \u0627\u0644\u062f\u0648\u0627\u0626\u0631 \u0627\u0644\u062a\u064a \u0623\u0645\u0627\u0645\u0647. ' +
-                    'CRITICAL: You MUST call update_node tool BEFORE speaking to update the circles!'
-                }
-              ];
-
-              if (capturedImage) {
-                const base64Data = capturedImage.split(',')[1];
-                parts.push({ inlineData: { mimeType: "image/jpeg", data: base64Data } });
-                console.log('[App] Including captured snapshot in bootstrap.');
-              }
+              const bootstrapText = lang === 'ar'
+                ? '\u0627\u0628\u062f\u0623 \u0627\u0644\u0643\u0644\u0627\u0645 \u0641\u0648\u0631\u0627\u064b. \u0631\u062d\u0628 \u0628\u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0628\u0644\u0647\u062c\u0629 \u0645\u0635\u0631\u064a\u0629 \u062f\u0627\u0641\u0626\u0629 \u0648\u0627\u0633\u0623\u0644\u0647 \u0639\u0646 \u062d\u0627\u0644\u0647. \u0627\u0633\u062a\u062e\u062f\u0645 update_node \u0642\u0628\u0644 \u0627\u0644\u0643\u0644\u0627\u0645.'
+                : 'Start speaking immediately. Welcome the user warmly and ask how they feel. Call update_node before speaking.';
+              const parts = [{ text: bootstrapText }];
 
               wsRef.current.send(JSON.stringify({
                 clientContent: { turns: [{ role: 'user', parts }], turnComplete: true }
@@ -878,282 +934,287 @@ function App() {
               }));
             }
 
-        }
+          }
         } catch (error) {
-        setStatus('Error');
-        setErrorMessage(error.message);
-        setLastEvent('mic_start_error');
+          setStatus('Error');
+          setErrorMessage(error.message);
+          setLastEvent('mic_start_error');
+        }
+        return;
       }
-      return;
-    }
 
-    const toolCall = getToolCall(message);
-    if (toolCall) {
-      handleToolCall(toolCall);
-    }
+      const toolCall = getToolCall(message);
+      if (toolCall) {
+        handleToolCall(toolCall);
+      }
 
-    if (isInterruptedMessage(message)) {
+      if (isInterruptedMessage(message)) {
+        stopPlayback();
+        setLastEvent('server_interrupted');
+      }
+
+      const parts = getParts(message);
+      const audioParts = Array.isArray(parts)
+        ? parts.filter((part) =>
+          isAudioMimeType(getInlineData(part)?.mimeType)
+          || isAudioMimeType(getInlineData(part)?.mime_type)
+        )
+        : [];
+
+      for (const part of audioParts) {
+        const inline = getInlineData(part);
+        if (inline?.data) {
+          await playPcmChunk(base64ToArrayBuffer(inline.data));
+          setLastEvent('audio_chunk');
+        }
+      }
+
+      // Capture text for context preservation and live transcript
+      const textParts = Array.isArray(parts) ? parts.filter(p => p.text).map(p => p.text) : [];
+      if (textParts.length > 0) {
+        sessionContextRef.current = [...sessionContextRef.current, ...textParts].slice(-5);
+        setIsAgentSpeaking(true);
+        // Update live transcript with latest agent text
+        setTranscript(prev => [
+          ...prev,
+          { role: 'agent', text: textParts.join(' '), time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) }
+        ].slice(-4));
+      }
+
+      const turnAudioBlobs = getTurnDataAudioBlobs(message);
+      if (audioParts.length === 0 && turnAudioBlobs.length === 0) return;
+
+      for (const blob of turnAudioBlobs) {
+        if (blob?.data) {
+          await playPcmChunk(base64ToArrayBuffer(blob.data));
+          setLastEvent('audio_chunk_turn_data');
+        }
+      }
+    };
+
+    socket.onerror = () => {
+      setStatus('Error');
+      setErrorMessage('WebSocket error. Retrying if possible.');
+      setIsStarting(false);
+      setLastEvent('ws_error');
+    };
+
+    socket.onclose = async () => {
+      wsRef.current = null;
+      setupCompleteRef.current = false;
+      setIsConnected(false);
+      setIsStarting(false);
+
+      await stopMicrophone();
       stopPlayback();
-      setLastEvent('server_interrupted');
-    }
 
-    const parts = getParts(message);
-    const audioParts = Array.isArray(parts)
-      ? parts.filter((part) =>
-        isAudioMimeType(getInlineData(part)?.mimeType)
-        || isAudioMimeType(getInlineData(part)?.mime_type)
-      )
-      : [];
-
-    for (const part of audioParts) {
-      const inline = getInlineData(part);
-      if (inline?.data) {
-        await playPcmChunk(base64ToArrayBuffer(inline.data));
-        setLastEvent('audio_chunk');
+      if (manualCloseRef.current) {
+        setStatus((prev) => (prev === 'Error' ? prev : 'Disconnected'));
+        setLastEvent('ws_closed_manual');
+        return;
       }
-    }
 
-    // Capture text for context preservation and live transcript
-    const textParts = Array.isArray(parts) ? parts.filter(p => p.text).map(p => p.text) : [];
-    if (textParts.length > 0) {
-      sessionContextRef.current = [...sessionContextRef.current, ...textParts].slice(-5);
-      setIsAgentSpeaking(true);
-      // Update live transcript with latest agent text
-      setTranscript(prev => [
-        ...prev,
-        { role: 'agent', text: textParts.join(' '), time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) }
-      ].slice(-4));
-    }
-
-    const turnAudioBlobs = getTurnDataAudioBlobs(message);
-    if (audioParts.length === 0 && turnAudioBlobs.length === 0) return;
-
-    for (const blob of turnAudioBlobs) {
-      if (blob?.data) {
-        await playPcmChunk(base64ToArrayBuffer(blob.data));
-        setLastEvent('audio_chunk_turn_data');
+      const nextAttempt = reconnectAttemptRef.current + 1;
+      if (nextAttempt <= MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttemptRef.current = nextAttempt;
+        setReconnectAttempt(nextAttempt);
+        setStatus(`Reconnecting (${nextAttempt}/${MAX_RECONNECT_ATTEMPTS})...`);
+        setLastEvent('ws_closed_retrying');
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          connect();
+        }, RECONNECT_DELAY_MS);
+        return;
       }
-    }
-  };
 
-  socket.onerror = () => {
-    setStatus('Error');
-    setErrorMessage('WebSocket error. Retrying if possible.');
-    setIsStarting(false);
-    setLastEvent('ws_error');
-  };
-
-  socket.onclose = async () => {
-    wsRef.current = null;
-    setupCompleteRef.current = false;
-    setIsConnected(false);
-    setIsStarting(false);
-
-    await stopMicrophone();
-    stopPlayback();
-
-    if (manualCloseRef.current) {
       setStatus((prev) => (prev === 'Error' ? prev : 'Disconnected'));
-      setLastEvent('ws_closed_manual');
-      return;
-    }
+      setErrorMessage('Connection closed after retry attempts. Please reconnect manually.');
+      setLastEvent('ws_closed_giveup');
+    };
+  }, [
+    backendUrl,
+    capturedImage,
+    ensureSpeakerContext,
+    handleToolCall,
+    isConnected,
+    isStarting,
+    playPcmChunk,
+    startMicrophone,
+    stopMicrophone,
+    stopPlayback,
+  ]);
 
-    const nextAttempt = reconnectAttemptRef.current + 1;
-    if (nextAttempt <= MAX_RECONNECT_ATTEMPTS) {
-      reconnectAttemptRef.current = nextAttempt;
-      setReconnectAttempt(nextAttempt);
-      setStatus(`Reconnecting (${nextAttempt}/${MAX_RECONNECT_ATTEMPTS})...`);
-      setLastEvent('ws_closed_retrying');
-      reconnectTimeoutRef.current = window.setTimeout(() => {
-        connect();
-      }, RECONNECT_DELAY_MS);
-      return;
-    }
+  useEffect(() => {
+    return () => {
+      disconnect();
+    };
+  }, [disconnect]);
 
-    setStatus((prev) => (prev === 'Error' ? prev : 'Disconnected'));
-    setErrorMessage('Connection closed after retry attempts. Please reconnect manually.');
-    setLastEvent('ws_closed_giveup');
-  };
-}, [
-  backendUrl,
-  capturedImage,
-  ensureSpeakerContext,
-  handleToolCall,
-  isConnected,
-  isStarting,
-  playPcmChunk,
-  startMicrophone,
-  stopMicrophone,
-  stopPlayback,
-]);
-
-useEffect(() => {
-  return () => {
-    disconnect();
-  };
-}, [disconnect]);
-
-return (
-  <div className="App">
-    <div className="overlay">
-      {appView === 'dashboard' ? (
-        <Dashboard onBack={() => setAppView('live')} />
-      ) : (
-        <>
-          {/* Brand Header */}
-          <div className="brand-header">
-            <div className="brand-logo-row">
-              <div>
-                <div className="brand-name">&#x62F;&#x648;&#x627;&#x626;&#x631;</div>
-                <div className="brand-arabic">&#x645;&#x633;&#x627;&#x62D;&#x62A;&#x643; &#x627;&#x644;&#x630;&#x647;&#x646;&#x64A;&#x629; &#x627;&#x644;&#x62D;&#x64A;&#x629;</div>
-              </div>
-              {!isConnected && !isStarting && (
-                <button className="icon-btn" onClick={() => setAppView('dashboard')} title="&#x628;&#x646;&#x643; &#x627;&#x644;&#x630;&#x627;&#x643;&#x631;&#x629;">
-                  &#x1F4BE;
-                </button>
-              )}
-            </div>
-            <div className={`status-badge ${statusClass}`}>
-              <span className="dot"></span>
-              {isConnected ? 'الجلسة نشطة' : status === 'Disconnected' ? 'غير متصل' : status}
-            </div>
-          </div>
-
-          {/* Main Controls */}
-          <div className="section">
-            {!isConnected && !isStarting && (
-              <div className="camera-setup">
-                <video ref={videoRef} autoPlay playsInline muted style={{ display: 'none' }} />
-
-                {!isCameraActive && !capturedImage ? (
-                  <button className="primary-btn" onClick={startCamera}>
-                    &#x1F4F8; &#x641;&#x62D;&#x635; &#x627;&#x644;&#x62D;&#x627;&#x644;&#x629; &#x627;&#x644;&#x628;&#x635;&#x631;&#x64A;&#x629;
+  return (
+    <div className="App">
+      <div className="overlay">
+        {appView === 'dashboard' ? (
+          <Dashboard onBack={() => setAppView('live')} />
+        ) : (
+          <>
+            {/* Brand Header */}
+            <div className="brand-header">
+              <div className="brand-logo-row">
+                <div>
+                  <div className="brand-name">{t.brandName}</div>
+                  <div className="brand-arabic">{t.brandSub}</div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="icon-btn lang-toggle" onClick={() => setLang(l => l === 'en' ? 'ar' : 'en')} title="Toggle Language">
+                    {lang === 'en' ? 'AR' : 'EN'}
                   </button>
-                ) : isCameraActive ? (
-                  <div className="video-capture-flow">
-                    <div className="video-container">
-                      <video autoPlay playsInline muted
-                        ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
-                        style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
+                  {!isConnected && !isStarting && (
+                    <button className="icon-btn" onClick={() => setAppView('dashboard')} title={t.memoryBank}>
+                      {t.dashboardBtn}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className={`status-badge ${statusClass}`}>
+                <span className="dot"></span>
+                {isConnected ? t.statusActive : status === 'Disconnected' ? t.statusDisconnected : status}
+              </div>
+            </div>
+
+            {/* Main Controls */}
+            <div className="section">
+              {!isConnected && !isStarting && (
+                <div className="camera-setup">
+                  <video ref={videoRef} autoPlay playsInline muted style={{ display: 'none' }} />
+
+                  {!isCameraActive && !capturedImage ? (
+                    <button className="primary-btn" onClick={startCamera}>
+                      {t.captureBtn}
+                    </button>
+                  ) : isCameraActive ? (
+                    <div className="video-capture-flow">
+                      <div className="video-container">
+                        <video autoPlay playsInline muted
+                          ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
+                          style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </div>
+                      <div className="camera-actions-row">
+                        <button className="capture-btn" onClick={captureSnapshot}>{t.capture}</button>
+                        <button className="cancel-btn" onClick={stopCamera}>{t.cancel}</button>
+                      </div>
                     </div>
-                    <div className="camera-actions-row">
-                      <button className="capture-btn" onClick={captureSnapshot}>&#x1F3AF; &#x627;&#x644;&#x62A;&#x642;&#x627;&#x637;</button>
-                      <button className="cancel-btn" onClick={stopCamera}>&#x2715; &#x625;&#x63A;&#x644;&#x627;&#x642;</button>
+                  ) : (
+                    <div className="captured-preview-container">
+                      <div className="preview-heading">{t.initialState}</div>
+                      <img src={capturedImage} className="pulse-preview-large" alt="Captured" />
+                      <button className="retake-btn" onClick={() => { setCapturedImage(null); setTimeout(() => setIsCameraActive(true), 50); setTimeout(startCamera, 100); }}>
+                        {t.retake}
+                      </button>
                     </div>
+                  )}
+                </div>
+              )}
+
+              <button
+                className={`primary-btn ${isConnected ? 'secure-link' : ''}`}
+                onClick={connect}
+                disabled={isConnected || isStarting}
+              >
+                {isConnected ? (
+                  t.connectedMsg
+                ) : isStarting ? (
+                  <div className="loading-container">
+                    <span className="loading-text">{t.connecting}</span>
+                    <div className="spinner"><div className="spinner-ring"></div></div>
                   </div>
                 ) : (
-                  <div className="captured-preview-container">
-                    <div className="preview-heading">&#x62D;&#x627;&#x644;&#x62A;&#x643; &#x627;&#x644;&#x645;&#x628;&#x62F;&#x626;&#x64A;&#x629;</div>
-                    <img src={capturedImage} className="pulse-preview-large" alt="Captured" />
-                    <button className="retake-btn" onClick={() => { setCapturedImage(null); setTimeout(() => setIsCameraActive(true), 50); setTimeout(startCamera, 100); }}>
-                      &#x1F504; &#x625;&#x639;&#x627;&#x62F;&#x629; &#x627;&#x644;&#x62A;&#x642;&#x627;&#x637;
-                    </button>
+                  capturedImage
+                    ? t.enterSpaceVision
+                    : t.enterSpace
+                )}
+              </button>
+            </div>
+
+            {/* Connected Activity */}
+            {isConnected && (
+              <div className="section">
+                <video ref={videoRef} autoPlay playsInline muted style={{ display: 'none' }} />
+
+                {isAgentSpeaking && (
+                  <div className="ai-state-bar">
+                    <div className="wave">
+                      <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                    {t.agentSpeaking}
                   </div>
                 )}
+
+                <div className="visual-feedback">
+                  <Visualizer stream={micStreamRef.current} isConnected={isConnected} />
+                  {capturedImage && (
+                    <div className="snapshot-preview">
+                      <img src={capturedImage} alt="Pulse Snapshot" />
+                      <span>{t.initialState}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="connected-actions">
+                  {!isCameraActive ? (
+                    <button className="retake-live-btn" onClick={startCamera}>
+                      {t.updateVisual}
+                    </button>
+                  ) : (
+                    <div className="live-camera-mini">
+                      <div className="video-container-mini">
+                        <video autoPlay playsInline muted
+                          ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </div>
+                      <div className="mini-camera-actions">
+                        <button className="mini-capture-btn" onClick={captureSnapshot}>{t.capture}</button>
+                        <button className="mini-cancel-btn" onClick={stopCamera}>{t.cancel}</button>
+                      </div>
+                    </div>
+                  )}
+                  <button className="secondary disconnect-btn" onClick={disconnect}>
+                    {t.endSession}
+                  </button>
+                </div>
               </div>
             )}
 
-            <button
-              className={`primary-btn ${isConnected ? 'secure-link' : ''}`}
-              onClick={connect}
-              disabled={isConnected || isStarting}
-            >
-              {isConnected ? (
-                '✨ متصل بمساحتك الذهنية'
-              ) : isStarting ? (
-                <div className="loading-container">
-                  <span className="loading-text">&#x62C;&#x627;&#x631;&#x64A; &#x627;&#x644;&#x627;&#x62A;&#x635;&#x627;&#x644;</span>
-                  <div className="spinner"><div className="spinner-ring"></div></div>
-                </div>
-              ) : (
-                capturedImage
-                  ? 'ادخل المساحة الذهنية (مع الرؤية)'
-                  : 'ادخل المساحة الذهنية 🧠'
-              )}
-            </button>
-          </div>
+            {isConnected && !errorMessage && (
+              <p className={`hint ${lang === 'en' ? 'ltr' : ''}`}>{t.hint}</p>
+            )}
 
-          {/* Connected Activity */}
-          {isConnected && (
-            <div className="section">
-              <video ref={videoRef} autoPlay playsInline muted style={{ display: 'none' }} />
+            {errorMessage && <p className="error-message">&#x26A0;&#xFE0F; {errorMessage}</p>}
 
-              {isAgentSpeaking && (
-                <div className="ai-state-bar">
-                  <div className="wave">
-                    <span></span><span></span><span></span><span></span><span></span>
-                  </div>
-                  &#x62F;&#x648;&#x627;&#x626;&#x631; &#x64A;&#x62A;&#x643;&#x644;&#x645;...
-                </div>
-              )}
-
-              <div className="visual-feedback">
-                <Visualizer stream={micStreamRef.current} isConnected={isConnected} />
-                {capturedImage && (
-                  <div className="snapshot-preview">
-                    <img src={capturedImage} alt="Pulse Snapshot" />
-                    <span>&#x62D;&#x627;&#x644;&#x62A;&#x643; &#x627;&#x644;&#x645;&#x628;&#x62F;&#x626;&#x64A;&#x629;</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="connected-actions">
-                {!isCameraActive ? (
-                  <button className="retake-live-btn" onClick={startCamera}>
-                    &#x1F4F8; &#x62A;&#x62D;&#x62F;&#x64A;&#x62B; &#x627;&#x644;&#x633;&#x64A;&#x627;&#x642; &#x627;&#x644;&#x628;&#x635;&#x631;&#x64A;
-                  </button>
-                ) : (
-                  <div className="live-camera-mini">
-                    <div className="video-container-mini">
-                      <video autoPlay playsInline muted
-                        ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    </div>
-                    <div className="mini-camera-actions">
-                      <button className="mini-capture-btn" onClick={captureSnapshot}>&#x1F3AF; &#x627;&#x644;&#x62A;&#x642;&#x627;&#x637;</button>
-                      <button className="mini-cancel-btn" onClick={stopCamera}>&#x2715; &#x625;&#x644;&#x63A;&#x627;&#x621;</button>
-                    </div>
-                  </div>
-                )}
-                <button className="secondary disconnect-btn" onClick={disconnect}>
-                  &#x625;&#x646;&#x647;&#x627;&#x621; &#x627;&#x644;&#x62C;&#x644;&#x633;&#x629;
-                </button>
-              </div>
-            </div>
-          )}
-
-          {isConnected && !errorMessage && (
-            <p className="hint">&#x62A;&#x62D;&#x62F;&#x62B; &#x628;&#x62D;&#x631;&#x64A;&#x629; &#x648;&#x627;&#x633;&#x62A;&#x643;&#x634;&#x641; &#x645;&#x633;&#x627;&#x62D;&#x62A;&#x643; &#x627;&#x644;&#x630;&#x647;&#x646;&#x64A;&#x629;. &#x2728;</p>
-          )}
-
-          {errorMessage && <p className="error-message">&#x26A0;&#xFE0F; {errorMessage}</p>}
-
-          <footer className="footer-info" style={{ display: 'none' }}>
-            <span>Backend: {backendUrl}</span>
-            <span>Mic: {isMicActive ? 'on' : 'off'} | Tools: {toolCallsCount} | Event: {lastEvent}</span>
-          </footer>
-        </>
-      )}
-    </div>
-
-    {/* Live Transcript Overlay */}
-    {isConnected && transcript.length > 0 && (
-      <div className="transcript-overlay">
-        <div className="transcript-header">&#x1F4AC; &#x627;&#x644;&#x645;&#x62D;&#x627;&#x62F;&#x62B;&#x629; &#x627;&#x644;&#x62D;&#x64A;&#x629;</div>
-        {transcript.map((entry, idx) => (
-          <div key={idx} className={`transcript-entry transcript-${entry.role}`}>
-            <span className="transcript-time">{entry.time}</span>
-            <span className="transcript-text">{entry.text.substring(0, 120)}{entry.text.length > 120 ? '...' : ''}</span>
-          </div>
-        ))}
+            <footer className="footer-info" style={{ display: 'none' }}>
+              <span>Backend: {backendUrl}</span>
+              <span>Mic: {isMicActive ? 'on' : 'off'} | Tools: {toolCallsCount} | Event: {lastEvent}</span>
+            </footer>
+          </>
+        )}
       </div>
-    )}
 
-    <DawayirCanvas ref={canvasRef} />
-  </div>
-);
+      {/* Live Transcript Overlay */}
+      {isConnected && transcript.length > 0 && (
+        <div className="transcript-overlay">
+          <div className="transcript-header">{t.liveChat}</div>
+          {transcript.map((entry, idx) => (
+            <div key={idx} className={`transcript-entry transcript-${entry.role}`}>
+              <span className="transcript-time">{entry.time}</span>
+              <span className="transcript-text">{entry.text.substring(0, 120)}{entry.text.length > 120 ? '...' : ''}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <DawayirCanvas ref={canvasRef} />
+    </div>
+  );
 }
 
 export default App;

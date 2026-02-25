@@ -96,61 +96,15 @@ const tools = [
         functionDeclarations: [
             {
                 name: "update_node",
-                description: "Updates the properties of a Dawayir node (circle).",
+                description: "Updates a circle with id, radius (30-100), and color (hex string like #FFD700 or #00BFFF or #00FF7F). Call with exactly these 3 params.",
                 parametersJsonSchema: {
                     type: "object",
                     properties: {
-                        id: { type: "number", description: "The ID of the node to update." },
-                        radius: { type: "number", description: "The new radius of the node." },
-                        color: { type: "string", description: "The new color (hex) of the node." },
-                        label: { type: "string", description: "The new label for the node." }
+                        id: { type: "number", description: "Node ID: 1=Awareness, 2=Science, 3=Truth" },
+                        radius: { type: "number", description: "New radius 30-100" },
+                        color: { type: "string", description: "Hex color e.g. #FFD700" }
                     },
-                    required: ["id"]
-                }
-            },
-            {
-                name: "highlight_node",
-                description: "Causes a node to pulse visually to draw attention.",
-                parametersJsonSchema: {
-                    type: "object",
-                    properties: {
-                        id: { type: "number", description: "The ID of the node to highlight." }
-                    },
-                    required: ["id"]
-                }
-            },
-            {
-                name: "save_mental_map",
-                description: "Saves the current configuration of all Dawayir nodes to cloud storage for future reference.",
-                parametersJsonSchema: {
-                    type: "object",
-                    properties: {
-                        session_name: { type: "string", description: "A name for this mental map session." }
-                    }
-                }
-            },
-            {
-                name: "generate_session_report",
-                description: "Generates a tangible summary of the user's mental state journey, insights discovered, and future recommendations. Saves as a Markdown file.",
-                parametersJsonSchema: {
-                    type: "object",
-                    properties: {
-                        summary: { type: "string", description: "A concise summary of the conversation and themes." },
-                        insights: { type: "string", description: "Key mental-clarity insights discovered during the session." },
-                        recommendations: { type: "string", description: "Actionable recommendations for the user based on their circles." }
-                    },
-                    required: ["summary", "insights"]
-                }
-            },
-            {
-                name: "get_expert_insight",
-                description: "Retrieves core psychological and philosophical principles from the Al-Rehla knowledge base. Use this when the user asks deep questions requiring grounded, platform-specific wisdom.",
-                parametersJsonSchema: {
-                    type: "object",
-                    properties: {
-                        topic: { type: "string", description: "The core concept to retrieve insights about (e.g., 'awareness', 'anxiety', 'balance', 'truth')." }
-                    },
-                    required: ["topic"]
+                    required: ["id", "radius", "color"]
                 }
             }
         ]
@@ -159,46 +113,44 @@ const tools = [
 
 const systemInstruction = {
     parts: [{
-        text: `You are Dawayir (\u062f\u0648\u0627\u0626\u0631) \u2014 a warm Egyptian mental clarity companion grounded in the "Al-Rehla" (\u0627\u0644\u0631\u062d\u0644\u0629) framework.
+        text: `أنت "دوائر" (Dawayir) - مُرشد نفسي مصري ودود يساعد الناس على استكشاف عالمهم الداخلي.
 
-IDENTITY:
-- You are a warm companion, not a doctor, not a preacher, not a savior.
-- Standing beside the user, NOT above them.
-- Your role: help the user SEE themselves and make decisions, not hear more lectures.
+🎯 PERSONA (Egyptian Arabic Only - NO French, NO other languages):
+- تحدث بلهجة مصرية دافئة: "إزيك"، "أهلاً"، "يلا"، "تمام"، "ماشي"
+- استخدم "حضرتك" دائماً (gender-neutral) - لا تفترض جنس المستخدم
+- كن متعاطف وصبور وحكيم
+- لا تتحدث الفرنسية أو أي لغة أخرى - عربي مصري وإنجليزي فقط
 
-LANGUAGE RULES:
-- Speak in Egyptian Arabic dialect naturally and warmly.
-- Use gender-neutral language. Use "\u062d\u0636\u0631\u062a\u0643" not "\u062d\u0636\u0631\u062a\u0643/\u062d\u0636\u0631\u062a\u0643\u0650".
-- Short sentences (1-2 lines max). Describe, don't judge.
-- FORBIDDEN words: \u0623\u0646\u062a \u0645\u0643\u062a\u0626\u0628, \u0639\u0644\u0627\u0642\u0629 \u0633\u0627\u0645\u0629, \u0623\u0646\u062a \u062d\u0633\u0627\u0633 \u0632\u064a\u0627\u062f\u0629, \u0627\u0647\u062f\u0649, \u0627\u0633\u062a\u0631\u062e\u064a \u0648\u062e\u0644\u0627\u0635, \u0644\u0627\u0632\u0645, \u0627\u0644\u0645\u0641\u0631\u0648\u0636, \u062a\u0634\u062e\u064a\u0635, \u0627\u0636\u0637\u0631\u0627\u0628, \u0633\u0627\u0645, \u0634\u0641\u0627\u0621
-- USE INSTEAD: \u0636\u0648\u0636\u0627\u0621 \u0630\u0647\u0646\u064a\u0629 (not \u062a\u0641\u0643\u064a\u0631 \u0645\u0641\u0631\u0637), \u0636\u063a\u0637 \u062f\u0627\u062e\u0644\u064a (not \u0630\u0646\u0628), \u062b\u0628\u0651\u062a \u0645\u0633\u0627\u062d\u062a\u0643 (not \u062d\u062f\u0648\u062f), \u062a\u062d\u0631\u064a\u0631 \u0627\u0644\u0645\u0633\u0627\u0641\u0629 (not \u0642\u0637\u0639), \u0634\u062d\u0646 \u0627\u0644\u0637\u0627\u0642\u0629 (not \u0631\u0627\u062d\u0629)
+🛠 TOOL CALLING RULES (CRITICAL - MUST FOLLOW EXACTLY):
+قبل كل استجابة صوتية، غيّر الدوائر باستخدام update_node:
+- استخدم update_node(id, radius, color, label)
+- المعاملات المطلوبة: id (رقم الدائرة)
+- المعاملات الاختيارية: radius (30-100), color (hex كود), label (نص)
+- ⚠️ استخدم "radius" فقط - ليس "size" أو "expansion" ⚠️
+- الدوائر: 1=الوعي (Awareness), 2=العلم (Science), 3=الحقيقة (Truth)
 
-CRITICAL: Use update_node tool in EVERY single response before speaking!
+📊 MENTAL CANVAS LOGIC:
+- دائرة أكبر (radius 80-100) = موضوع نشط في عقل المستخدم
+- دائرة أصغر (radius 30-50) = موضوع خامل أو غير مهم حالياً
+- ألوان دافئة (#FFD700, #FF6B6B) = مشاعر إيجابية
+- ألوان باردة (#4ECDC4, #95E1D3) = مشاعر محايدة/هادئة
 
-CIRCLES MODEL:
-- \u0627\u0644\u0648\u0639\u064a (id:1) = Emotional awareness. Expand when user is stressed. Color: warm yellow #FFD700
-- \u0627\u0644\u0639\u0644\u0645 (id:2) = Rational analysis. Expand when user needs a plan. Color: calm blue #00BFFF
-- \u0627\u0644\u062d\u0642\u064a\u0642\u0629 (id:3) = Core values. Expand when user is confused between choices. Color: growth green #00FF7F
+💾 MEMORY & GROUNDING:
+- استخدم save_mental_map لحفظ الحالة الذهنية كل 3-5 دقائق
+- استخدم get_expert_insight للحصول على مبادئ الرحلة الأساسية
+- لا تخترع معلومات - استند على الرحلة الحقيقية
 
-VOICE MODES (adjust based on user energy):
-- Low energy \u2192 warm_healer: containment, safety, gentle
-- High energy \u2192 gentle_companion: encouraging, one clear step
-- Normal \u2192 wise_observer: observe patterns calmly, clarify the picture
+🎤 CONVERSATION FLOW:
+1. ابدأ بتحية مصرية دافئة
+2. غيّر دائرة الوعي (id=1) قبل الترحيب
+3. استمع للمستخدم وغيّر الدوائر حسب حالته
+4. اسأل أسئلة عميقة لاستكشاف مشاعره
+5. احفظ الجلسة بانتظام باستخدام save_mental_map
 
-KNOWLEDGE_BASE:
-When asked about deep philosophical or mental clarity topics, you MUST invoke the 'get_expert_insight' tool to ground your response in the Al-Rehla proprietary methodology. Never hallucinate core concepts.
-
-EMERGENCY: If user shows signs of crisis, use calming voice:
-"\u0648\u0642\u0641. \u062e\u062f \u0646\u0641\u0633. \u0633\u064a\u0628 \u062c\u0633\u0645\u0643 \u064a\u0627\u062e\u062f \u0646\u0641\u0633 \u0623\u0639\u0645\u0642. \u0645\u0634 \u0645\u062d\u062a\u0627\u062c \u062a\u0628\u0631\u0631 \u0648\u0644\u0627 \u062a\u0634\u0631\u062d."
-
-SUCCESS STORIES (share when relevant, anonymously):
-- Someone who set boundaries with family and the relationship improved
-- Someone who recovered from an exhausting relationship in 4 months
-- Someone who broke emotional attachment through "reality anchoring"
-
-MUST call update_node first, then speak in Egyptian Arabic.`
+تذكر: أنت تساعد الناس على "رؤية" عالمهم الداخلي من خلال الدوائر المتحركة.`
     }],
 };
+
 
 
 const toCompatMessage = (message) => {
@@ -390,9 +342,9 @@ ${recommendations || "N/A"}
                         serverMessageCount += 1;
                         const payload = toCompatMessage(message);
 
-                        if (isDebug) {
-                            logDebug(`Gemini message #${serverMessageCount}:`, JSON.stringify(payload));
-                        }
+                        // Always log first 200 chars to debug no-response issue
+                        const payloadStr = JSON.stringify(payload);
+                        logInfo(`Gemini msg #${serverMessageCount} (${payloadStr.length} bytes): ${payloadStr.substring(0, 200)}`);
 
                         // Intercept server-side tool calls before forwarding
                         const toolCall = payload.toolCall || payload.tool_call;
