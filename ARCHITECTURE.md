@@ -39,6 +39,7 @@ graph TD
 ## Technical Pillars
 
 ### 1. High-Fidelity Audio Streaming (The Pulse)
+- **Sub-200ms Latency Requirement:** In conversational AI, if a response takes over 200ms, the "magic" is lost. Dawayir abandons traditional Request-Response (REST) patterns completely in favor of WebRTC-like continuous stream processing.
 - **Ingress:** The browser captures raw audio through an `AudioWorkletProcessor`, converts it to **PCM16** at **16kHz** (optimized for Gemini), and streams it via high-speed binary WebSockets.
 - **Egress:** Gemini returns low-latency audio chunks (24kHz) which are re-assembled and played through the `Web Audio API` using a precision playback queue. This ensures seamless audio delivery even during high-frequency interruptions.
 
@@ -58,14 +59,30 @@ Unlike standard chatbots, Dawayir has a **long-term memory**.
 - **Glassmorphism Mapping:** Every "node" (Awareness, Science, Truth) is a state-aware object with individual physics and glowing shaders.
 - **AI-Driven Mutations:** When Gemini invokes `update_node` or `highlight_node`, the canvas translates the model's logic into visual "living" changes (size, color, pulsing).
 
-### 5. Scalability & Deployment
+### 5. Token Optimization & Cost Efficiency (The Scalability Engine)
+Running continuous multimodal models (Audio + Vision) can be prohibitively expensive if not aggressively managed.
+- **Targeted Visual Context:** We avoid streaming 60FPS video. Instead, the 'Visual Pulse Check' captures compressed static snapshots (`📸 Update Visual Context`) only when emotionally or contextually relevant.
+- **Context Compression:** By regularly shifting conversational state to GCS via `save_mental_map`, Dawayir prevents the Gemini context window from ballooning endlessly, saving thousands of tokens per minute.
+- **Audio Tuning:** We capture user audio at a highly-optimized 16kHz PCM16, giving the model exactly what it needs for speech recognition without wasting bandwidth or extra audio tokens.
+
+### 6. Grounding (The Knowledge Base Protocol)
+To ensure the AI operates as a trustworthy psychological coach rather than a generic chatbot, Dawayir is grounded in the proprietary **Al-Rehla** framework.
+- The `get_expert_insight` tool allows the agent to fetch predefined core principles (Awareness, Science, Truth) directly from a local JSON Knowledge Base, mathematically preventing hallucination of core therapeutic concepts.
+- The system instructions explicitly mandate retrieving these insights before tackling deep philosophical questions from the user.
+
+### 7. Scalability & Deployment
 ```mermaid
 graph LR
-    FE[Browser Frontend] -->|WSS Relay| CR[Google Cloud Run]
-    CR -->|GenAI SDK| GL[Gemini Live API Endpoint]
-    CR --> H[Liveness Health Check]
+    FE[Browser Frontend] <-->|WSS Relay + Audio/PCM16| CR[Google Cloud Run]
+    CR <-->|Google GenAI SDK| GEM[Gemini 2.5 Flash Live API]
+    CR -->|save_mental_map| GCS[(Google Cloud Storage)]
+    CR <-->|get_expert_insight| KB[(Al-Rehla Knowledge Base)]
+    GEM -->|update_node / highlight_node| CR
+    CR -->|Visual Sync + Audio| FE
+    CR --> H[/health Liveness Check/]
 ```
-- **Deployment:** Zero-downtime CI/CD deployment on Google Cloud.
+- **Scale-to-Zero:** Cloud Run only incurs compute cost during active WebSocket sessions. $0 when idle.
+- **IaC Automation:** Terraform (`main.tf`) + Cloud Build (`cloudbuild.yaml`) for fully automated, zero-downtime CI/CD deployment.
 - **Monitoring:** Real-time telemetry via custom debug pipes sent in each WebSocket event.
 
 ## Why This Architecture Wins

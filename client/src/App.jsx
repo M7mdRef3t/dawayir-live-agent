@@ -216,6 +216,8 @@ function App() {
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const [isMicActive, setIsMicActive] = useState(false);
   const [appView, setAppView] = useState('live'); // 'live' or 'dashboard'
+  const [transcript, setTranscript] = useState([]); // Live transcript entries
+  const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
@@ -237,7 +239,14 @@ function App() {
   const sessionContextRef = useRef([]); // Stores last few text segments for context preservation
 
   const startCamera = async () => {
+    console.log("[Camera] Starting camera...");
     try {
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("getUserMedia not supported in this browser");
+      }
+
+      console.log("[Camera] Requesting camera permission...");
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 640 },
@@ -245,20 +254,49 @@ function App() {
           facingMode: 'user'
         }
       });
+
+      console.log("[Camera] Permission granted. Stream:", stream);
+      console.log("[Camera] Video tracks:", stream.getVideoTracks());
+
       if (videoRef.current) {
+        console.log("[Camera] Setting stream to video element");
         videoRef.current.srcObject = stream;
+
+        // Wait for video metadata to load
+        videoRef.current.onloadedmetadata = () => {
+          console.log("[Camera] Video metadata loaded");
+          console.log("[Camera] Video dimensions:", videoRef.current.videoWidth, "x", videoRef.current.videoHeight);
+        };
+
         // Force play for browsers that need it
         try {
           await videoRef.current.play();
+          console.log("[Camera] Video play() succeeded");
         } catch (playErr) {
-          console.warn("Autoplay prevented, user interaction needed", playErr);
+          console.warn("[Camera] Autoplay prevented", playErr);
+          setErrorMessage("Click anywhere to start camera preview");
         }
+
         setIsCameraActive(true);
-        console.log("[Camera] Video stream started successfully");
+        console.log("[Camera] ✅ Camera activated successfully");
+      } else {
+        console.error("[Camera] videoRef.current is null!");
+        setErrorMessage("Video element not ready. Please try again.");
       }
     } catch (err) {
-      console.error("Camera access denied", err);
-      setErrorMessage("Camera access denied. Visual Pulse Check skipped.");
+      console.error("[Camera] ❌ Error:", err);
+      console.error("[Camera] Error name:", err.name);
+      console.error("[Camera] Error message:", err.message);
+
+      if (err.name === 'NotAllowedError') {
+        setErrorMessage("Camera permission denied. Please allow camera access and try again.");
+      } else if (err.name === 'NotFoundError') {
+        setErrorMessage("No camera found. Please connect a camera and try again.");
+      } else if (err.name === 'NotReadableError') {
+        setErrorMessage("Camera is in use by another application.");
+      } else {
+        setErrorMessage(`Camera error: ${err.message}`);
+      }
     }
   };
 
@@ -652,6 +690,10 @@ function App() {
             },
           });
           continue;
+        } else if (call.name === 'save_mental_map' || call.name === 'generate_session_report' || call.name === 'get_expert_insight') {
+          // These are now resolved server-side; skip silently on client
+          console.log(`[App] Tool ${call.name} handled server-side, skipping client handler`);
+          continue;
         } else {
           throw new Error(`Unsupported tool: ${call.name}`);
         }
@@ -803,11 +845,12 @@ function App() {
 
               const parts = [
                 {
-                  text: `مهم جداً: ابدأ الكلام فوراً بدون انتظار المستخدم. 
-                  أهلًا بك! أنا "دوائر"، رفيقك في رحلة استكشاف مساحتك الذهنية. 
-                  ابدأ بالترحيب بالمستخدم بلهجة مصرية ودودة جداً وبأسلوب هادئ،
-                  وحلل تعبير وجهه المبدئي (متوتر، سعيد، مرهق) إذا وجدته في الصورة، 
-                  واذكر ذلك بشكل لطيف جداً، ثم اطلب منه أن يعبر عن مشاعره لكي نراها سوياً في الدوائر التي أمامه.`,
+                  text: '\u0645\u0647\u0645 \u062c\u062f\u0627\u064b: \u0627\u0628\u062f\u0623 \u0627\u0644\u0643\u0644\u0627\u0645 \u0641\u0648\u0631\u0627\u064b \u0628\u062f\u0648\u0646 \u0627\u0646\u062a\u0638\u0627\u0631 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645. ' +
+                    '\u0623\u0647\u0644\u0627\u064b \u0628\u0643! \u0623\u0646\u0627 "\u062f\u0648\u0627\u0626\u0631"\u060c \u0631\u0641\u064a\u0642\u0643 \u0641\u064a \u0631\u062d\u0644\u0629 \u0627\u0633\u062a\u0643\u0634\u0627\u0641 \u0645\u0633\u0627\u062d\u062a\u0643 \u0627\u0644\u0630\u0647\u0646\u064a\u0629. ' +
+                    '\u0627\u0628\u062f\u0623 \u0628\u0627\u0644\u062a\u0631\u062d\u064a\u0628 \u0628\u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0628\u0644\u0647\u062c\u0629 \u0645\u0635\u0631\u064a\u0629 \u0648\u062f\u0648\u062f\u0629 \u062c\u062f\u0627\u064b \u0648\u0628\u0623\u0633\u0644\u0648\u0628 \u0647\u0627\u062f\u0626\u060c ' +
+                    '\u0648\u062d\u0644\u0644 \u062a\u0639\u0628\u064a\u0631 \u0648\u062c\u0647\u0647 \u0627\u0644\u0645\u0628\u062f\u0626\u064a (\u0645\u062a\u0648\u062a\u0631\u060c \u0633\u0639\u064a\u062f\u060c \u0645\u0631\u0647\u0642) \u0625\u0630\u0627 \u0648\u062c\u062f\u062a\u0647 \u0641\u064a \u0627\u0644\u0635\u0648\u0631\u0629\u060c ' +
+                    '\u0648\u0627\u0630\u0643\u0631 \u0630\u0644\u0643 \u0628\u0634\u0643\u0644 \u0644\u0637\u064a\u0641 \u062c\u062f\u0627\u064b\u060c \u062b\u0645 \u0627\u0637\u0644\u0628 \u0645\u0646\u0647 \u0623\u0646 \u064a\u0639\u0628\u0631 \u0639\u0646 \u0645\u0634\u0627\u0639\u0631\u0647 \u0644\u0643\u064a \u0646\u0631\u0627\u0647\u0627 \u0633\u0648\u064a\u0627\u064b \u0641\u064a \u0627\u0644\u062f\u0648\u0627\u0626\u0631 \u0627\u0644\u062a\u064a \u0623\u0645\u0627\u0645\u0647. ' +
+                    'CRITICAL: You MUST call update_node tool BEFORE speaking to update the circles!'
                 }
               ];
 
@@ -823,277 +866,294 @@ function App() {
             } else if (isReconnect) {
               const nodesContext = currentNodes.map(n => `- ${n.label} (id: ${n.id}, size: ${n.radius}, color: ${n.color})`).join('\n');
               const lastConv = sessionContextRef.current.length > 0
-                ? `آخر حاجة كنا بنقولها كانت: "${sessionContextRef.current.join(' ... ')}"`
+                ? `\u0622\u062e\u0631 \u062d\u0627\u062c\u0629 \u0643\u0646\u0627 \u0628\u0646\u0642\u0648\u0644\u0647\u0627 \u0643\u0627\u0646\u062a: "${sessionContextRef.current.join(' ... ')}"`
                 : "";
-              const promptText = `حصل انقطاع بسيط في الاتصال ورجعنا تاني. 
-                خليك فاكر إننا بنكمل نفس الجلسة. 
-                ${lastConv}
-                حالة الدوائر الحالية قدام المستخدم هي:
-                ${nodesContext}
-                كمل كلامك مع المستخدم من مكان ما وقفنا بأسلوب طبيعي جداً كأن مفيش حاجة حصلت، 
-                ومتقولش "أهلاً بك" تاني ولا تعتذر عن الانقطاع بشكل رسمي، ادخل في الموضوع فوراً بلهجة مصرية ودودة.`;
+              const promptText = '\u062d\u0635\u0644 \u0627\u0646\u0642\u0637\u0627\u0639 \u0628\u0633\u064a\u0637 \u0641\u064a \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0648\u0631\u062c\u0639\u0646\u0627 \u062a\u0627\u0646\u064a. ' +
+                '\u062e\u0644\u064a\u0643 \u0641\u0627\u0643\u0631 \u0625\u0646\u0646\u0627 \u0628\u0646\u0643\u0645\u0644 \u0646\u0641\u0633 \u0627\u0644\u062c\u0644\u0633\u0629. ' +
+                lastConv + ' ' +
+                '\u062d\u0627\u0644\u0629 \u0627\u0644\u062f\u0648\u0627\u0626\u0631 \u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0642\u062f\u0627\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0647\u064a:\n' + nodesContext + '\n' +
+                '\u0643\u0645\u0644 \u0643\u0644\u0627\u0645\u0643 \u0645\u0639 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0645\u0646 \u0645\u0643\u0627\u0646 \u0645\u0627 \u0648\u0642\u0641\u0646\u0627 \u0628\u0623\u0633\u0644\u0648\u0628 \u0637\u0628\u064a\u0639\u064a \u062c\u062f\u0627\u064b.';
               wsRef.current.send(JSON.stringify({
                 clientContent: { turns: [{ role: 'user', parts: [{ text: promptText }] }], turnComplete: true }
               }));
             }
-          }
+
+        }
         } catch (error) {
-          setStatus('Error');
-          setErrorMessage(error.message);
-          setLastEvent('mic_start_error');
-        }
-        return;
+        setStatus('Error');
+        setErrorMessage(error.message);
+        setLastEvent('mic_start_error');
       }
+      return;
+    }
 
-      const toolCall = getToolCall(message);
-      if (toolCall) {
-        handleToolCall(toolCall);
-      }
+    const toolCall = getToolCall(message);
+    if (toolCall) {
+      handleToolCall(toolCall);
+    }
 
-      if (isInterruptedMessage(message)) {
-        stopPlayback();
-        setLastEvent('server_interrupted');
-      }
-
-      const parts = getParts(message);
-      const audioParts = Array.isArray(parts)
-        ? parts.filter((part) =>
-          isAudioMimeType(getInlineData(part)?.mimeType)
-          || isAudioMimeType(getInlineData(part)?.mime_type)
-        )
-        : [];
-
-      for (const part of audioParts) {
-        const inline = getInlineData(part);
-        if (inline?.data) {
-          await playPcmChunk(base64ToArrayBuffer(inline.data));
-          setLastEvent('audio_chunk');
-        }
-      }
-
-      // Capture text for context preservation
-      const textParts = Array.isArray(parts) ? parts.filter(p => p.text).map(p => p.text) : [];
-      if (textParts.length > 0) {
-        sessionContextRef.current = [...sessionContextRef.current, ...textParts].slice(-5);
-      }
-
-      const turnAudioBlobs = getTurnDataAudioBlobs(message);
-      if (audioParts.length === 0 && turnAudioBlobs.length === 0) return;
-
-      for (const blob of turnAudioBlobs) {
-        if (blob?.data) {
-          await playPcmChunk(base64ToArrayBuffer(blob.data));
-          setLastEvent('audio_chunk_turn_data');
-        }
-      }
-    };
-
-    socket.onerror = () => {
-      setStatus('Error');
-      setErrorMessage('WebSocket error. Retrying if possible.');
-      setIsStarting(false);
-      setLastEvent('ws_error');
-    };
-
-    socket.onclose = async () => {
-      wsRef.current = null;
-      setupCompleteRef.current = false;
-      setIsConnected(false);
-      setIsStarting(false);
-
-      await stopMicrophone();
+    if (isInterruptedMessage(message)) {
       stopPlayback();
+      setLastEvent('server_interrupted');
+    }
 
-      if (manualCloseRef.current) {
-        setStatus((prev) => (prev === 'Error' ? prev : 'Disconnected'));
-        setLastEvent('ws_closed_manual');
-        return;
+    const parts = getParts(message);
+    const audioParts = Array.isArray(parts)
+      ? parts.filter((part) =>
+        isAudioMimeType(getInlineData(part)?.mimeType)
+        || isAudioMimeType(getInlineData(part)?.mime_type)
+      )
+      : [];
+
+    for (const part of audioParts) {
+      const inline = getInlineData(part);
+      if (inline?.data) {
+        await playPcmChunk(base64ToArrayBuffer(inline.data));
+        setLastEvent('audio_chunk');
       }
+    }
 
-      const nextAttempt = reconnectAttemptRef.current + 1;
-      if (nextAttempt <= MAX_RECONNECT_ATTEMPTS) {
-        reconnectAttemptRef.current = nextAttempt;
-        setReconnectAttempt(nextAttempt);
-        setStatus(`Reconnecting (${nextAttempt}/${MAX_RECONNECT_ATTEMPTS})...`);
-        setLastEvent('ws_closed_retrying');
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          connect();
-        }, RECONNECT_DELAY_MS);
-        return;
+    // Capture text for context preservation and live transcript
+    const textParts = Array.isArray(parts) ? parts.filter(p => p.text).map(p => p.text) : [];
+    if (textParts.length > 0) {
+      sessionContextRef.current = [...sessionContextRef.current, ...textParts].slice(-5);
+      setIsAgentSpeaking(true);
+      // Update live transcript with latest agent text
+      setTranscript(prev => [
+        ...prev,
+        { role: 'agent', text: textParts.join(' '), time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) }
+      ].slice(-4));
+    }
+
+    const turnAudioBlobs = getTurnDataAudioBlobs(message);
+    if (audioParts.length === 0 && turnAudioBlobs.length === 0) return;
+
+    for (const blob of turnAudioBlobs) {
+      if (blob?.data) {
+        await playPcmChunk(base64ToArrayBuffer(blob.data));
+        setLastEvent('audio_chunk_turn_data');
       }
+    }
+  };
 
+  socket.onerror = () => {
+    setStatus('Error');
+    setErrorMessage('WebSocket error. Retrying if possible.');
+    setIsStarting(false);
+    setLastEvent('ws_error');
+  };
+
+  socket.onclose = async () => {
+    wsRef.current = null;
+    setupCompleteRef.current = false;
+    setIsConnected(false);
+    setIsStarting(false);
+
+    await stopMicrophone();
+    stopPlayback();
+
+    if (manualCloseRef.current) {
       setStatus((prev) => (prev === 'Error' ? prev : 'Disconnected'));
-      setErrorMessage('Connection closed after retry attempts. Please reconnect manually.');
-      setLastEvent('ws_closed_giveup');
-    };
-  }, [
-    backendUrl,
-    capturedImage,
-    ensureSpeakerContext,
-    handleToolCall,
-    isConnected,
-    isStarting,
-    playPcmChunk,
-    startMicrophone,
-    stopMicrophone,
-    stopPlayback,
-  ]);
+      setLastEvent('ws_closed_manual');
+      return;
+    }
 
-  useEffect(() => {
-    return () => {
-      disconnect();
-    };
-  }, [disconnect]);
+    const nextAttempt = reconnectAttemptRef.current + 1;
+    if (nextAttempt <= MAX_RECONNECT_ATTEMPTS) {
+      reconnectAttemptRef.current = nextAttempt;
+      setReconnectAttempt(nextAttempt);
+      setStatus(`Reconnecting (${nextAttempt}/${MAX_RECONNECT_ATTEMPTS})...`);
+      setLastEvent('ws_closed_retrying');
+      reconnectTimeoutRef.current = window.setTimeout(() => {
+        connect();
+      }, RECONNECT_DELAY_MS);
+      return;
+    }
 
-  return (
-    <div className="App">
-      <div className="overlay">
-        {appView === 'dashboard' ? (
-          <Dashboard onBack={() => setAppView('live')} />
-        ) : (
-          <>
-            <header>
-              <div className="title-row">
-                <h1>Dawayir Live Agent</h1>
-                {!isConnected && !isStarting && (
-                  <button className="icon-btn" onClick={() => setAppView('dashboard')} title="Memory Bank">
-                    💾
-                  </button>
-                )}
+    setStatus((prev) => (prev === 'Error' ? prev : 'Disconnected'));
+    setErrorMessage('Connection closed after retry attempts. Please reconnect manually.');
+    setLastEvent('ws_closed_giveup');
+  };
+}, [
+  backendUrl,
+  capturedImage,
+  ensureSpeakerContext,
+  handleToolCall,
+  isConnected,
+  isStarting,
+  playPcmChunk,
+  startMicrophone,
+  stopMicrophone,
+  stopPlayback,
+]);
+
+useEffect(() => {
+  return () => {
+    disconnect();
+  };
+}, [disconnect]);
+
+return (
+  <div className="App">
+    <div className="overlay">
+      {appView === 'dashboard' ? (
+        <Dashboard onBack={() => setAppView('live')} />
+      ) : (
+        <>
+          {/* Brand Header */}
+          <div className="brand-header">
+            <div className="brand-logo-row">
+              <div>
+                <div className="brand-name">&#x62F;&#x648;&#x627;&#x626;&#x631;</div>
+                <div className="brand-arabic">&#x645;&#x633;&#x627;&#x62D;&#x62A;&#x643; &#x627;&#x644;&#x630;&#x647;&#x646;&#x64A;&#x629; &#x627;&#x644;&#x62D;&#x64A;&#x629;</div>
               </div>
-              <div className={`status-badge ${statusClass}`}>
-                <span className="dot"></span> {isConnected ? 'Live Session Active' : status}
-              </div>
-            </header>
-
-            <section className="main-controls">
               {!isConnected && !isStarting && (
-                <div className="camera-setup">
-                  {!isCameraActive && !capturedImage ? (
-                    <button className="primary-btn" onClick={startCamera}>
-                      📸 Start Visual Pulse Check
-                    </button>
-                  ) : isCameraActive ? (
-                    <div className="video-capture-flow">
-                      <div className="video-container">
-                        <video
-                          ref={videoRef}
-                          autoPlay
-                          playsInline
-                          muted
-                          style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      </div>
-                      <div className="camera-actions-row">
-                        <button className="capture-btn" onClick={captureSnapshot}>
-                          🎯 Take Snapshot
-                        </button>
-                        <button className="cancel-btn" onClick={stopCamera}>
-                          ❌ Close Camera
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="captured-preview-container">
-                      <div className="preview-heading">Your initial mindset:</div>
-                      <img src={capturedImage} className="pulse-preview-large" alt="Captured" />
-                      <button className="retake-btn" onClick={() => { setCapturedImage(null); startCamera(); }}>
-                        🔄 Retake Snapshot
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <button className="icon-btn" onClick={() => setAppView('dashboard')} title="&#x628;&#x646;&#x643; &#x627;&#x644;&#x630;&#x627;&#x643;&#x631;&#x629;">
+                  &#x1F4BE;
+                </button>
               )}
+            </div>
+            <div className={`status-badge ${statusClass}`}>
+              <span className="dot"></span>
+              {isConnected ? 'الجلسة نشطة' : status === 'Disconnected' ? 'غير متصل' : status}
+            </div>
+          </div>
 
-              <button
-                className={`primary-btn ${isConnected ? 'secure-link' : ''}`}
-                onClick={connect}
-                disabled={isConnected || isStarting}
-              >
-                {isConnected ? (
-                  '✨ Connection Secured'
-                ) : isStarting ? (
-                  <div className="loading-container">
-                    <span className="loading-text">Establishing Link</span>
-                    <div className="spinner">
-                      <div className="spinner-ring"></div>
+          {/* Main Controls */}
+          <div className="section">
+            {!isConnected && !isStarting && (
+              <div className="camera-setup">
+                <video ref={videoRef} autoPlay playsInline muted style={{ display: 'none' }} />
+
+                {!isCameraActive && !capturedImage ? (
+                  <button className="primary-btn" onClick={startCamera}>
+                    &#x1F4F8; &#x641;&#x62D;&#x635; &#x627;&#x644;&#x62D;&#x627;&#x644;&#x629; &#x627;&#x644;&#x628;&#x635;&#x631;&#x64A;&#x629;
+                  </button>
+                ) : isCameraActive ? (
+                  <div className="video-capture-flow">
+                    <div className="video-container">
+                      <video autoPlay playsInline muted
+                        ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
+                        style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+                    <div className="camera-actions-row">
+                      <button className="capture-btn" onClick={captureSnapshot}>&#x1F3AF; &#x627;&#x644;&#x62A;&#x642;&#x627;&#x637;</button>
+                      <button className="cancel-btn" onClick={stopCamera}>&#x2715; &#x625;&#x63A;&#x644;&#x627;&#x642;</button>
                     </div>
                   </div>
                 ) : (
-                  capturedImage
-                    ? 'Enter the Mental Space (with Vision)'
-                    : 'Enter the Mental Space (Audio Only)'
-                )}
-              </button>
-
-              {isConnected && (
-                <div className="activity-container">
-                  <div className="visual-feedback">
-                    <Visualizer stream={micStreamRef.current} isConnected={isConnected} />
-                    {capturedImage && (
-                      <div className="snapshot-preview">
-                        <img src={capturedImage} alt="Pulse Snapshot" />
-                        <span>Initial Mindset</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="connected-actions">
-                    {!isCameraActive ? (
-                      <button className="secondary retake-live-btn" onClick={startCamera}>
-                        📸 Update Visual Context
-                      </button>
-                    ) : (
-                      <div className="live-camera-mini">
-                        <div className="video-container-mini">
-                          <video
-                            ref={videoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                        </div>
-                        <div className="mini-camera-actions">
-                          <button className="mini-capture-btn" onClick={captureSnapshot}>
-                            🎯 Capture
-                          </button>
-                          <button className="mini-cancel-btn" onClick={stopCamera}>
-                            ❌ Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    <button className="secondary disconnect-btn" onClick={disconnect}>
-                      Finish Session
+                  <div className="captured-preview-container">
+                    <div className="preview-heading">&#x62D;&#x627;&#x644;&#x62A;&#x643; &#x627;&#x644;&#x645;&#x628;&#x62F;&#x626;&#x64A;&#x629;</div>
+                    <img src={capturedImage} className="pulse-preview-large" alt="Captured" />
+                    <button className="retake-btn" onClick={() => { setCapturedImage(null); setTimeout(() => setIsCameraActive(true), 50); setTimeout(startCamera, 100); }}>
+                      &#x1F504; &#x625;&#x639;&#x627;&#x62F;&#x629; &#x627;&#x644;&#x62A;&#x642;&#x627;&#x637;
                     </button>
                   </div>
-                </div>
-              )}
-            </section>
-
-            {isConnected && !errorMessage && (
-              <p className="hint">
-                Speak naturally and explore your mental space.
-              </p>
+                )}
+              </div>
             )}
 
-            {errorMessage && <p className="error-message">⚠️ {errorMessage}</p>}
+            <button
+              className={`primary-btn ${isConnected ? 'secure-link' : ''}`}
+              onClick={connect}
+              disabled={isConnected || isStarting}
+            >
+              {isConnected ? (
+                '✨ متصل بمساحتك الذهنية'
+              ) : isStarting ? (
+                <div className="loading-container">
+                  <span className="loading-text">&#x62C;&#x627;&#x631;&#x64A; &#x627;&#x644;&#x627;&#x62A;&#x635;&#x627;&#x644;</span>
+                  <div className="spinner"><div className="spinner-ring"></div></div>
+                </div>
+              ) : (
+                capturedImage
+                  ? 'ادخل المساحة الذهنية (مع الرؤية)'
+                  : 'ادخل المساحة الذهنية 🧠'
+              )}
+            </button>
+          </div>
 
-            <footer className="footer-info">
-              <span>Backend: {backendUrl} | Client: v1.0.1</span>
-              <br />
-              <span>
-                Mic: {isMicActive ? 'on' : 'off'} | Retries: {reconnectAttempt}/{MAX_RECONNECT_ATTEMPTS} | Tools: {toolCallsCount} | Event: {lastEvent}
-              </span>
-            </footer>
-          </>
-        )}
-      </div>
-      <DawayirCanvas ref={canvasRef} />
+          {/* Connected Activity */}
+          {isConnected && (
+            <div className="section">
+              <video ref={videoRef} autoPlay playsInline muted style={{ display: 'none' }} />
+
+              {isAgentSpeaking && (
+                <div className="ai-state-bar">
+                  <div className="wave">
+                    <span></span><span></span><span></span><span></span><span></span>
+                  </div>
+                  &#x62F;&#x648;&#x627;&#x626;&#x631; &#x64A;&#x62A;&#x643;&#x644;&#x645;...
+                </div>
+              )}
+
+              <div className="visual-feedback">
+                <Visualizer stream={micStreamRef.current} isConnected={isConnected} />
+                {capturedImage && (
+                  <div className="snapshot-preview">
+                    <img src={capturedImage} alt="Pulse Snapshot" />
+                    <span>&#x62D;&#x627;&#x644;&#x62A;&#x643; &#x627;&#x644;&#x645;&#x628;&#x62F;&#x626;&#x64A;&#x629;</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="connected-actions">
+                {!isCameraActive ? (
+                  <button className="retake-live-btn" onClick={startCamera}>
+                    &#x1F4F8; &#x62A;&#x62D;&#x62F;&#x64A;&#x62B; &#x627;&#x644;&#x633;&#x64A;&#x627;&#x642; &#x627;&#x644;&#x628;&#x635;&#x631;&#x64A;
+                  </button>
+                ) : (
+                  <div className="live-camera-mini">
+                    <div className="video-container-mini">
+                      <video autoPlay playsInline muted
+                        ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+                    <div className="mini-camera-actions">
+                      <button className="mini-capture-btn" onClick={captureSnapshot}>&#x1F3AF; &#x627;&#x644;&#x62A;&#x642;&#x627;&#x637;</button>
+                      <button className="mini-cancel-btn" onClick={stopCamera}>&#x2715; &#x625;&#x644;&#x63A;&#x627;&#x621;</button>
+                    </div>
+                  </div>
+                )}
+                <button className="secondary disconnect-btn" onClick={disconnect}>
+                  &#x625;&#x646;&#x647;&#x627;&#x621; &#x627;&#x644;&#x62C;&#x644;&#x633;&#x629;
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isConnected && !errorMessage && (
+            <p className="hint">&#x62A;&#x62D;&#x62F;&#x62B; &#x628;&#x62D;&#x631;&#x64A;&#x629; &#x648;&#x627;&#x633;&#x62A;&#x643;&#x634;&#x641; &#x645;&#x633;&#x627;&#x62D;&#x62A;&#x643; &#x627;&#x644;&#x630;&#x647;&#x646;&#x64A;&#x629;. &#x2728;</p>
+          )}
+
+          {errorMessage && <p className="error-message">&#x26A0;&#xFE0F; {errorMessage}</p>}
+
+          <footer className="footer-info" style={{ display: 'none' }}>
+            <span>Backend: {backendUrl}</span>
+            <span>Mic: {isMicActive ? 'on' : 'off'} | Tools: {toolCallsCount} | Event: {lastEvent}</span>
+          </footer>
+        </>
+      )}
     </div>
-  );
+
+    {/* Live Transcript Overlay */}
+    {isConnected && transcript.length > 0 && (
+      <div className="transcript-overlay">
+        <div className="transcript-header">&#x1F4AC; &#x627;&#x644;&#x645;&#x62D;&#x627;&#x62F;&#x62B;&#x629; &#x627;&#x644;&#x62D;&#x64A;&#x629;</div>
+        {transcript.map((entry, idx) => (
+          <div key={idx} className={`transcript-entry transcript-${entry.role}`}>
+            <span className="transcript-time">{entry.time}</span>
+            <span className="transcript-text">{entry.text.substring(0, 120)}{entry.text.length > 120 ? '...' : ''}</span>
+          </div>
+        ))}
+      </div>
+    )}
+
+    <DawayirCanvas ref={canvasRef} />
+  </div>
+);
 }
 
 export default App;

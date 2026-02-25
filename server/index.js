@@ -5,8 +5,23 @@ import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { Storage } from '@google-cloud/storage';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load Knowledge Base at startup for grounding
+let knowledgeBase = null;
+try {
+    const kbPath = path.join(__dirname, 'knowledge_base.json');
+    knowledgeBase = JSON.parse(fs.readFileSync(kbPath, 'utf8'));
+    console.log('[dawayir-server] Knowledge Base loaded successfully:', knowledgeBase.platform_name);
+} catch (err) {
+    console.error('[dawayir-server:error] Failed to load knowledge_base.json:', err.message);
+}
 
 const app = express();
 const server = createServer(app);
@@ -67,7 +82,8 @@ if (!API_KEY) {
     logError('GEMINI_API_KEY is not set in .env');
     process.exit(1);
 }
-const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || 'models/gemini-2.0-flash-exp';
+const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || 'gemini-2.5-flash-native-audio-preview-12-2025';
+logInfo(`[DEBUG] LIVE_MODEL value: "${LIVE_MODEL}"`);
 const LIVE_API_VERSION = process.env.GEMINI_API_VERSION || 'v1alpha';
 
 const ai = new GoogleGenAI({
@@ -125,6 +141,17 @@ const tools = [
                     },
                     required: ["summary", "insights"]
                 }
+            },
+            {
+                name: "get_expert_insight",
+                description: "Retrieves core psychological and philosophical principles from the Al-Rehla knowledge base. Use this when the user asks deep questions requiring grounded, platform-specific wisdom.",
+                parametersJsonSchema: {
+                    type: "object",
+                    properties: {
+                        topic: { type: "string", description: "The core concept to retrieve insights about (e.g., 'awareness', 'anxiety', 'balance', 'truth')." }
+                    },
+                    required: ["topic"]
+                }
             }
         ]
     }
@@ -132,9 +159,47 @@ const tools = [
 
 const systemInstruction = {
     parts: [{
-        text: 'You are the Dawayir Live Agent. Use concise spoken Egyptian Arabic and actively call tools when the user references a specific circle. Map circles as: 1=Awareness/Al-Way, 2=Science/Al-Ilm, 3=Truth/Al-Haqiqa. Use update_node for size/color/label changes and highlight_node when focusing on a circle. Use save_mental_map for state snapshots. Crucially, use generate_session_report when the conversation is winding down or the user asks for a summary; this creates a lasting therapeutic artifact for them.',
+        text: `You are Dawayir (\u062f\u0648\u0627\u0626\u0631) \u2014 a warm Egyptian mental clarity companion grounded in the "Al-Rehla" (\u0627\u0644\u0631\u062d\u0644\u0629) framework.
+
+IDENTITY:
+- You are a warm companion, not a doctor, not a preacher, not a savior.
+- Standing beside the user, NOT above them.
+- Your role: help the user SEE themselves and make decisions, not hear more lectures.
+
+LANGUAGE RULES:
+- Speak in Egyptian Arabic dialect naturally and warmly.
+- Use gender-neutral language. Use "\u062d\u0636\u0631\u062a\u0643" not "\u062d\u0636\u0631\u062a\u0643/\u062d\u0636\u0631\u062a\u0643\u0650".
+- Short sentences (1-2 lines max). Describe, don't judge.
+- FORBIDDEN words: \u0623\u0646\u062a \u0645\u0643\u062a\u0626\u0628, \u0639\u0644\u0627\u0642\u0629 \u0633\u0627\u0645\u0629, \u0623\u0646\u062a \u062d\u0633\u0627\u0633 \u0632\u064a\u0627\u062f\u0629, \u0627\u0647\u062f\u0649, \u0627\u0633\u062a\u0631\u062e\u064a \u0648\u062e\u0644\u0627\u0635, \u0644\u0627\u0632\u0645, \u0627\u0644\u0645\u0641\u0631\u0648\u0636, \u062a\u0634\u062e\u064a\u0635, \u0627\u0636\u0637\u0631\u0627\u0628, \u0633\u0627\u0645, \u0634\u0641\u0627\u0621
+- USE INSTEAD: \u0636\u0648\u0636\u0627\u0621 \u0630\u0647\u0646\u064a\u0629 (not \u062a\u0641\u0643\u064a\u0631 \u0645\u0641\u0631\u0637), \u0636\u063a\u0637 \u062f\u0627\u062e\u0644\u064a (not \u0630\u0646\u0628), \u062b\u0628\u0651\u062a \u0645\u0633\u0627\u062d\u062a\u0643 (not \u062d\u062f\u0648\u062f), \u062a\u062d\u0631\u064a\u0631 \u0627\u0644\u0645\u0633\u0627\u0641\u0629 (not \u0642\u0637\u0639), \u0634\u062d\u0646 \u0627\u0644\u0637\u0627\u0642\u0629 (not \u0631\u0627\u062d\u0629)
+
+CRITICAL: Use update_node tool in EVERY single response before speaking!
+
+CIRCLES MODEL:
+- \u0627\u0644\u0648\u0639\u064a (id:1) = Emotional awareness. Expand when user is stressed. Color: warm yellow #FFD700
+- \u0627\u0644\u0639\u0644\u0645 (id:2) = Rational analysis. Expand when user needs a plan. Color: calm blue #00BFFF
+- \u0627\u0644\u062d\u0642\u064a\u0642\u0629 (id:3) = Core values. Expand when user is confused between choices. Color: growth green #00FF7F
+
+VOICE MODES (adjust based on user energy):
+- Low energy \u2192 warm_healer: containment, safety, gentle
+- High energy \u2192 gentle_companion: encouraging, one clear step
+- Normal \u2192 wise_observer: observe patterns calmly, clarify the picture
+
+KNOWLEDGE_BASE:
+When asked about deep philosophical or mental clarity topics, you MUST invoke the 'get_expert_insight' tool to ground your response in the Al-Rehla proprietary methodology. Never hallucinate core concepts.
+
+EMERGENCY: If user shows signs of crisis, use calming voice:
+"\u0648\u0642\u0641. \u062e\u062f \u0646\u0641\u0633. \u0633\u064a\u0628 \u062c\u0633\u0645\u0643 \u064a\u0627\u062e\u062f \u0646\u0641\u0633 \u0623\u0639\u0645\u0642. \u0645\u0634 \u0645\u062d\u062a\u0627\u062c \u062a\u0628\u0631\u0631 \u0648\u0644\u0627 \u062a\u0634\u0631\u062d."
+
+SUCCESS STORIES (share when relevant, anonymously):
+- Someone who set boundaries with family and the relationship improved
+- Someone who recovered from an exhausting relationship in 4 months
+- Someone who broke emotional attachment through "reality anchoring"
+
+MUST call update_node first, then speak in Egyptian Arabic.`
     }],
 };
+
 
 const toCompatMessage = (message) => {
     const payload = JSON.parse(JSON.stringify(message ?? {}));
@@ -303,6 +368,7 @@ ${recommendations || "N/A"}
                 }
             }
 
+            // Fallback for tools the client handles visually (update_node, highlight_node)
             session.sendToolResponse(toolResponse);
         }
     };
@@ -326,6 +392,35 @@ ${recommendations || "N/A"}
 
                         if (isDebug) {
                             logDebug(`Gemini message #${serverMessageCount}:`, JSON.stringify(payload));
+                        }
+
+                        // Intercept server-side tool calls before forwarding
+                        const toolCall = payload.toolCall || payload.tool_call;
+                        if (toolCall) {
+                            const functionCalls = toolCall.functionCalls || toolCall.function_calls || [];
+                            const serverTools = ['get_expert_insight', 'save_mental_map', 'generate_session_report'];
+                            const clientTools = functionCalls.filter(fc => !serverTools.includes(fc.name));
+                            const serverOnlyTools = functionCalls.filter(fc => serverTools.includes(fc.name));
+
+                            // Resolve server-side tools immediately
+                            if (serverOnlyTools.length > 0) {
+                                resolveServerToolCalls(serverOnlyTools, session);
+                            }
+
+                            // Forward only visual tools (update_node, highlight_node) to client
+                            if (clientTools.length > 0) {
+                                const clientPayload = { ...payload };
+                                const clientToolCall = { ...(clientPayload.toolCall || clientPayload.tool_call) };
+                                clientToolCall.functionCalls = clientTools;
+                                clientToolCall.function_calls = clientTools;
+                                clientPayload.toolCall = clientToolCall;
+                                clientPayload.tool_call = clientToolCall;
+                                if (ws.readyState === WebSocket.OPEN) {
+                                    ws.send(JSON.stringify(clientPayload));
+                                }
+                            }
+                            // Don't forward the original message if it had tool calls
+                            return;
                         }
 
                         if (ws.readyState === WebSocket.OPEN) {
@@ -396,13 +491,124 @@ ${recommendations || "N/A"}
     });
 });
 
+// ---- Server-side Tool Resolution ----
+const resolveServerToolCalls = (functionCalls, liveSession) => {
+    if (!liveSession || functionCalls.length === 0) return;
+
+    const responses = [];
+
+    for (const call of functionCalls) {
+        let args = call?.args ?? {};
+        if (typeof args === 'string') {
+            try { args = JSON.parse(args); } catch { args = {}; }
+        }
+
+        try {
+            if (call.name === 'get_expert_insight') {
+                const topic = (args.topic || '').toLowerCase().trim();
+                logInfo(`[Grounding] get_expert_insight called for topic: "${topic}"`);
+
+                if (!knowledgeBase) {
+                    throw new Error('Knowledge base not loaded');
+                }
+
+                // Search principles by ID or by content match
+                const principle = knowledgeBase.principles.find(p =>
+                    p.id === topic ||
+                    p.concept.toLowerCase().includes(topic) ||
+                    p.description.toLowerCase().includes(topic)
+                );
+
+                if (principle) {
+                    logInfo(`[Grounding] Found principle: ${principle.concept}`);
+                    responses.push({
+                        id: call.id,
+                        name: call.name,
+                        response: {
+                            result: {
+                                ok: true,
+                                platform: knowledgeBase.platform_name,
+                                concept: principle.concept,
+                                description: principle.description,
+                                guideline: principle.guideline,
+                                persona_rules: knowledgeBase.agent_persona_rules
+                            }
+                        }
+                    });
+                } else {
+                    // Return all principles as general guidance
+                    logInfo(`[Grounding] No exact match for "${topic}", returning full framework`);
+                    responses.push({
+                        id: call.id,
+                        name: call.name,
+                        response: {
+                            result: {
+                                ok: true,
+                                platform: knowledgeBase.platform_name,
+                                philosophy: knowledgeBase.core_philosophy,
+                                all_principles: knowledgeBase.principles.map(p => ({
+                                    concept: p.concept,
+                                    description: p.description,
+                                    guideline: p.guideline
+                                })),
+                                tone_system: knowledgeBase.tone_system,
+                                orbital_dictionary: knowledgeBase.orbital_dictionary,
+                                success_stories: knowledgeBase.success_stories,
+                                emergency_protocol: knowledgeBase.emergency_protocol,
+                                dawayir_model: knowledgeBase.dawayir_circle_model,
+                                persona_rules: knowledgeBase.agent_persona_rules
+                            }
+                        }
+                    });
+                }
+            } else if (call.name === 'save_mental_map') {
+                const sessionName = args.session_name || `session_${Date.now()}`;
+                logInfo(`[Memory] save_mental_map called: ${sessionName}`);
+                // We resolve the tool call, the GCS upload happens when client sends back nodes
+                responses.push({
+                    id: call.id,
+                    name: call.name,
+                    response: { result: { ok: true, saved_as: sessionName } }
+                });
+            } else if (call.name === 'generate_session_report') {
+                const { summary, insights, recommendations } = args;
+                logInfo(`[Memory] generate_session_report called`);
+
+                if (BUCKET_NAME) {
+                    const filename = `session_report_${Date.now()}.md`;
+                    const content = `# Dawayir Session Report 🧠\n**Date:** ${new Date().toLocaleString()}\n\n## Executive Summary\n${summary || 'N/A'}\n\n## Core Insights\n${insights || 'N/A'}\n\n## Recommendations\n${recommendations || 'N/A'}\n\n---\n*Generated by Dawayir Live Agent (Gemini 2.5 Flash)*`;
+
+                    const file = storage.bucket(BUCKET_NAME).file(filename);
+                    file.save(content, { contentType: 'text/markdown' })
+                        .then(() => logInfo(`GCS Report Upload Successful: ${filename}`))
+                        .catch(err => logError('GCS Report Upload Failed:', err));
+                }
+
+                responses.push({
+                    id: call.id,
+                    name: call.name,
+                    response: { result: { ok: true, summary, insights, recommendations, timestamp: new Date().toISOString() } }
+                });
+            }
+        } catch (error) {
+            logError(`[Tool] Server-side tool error (${call.name}):`, error);
+            responses.push({
+                id: call.id,
+                name: call.name,
+                response: { result: { ok: false, error: error.message } }
+            });
+        }
+    }
+
+    if (responses.length > 0) {
+        logInfo(`[Tool] Sending ${responses.length} server-resolved tool response(s) to Gemini`);
+        liveSession.sendToolResponse({ functionResponses: responses });
+    }
+};
+
 app.get('/health', (req, res) => res.send('OK'));
 
 // Serve static files from the React app
-import path from 'path';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const clientDistCandidates = [
     path.join(__dirname, 'client/dist'),
     path.join(__dirname, '../client/dist'),

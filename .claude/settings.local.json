@@ -1,9 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl -i https://dawayir-live-agent-880073923613.europe-west1.run.app/health)",
-      "Bash(npm run dev)",
-      "Bash(ls -la \"c:\\Users\\moham\\Downloads\\dawayir-live-agent\\submission-assets\\architecture\"\" 2>/dev/null || echo \"Directory or files not found yet \")"
+      "Bash(npm start)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8080)",
+      "Bash(taskkill /F /PID 10632)",
+      "Bash(taskkill //F //PID 10632)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(curl -i http://localhost:8080/health)",
+      "Bash(curl -I http://localhost:5173/)",
+      "Bash(cat \"c:\\Users\\moham\\Downloads\\dawayir-live-agent\\server\\.env\")",
+      "Bash(node -e \"console.log(process.env.GEMINI_LIVE_MODEL || ''gemini-2.0-flash-exp'')\")",
+      "Bash(findstr /C:\"SUCCESS\" /C:\"ERROR\")",
+      "Bash(git add .)",
+      "Bash(git add -A)"
     ],
     "deny": [],
     "ask": []

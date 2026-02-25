@@ -15,10 +15,11 @@ Using the brand new **Gemini Multimodal Live API**, we created an agent that doe
 
 Key features:
 ✅ Real-time Egyptian Arabic voice interaction (Multimodal SDK)
-✅ Visual Pulse Check via snapshot (Initial mood context sent to Gemini)
-✅ Low-latency visual state updates (Function Calling)
+✅ Visual Pulse Check via snapshot (Initial + live mid-session updates!)
+✅ Low-latency visual state updates via Tool Calling
 ✅ Cloud Memory Bank & Session Reports on GCS
 ✅ Enterprise-ready with CI/CD and Terraform
+✅ NEW: Update your visual context during conversation!
 
 Check out the demo and code here: https://github.com/M7mdRef3t/dawayir-live-agent
 

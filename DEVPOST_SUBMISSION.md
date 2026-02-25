@@ -25,10 +25,13 @@ Compliance statement:
 - Built using **Google GenAI SDK** (`@google/genai`) + **Gemini Live API** and deployed on **Google Cloud Run**.
 
 ## Key Technical Strengths
-- Full-duplex voice streaming
-- Interruption-aware interaction
+- **True Bi-directional Streaming (Zero Request-Response):** To eliminate latency and ensure a natural conversational flow, we entirely bypassed traditional REST APIs. The architecture uses a full-duplex WebSocket stream feeding raw PCM16 audio directly to the Gemini Live API, ensuring real-time interruption (barge-in) and immediate voice responses.
+- **Aggressive Token Optimization (Cost Control):** Multimodal setups drain tokens rapidly. Dawayir employs a strict context-window management strategy, limiting the `save_mental_map` frequency and downsampling the user's Video Pulse Check frames before sending them to Gemini, significantly reducing GCP billing overhead.
+- **Knowledge Base Grounding (Trustworthy AI):** To prevent hallucination, the agent is hard-grounded to the proprietary **Al-Rehla** psychological framework using a custom `get_expert_insight` tool that directly parses server-side JSON rules.
+- Interruption-aware interaction and precision playback queue
 - Tool invocation and tool-response loop
 - **Cloud Memory Persistence:** Automatic snapshotting of mental maps to Google Cloud Storage via custom Tool Calling.
+- **Automated Deployment & Scale-to-Zero:** Infrastructure-as-code via Terraform and Cloud Build targeting Google Cloud Run, ensuring zero compute costs when idle.
 - Bounded reconnect strategy and debug telemetry
 - Cloud-ready deployment flow
 
@@ -56,6 +59,7 @@ Compliance statement:
 - **Demo Video:** [ADD_YOUTUBE_URL_HERE]
 - **Architecture Diagram:** See submission-assets/architecture/
 - **Social Media Post:** [ADD_POST_URL_AFTER_PUBLISHING]
+- **Technical Blog Post:** [ADD_BLOG_POST_URL_AFTER_PUBLISHING]
 
 ## Technologies Stack
 - **AI/ML:** Google GenAI SDK v1.42.0, Gemini Live API (gemini-2.0-flash-exp)
@@ -87,8 +91,8 @@ Compliance statement:
 - [ ] Social media post published with #GeminiLiveAgentChallenge
 
 ## Additional Notes for Judges
-We automated the entire deployment pipeline with Google Cloud Build and provided Terraform configurations to prove enterprise-readiness. The system demonstrates production-ready reliability with bounded retry logic and health monitoring.
+We automated the entire deployment pipeline with Google Cloud Build and provided Terraform configurations to prove enterprise-readiness and claim the "Automated Deployment" bonus points. We deliberately chose **Google Cloud Run** for its **Scale-to-Zero efficiency**. Unlike a constantly running server, Cloud Run ensures we only incur compute costs when a live WebSocket session is active, making the architecture inherently scalable and highly cost-optimized for production workloads.
 
-The mental clarity coaching domain was chosen to showcase how Live Agents can address emotional and relational complexity—areas where static text interfaces fall short. By combining real-time Arabic voice interaction with dynamic visual state manipulation and **Session Report artifacts**, Dawayir creates a lasting, accessible experience for users navigating personal growth. This project serves as the real-time engine for the upcoming **Rihlaty** platform.
+The mental clarity coaching domain was chosen to showcase how Live Agents can address emotional and relational complexity—areas where static text interfaces fall short. By combining real-time Arabic voice interaction with dynamic visual state manipulation and **Session Report artifacts**, Dawayir creates a lasting, accessible experience for users navigating personal growth. **Moreso, Dawayir is grounded in the proprietary Al-Rehla knowledge base, ensuring that every insight provided is scientifically backed by the platform's core therapeutic principles.** This project serves as the real-time engine for the upcoming **Rihlaty** platform.
 
 All code is open-source under ISC license, well-documented, and includes comprehensive setup instructions for judges to run locally or deploy to their own Google Cloud projects.

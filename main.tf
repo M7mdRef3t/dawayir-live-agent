@@ -20,9 +20,31 @@ variable "gemini_api_key" {
   sensitive   = true
 }
 
+# ------------------------------------------------------------------------------
+# ENABLE REQUIRED GOOGLE CLOUD APIS
+# ------------------------------------------------------------------------------
+resource "google_project_service" "cloudrun_api" {
+  service            = "run.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "storage_api" {
+  service            = "storage.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "vertexai_api" {
+  service            = "aiplatform.googleapis.com"
+  disable_on_destroy = false
+}
+
+# ------------------------------------------------------------------------------
+# CLOUD RUN SERVICE
+# ------------------------------------------------------------------------------
 resource "google_cloud_run_service" "dawayir_service" {
   name     = "dawayir-live-agent"
   location = var.region
+  depends_on = [google_project_service.cloudrun_api]
 
   template {
     spec {
