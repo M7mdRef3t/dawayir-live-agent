@@ -520,6 +520,11 @@ function App() {
   const activeSourcesRef = useRef(new Set());
   const nextPlaybackTimeRef = useRef(0);
   const speakingDebounceRef = useRef(null);
+  const pcmWorkletRef = useRef(null);
+  const workletReadyRef = useRef(false);
+  const lastPcmPushAtRef = useRef(0);
+  const pendingPcmChunksRef = useRef([]);
+  const pcmFlushScheduledRef = useRef(false);
   const ttsFallbackEnabledRef = useRef(false); // Disabled TTS fallback here
   const lastModelAudioAtRef = useRef(Date.now());
   const lastSpokenTextRef = useRef('');
@@ -552,6 +557,18 @@ function App() {
 
   const closeSpeakerContext = useCallback(async () => {
     if (!speakerContextRef.current) return;
+
+    // Clean up worklet
+    if (pcmWorkletRef.current) {
+      pcmWorkletRef.current.port.postMessage({ type: 'stop' });
+      try {
+        pcmWorkletRef.current.disconnect();
+      } catch {
+        // Ignore disconnect errors.
+      }
+      pcmWorkletRef.current = null;
+      workletReadyRef.current = false;
+    }
 
     try {
       await speakerContextRef.current.close();
@@ -645,30 +662,29 @@ function App() {
       clearTimeout(speakingDebounceRef.current);
       speakingDebounceRef.current = null;
     }
-    // Reset playback timeline so next audio starts fresh
-    nextPlaybackTimeRef.current = 0;
+    // Discard any batched but unflushed audio chunks
+    pendingPcmChunksRef.current = [];
+    pcmFlushScheduledRef.current = false;
+    // Clear worklet ring buffer
+    if (pcmWorkletRef.current) {
+      pcmWorkletRef.current.port.postMessage({ type: 'clear' });
+    }
 
+    // Also stop any legacy BufferSourceNodes
     for (const source of activeSourcesRef.current) {
       try {
         source.stop();
       } catch {
-        // Ignore if source already stopped.
+        // Ignore if already stopped.
       }
-
       try {
         source.disconnect();
       } catch {
         // Ignore disconnect errors.
       }
     }
-
     activeSourcesRef.current.clear();
-
-    if (speakerContextRef.current) {
-      nextPlaybackTimeRef.current = speakerContextRef.current.currentTime;
-    } else {
-      nextPlaybackTimeRef.current = 0;
-    }
+    nextPlaybackTimeRef.current = 0;
     setIsAgentSpeaking(false);
     isAgentSpeakingRef.current = false;
   }, [stopTextToSpeechFallback]);
@@ -696,62 +712,84 @@ function App() {
     return ctx;
   }, []);
 
-  // Direct per-chunk scheduling — Web Audio's scheduler runs on a separate thread
-  // so it handles gapless playback even when the main thread is busy.
+  // AudioWorklet-based streaming PCM player.
+  // The worklet runs on the audio thread — completely immune to main thread jank.
+  const ensurePcmWorklet = useCallback(async () => {
+    if (pcmWorkletRef.current && workletReadyRef.current) return pcmWorkletRef.current;
+    const audioContext = await ensureSpeakerContext();
+    try {
+      await audioContext.audioWorklet.addModule('/pcm-player-processor.js');
+    } catch {
+      // Module may already be registered
+    }
+    const workletNode = new AudioWorkletNode(audioContext, 'pcm-player-processor', {
+      outputChannelCount: [1],
+    });
+    workletNode.connect(audioContext.destination);
+    workletNode.port.onmessage = (e) => {
+      if (e.data.type === 'drained') {
+        // Worklet buffer fully drained after playing audio.
+        // Use a debounce to wait for potential new chunks before declaring speech ended.
+        if (speakingDebounceRef.current) clearTimeout(speakingDebounceRef.current);
+        speakingDebounceRef.current = setTimeout(() => {
+          const elapsed = Date.now() - lastPcmPushAtRef.current;
+          if (elapsed > 500) {
+            console.log('[Audio] Agent finished speaking (worklet drained)');
+            setIsAgentSpeaking(false);
+            isAgentSpeakingRef.current = false;
+          }
+          speakingDebounceRef.current = null;
+        }, 500);
+      }
+    };
+    pcmWorkletRef.current = workletNode;
+    workletReadyRef.current = true;
+    return workletNode;
+  }, [ensureSpeakerContext]);
+
+  const flushPcmChunks = useCallback(async () => {
+    pcmFlushScheduledRef.current = false;
+    const chunks = pendingPcmChunksRef.current;
+    if (chunks.length === 0) return;
+    pendingPcmChunksRef.current = [];
+
+    const worklet = await ensurePcmWorklet();
+    // Merge all pending chunks into a single Float32Array for one postMessage
+    const totalLen = chunks.reduce((sum, c) => sum + c.length, 0);
+    const merged = new Float32Array(totalLen);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    worklet.port.postMessage({ type: 'audio', samples: merged });
+    lastPcmPushAtRef.current = Date.now();
+    lastModelAudioAtRef.current = Date.now();
+  }, [ensurePcmWorklet]);
+
   const playPcmChunk = useCallback(
-    async (arrayBuffer, sampleRate = OUTPUT_SAMPLE_RATE) => {
+    async (arrayBuffer) => {
       if (!arrayBuffer || arrayBuffer.byteLength === 0) return;
 
       stopTextToSpeechFallback();
       const float32 = pcm16ToFloat32(arrayBuffer);
       if (float32.length === 0) return;
 
-      const safeSampleRate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : OUTPUT_SAMPLE_RATE;
-      const audioContext = await ensureSpeakerContext();
-
-      const audioBuffer = audioContext.createBuffer(1, float32.length, safeSampleRate);
-      audioBuffer.getChannelData(0).set(float32);
-
-      const source = audioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContext.destination);
-
-      // Schedule gaplessly: if we have a future scheduled end time, chain after it.
-      // Otherwise start immediately. Web Audio scheduler is sample-accurate on its own thread.
-      const now = audioContext.currentTime;
-      const startAt = (nextPlaybackTimeRef.current > now) ? nextPlaybackTimeRef.current : now;
-      source.start(startAt);
-      nextPlaybackTimeRef.current = startAt + audioBuffer.duration;
-      lastModelAudioAtRef.current = Date.now();
+      // Batch: accumulate chunks and flush via microtask so multiple WS messages
+      // that arrive in the same event loop tick are merged into one postMessage.
+      pendingPcmChunksRef.current.push(float32);
+      if (!pcmFlushScheduledRef.current) {
+        pcmFlushScheduledRef.current = true;
+        queueMicrotask(flushPcmChunks);
+      }
 
       // Cancel any pending "speaking ended" debounce since new audio arrived
       if (speakingDebounceRef.current) {
         clearTimeout(speakingDebounceRef.current);
         speakingDebounceRef.current = null;
       }
-
-      activeSourcesRef.current.add(source);
-      source.onended = () => {
-        activeSourcesRef.current.delete(source);
-        if (activeSourcesRef.current.size === 0) {
-          if (speakingDebounceRef.current) clearTimeout(speakingDebounceRef.current);
-          speakingDebounceRef.current = setTimeout(() => {
-            if (activeSourcesRef.current.size === 0) {
-              console.log('[Audio] Agent finished speaking (debounced)');
-              setIsAgentSpeaking(false);
-              isAgentSpeakingRef.current = false;
-            }
-            speakingDebounceRef.current = null;
-          }, 600);
-        }
-        try {
-          source.disconnect();
-        } catch {
-          // Ignore disconnect errors.
-        }
-      };
     },
-    [ensureSpeakerContext, stopTextToSpeechFallback]
+    [flushPcmChunks, stopTextToSpeechFallback]
   );
 
   const stopMicrophone = useCallback(async () => {
@@ -1245,6 +1283,8 @@ function App() {
         lastModelAudioAtRef.current = Date.now();
         resetAgentTurnState();
         stopPlayback();
+        // Pre-initialize AudioWorklet so first audio plays without delay
+        ensurePcmWorklet().catch(() => {});
         deferMicStartUntilFirstAgentReplyRef.current = true;
         if (micStartTimeoutRef.current) {
           window.clearTimeout(micStartTimeoutRef.current);
@@ -1274,7 +1314,7 @@ function App() {
 
               const bootstrapText = lang === 'ar'
                 ? (capturedImage
-                  ? 'دي صورتي دلوقتي. اوصف حاجة محددة شايفها في الصورة (لون هدومي، تعبير وشي، وضعي) وقولي ازاي ده بيأثر على دوائري. استخدم update_node تغيّر حجم الدوائر.'
+                  ? 'دي صورتي دلوقتي. اقرأ حالتي النفسية من الصورة واربطها بالدوائر التلاتة. غيّر أحجام الدوائر بـ update_node عشان تعكس حالتي.'
                   : 'رحب بيا بجملة قصيرة واحدة بالعامية المصرية.')
                 : (capturedImage
                   ? 'This is my photo. Greet me based on my appearance and connect it to the three circles. Use update_node to adjust circle sizes to reflect my state.'
@@ -1513,6 +1553,7 @@ function App() {
     capturedImage,
     clearPendingTts,
     ensureSpeakerContext,
+    ensurePcmWorklet,
     handleToolCall,
     isConnected,
     isStarting,
