@@ -16,9 +16,9 @@ class PcmPlayerProcessor extends AudioWorkletProcessor {
     this.wasPlaying = false;
     this.emptyFrameCount = 0;
     this.totalSamplesPlayed = 0;
-    // Small pre-buffer: accumulate ~80ms (1920 samples at 24kHz) before
-    // starting playback. Enough to smooth the first few chunks.
-    this.prebufferThreshold = 1920;
+    // Pre-buffer: accumulate ~120ms (2880 samples at 24kHz) before
+    // starting playback. Smooths the initial burst without noticeable delay.
+    this.prebufferThreshold = 2880;
     this.prebuffering = true;
 
     this.port.onmessage = (e) => {
@@ -97,6 +97,9 @@ class PcmPlayerProcessor extends AudioWorkletProcessor {
       const threshold = this.totalSamplesPlayed < 48000 ? 94 : 38;
       if (this.wasPlaying && this.emptyFrameCount === threshold) {
         this.wasPlaying = false;
+        // Re-enter prebuffer mode so next response also gets smoothing
+        this.prebuffering = true;
+        this.totalSamplesPlayed = 0;
         this.port.postMessage({ type: 'drained' });
       }
     }

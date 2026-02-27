@@ -91,33 +91,51 @@ const ai = new GoogleGenAI({
     apiVersion: LIVE_API_VERSION,
 });
 
-// ---- Server-side circle command detection (fallback for weak tool calling) ----
+// ---- Server-side circle command detection (fallback if model skips tool calls) ----
 const CIRCLE_IDS = {
-    'وعي': '1', 'الوعي': '1', 'awareness': '1',
-    'علم': '2', 'العلم': '2', 'knowledge': '2', 'science': '2',
-    'حقيقة': '3', 'الحقيقة': '3', 'truth': '3',
-    'حقيقه': '3', 'الحقيقه': '3',
-    'دايرة': null, 'دايره': null, 'الدايرة': null, 'الدايره': null,
+    'وعي': '1',
+    'الوعي': '1',
+    'awareness': '1',
+    'علم': '2',
+    'العلم': '2',
+    'knowledge': '2',
+    'science': '2',
+    'حقيقة': '3',
+    'الحقيقة': '3',
+    'truth': '3',
+    'دايرة': null,
+    'دائرة': null,
+    'الدائرة': null,
+    'circle': null,
 };
 
-// Detect circle-related words without requiring exact circle name
 const CIRCLE_ORDINALS = {
-    'اولى': '1', 'الاولى': '1', 'أولى': '1', 'الأولى': '1', 'اول': '1', 'أول': '1',
-    'تانية': '2', 'التانية': '2', 'تاني': '2', 'التاني': '2', 'ثانية': '2',
-    'تالتة': '3', 'التالتة': '3', 'تالت': '3', 'التالت': '3', 'ثالثة': '3',
+    'اولى': '1',
+    'أولى': '1',
+    'الأولى': '1',
+    'الاولى': '1',
+    'اول': '1',
+    'أول': '1',
+    'تانية': '2',
+    'الثانية': '2',
+    'ثانية': '2',
+    'تاني': '2',
+    'تالتة': '3',
+    'الثالثة': '3',
+    'ثالثة': '3',
+    'تالت': '3',
 };
 
 function detectCircleCommand(text) {
     if (!text || typeof text !== 'string') return null;
-    const t = text.trim();
-    // Match action words: صغّر/صغر/صغري/كبّر/كبر/كبري/غيّر
+    const t = text.trim().toLowerCase();
+
     let action = null;
-    if (/صغ/i.test(t)) action = 'shrink';
-    else if (/كب/i.test(t)) action = 'grow';
-    else if (/غي/i.test(t) || /change/i.test(t)) action = 'change';
+    if (/صغ/.test(t) || /shrink/.test(t) || /smaller/.test(t)) action = 'shrink';
+    else if (/كبر/.test(t) || /grow/.test(t) || /bigger/.test(t)) action = 'grow';
+    else if (/غي/.test(t) || /change/.test(t) || /adjust/.test(t)) action = 'change';
     if (!action) return null;
 
-    // Try matching circle by name
     let circleId = null;
     for (const [name, id] of Object.entries(CIRCLE_IDS)) {
         if (id && t.includes(name)) {
@@ -125,7 +143,7 @@ function detectCircleCommand(text) {
             break;
         }
     }
-    // Try matching by ordinal (اولى، تانية، تالتة)
+
     if (!circleId) {
         for (const [ord, id] of Object.entries(CIRCLE_ORDINALS)) {
             if (t.includes(ord)) {
@@ -134,8 +152,8 @@ function detectCircleCommand(text) {
             }
         }
     }
-    // If just "صغري الدايرة" without specifying which, default to first
-    if (!circleId && (/دا[يئ]ر/i.test(t) || /circle/i.test(t))) {
+
+    if (!circleId && (/(دا[يئ]ر|دائ)/.test(t) || /circle/.test(t))) {
         circleId = '1';
     }
     if (!circleId) return null;
@@ -148,7 +166,6 @@ function detectCircleCommand(text) {
         color: colors[circleId] || '#FFD700',
     };
 }
-
 const GEMINI_RECONNECT_MAX_ATTEMPTS = Number(process.env.GEMINI_RECONNECT_MAX_ATTEMPTS || 10);
 const GEMINI_RECONNECT_BASE_DELAY_MS = Number(process.env.GEMINI_RECONNECT_BASE_DELAY_MS || 1200);
 const GEMINI_RECONNECT_MAX_DELAY_MS = Number(process.env.GEMINI_RECONNECT_MAX_DELAY_MS || 15000);
@@ -164,12 +181,56 @@ const tools = [
                     type: "OBJECT",
                     properties: {
                         id: { type: "STRING", description: "Circle ID: 1, 2, or 3" },
-                        radius: { type: "STRING", description: "Size from 30 to 100" },
+                        radius: { type: "STRING", description: "Radius in pixels (30-100). Larger = more active." },
                         color: { type: "STRING", description: "Hex color e.g. #FFD700" }
                     },
                     required: ["id", "radius", "color"]
                 },
-                // BLOCKING: model waits for tool response before speaking (avoids repeating itself)
+            },
+            {
+                name: "highlight_node",
+                description: "Highlight a specific circle to draw attention to it. Use when you want to emphasize a specific concept (Awareness, Science, or Truth).",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        id: { type: "STRING", description: "Circle ID: 1, 2, or 3" }
+                    },
+                    required: ["id"]
+                }
+            },
+            {
+                name: "get_expert_insight",
+                description: "Retrieve psychological principles from the Al-Rehla framework. Use this when the user asks for deep advice or when you need to ground your response in the knowledge base.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        topic: { type: "STRING", description: "The psychological concept or topic to look up" }
+                    },
+                    required: ["topic"]
+                }
+            },
+            {
+                name: "save_mental_map",
+                description: "Save the current state of the mental circles to memory. Use this when the user asks to save, or after a significant breakthrough.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        session_name: { type: "STRING", description: "Optional name for the session" }
+                    }
+                }
+            },
+            {
+                name: "generate_session_report",
+                description: "Generate and save a summary report of the session. Use at the end of the session.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        summary: { type: "STRING", description: "Executive summary of the session" },
+                        insights: { type: "STRING", description: "Core psychological insights discovered" },
+                        recommendations: { type: "STRING", description: "Actionable recommendations for the user" }
+                    },
+                    required: ["summary", "insights"]
+                }
             }
         ]
     }
@@ -177,19 +238,23 @@ const tools = [
 
 const systemInstruction = {
     parts: [{
-        text: `أنت "دوائر" — رفيق صوتي دافي. عامية مصرية بس.
+        text: `أنت صاحب مصري. اتكلم عامية طبيعية.
 
-٣ دوائر: وعي (id=1)، علم (id=2)، حقيقة (id=3).
+ممنوع — لو كسرت أي قاعدة هتتقفل:
+- ممنوع تقول أكتر من جملة واحدة + سؤال واحد. خمس كلمات لكل جملة بالكتير.
+- ممنوع تسأل سؤال وترد عليه بنفسك. لما تسأل — وقّف واستنى.
+- ممنوع تذكر: دوائر، وعي، علم، حقيقة، دايرة، هكبّر، هغيّر، ألوان، أرقام.
+- ممنوع تشرح نفسك أو شغلك. لو حد سألك "فهمت ايه" أو "بتعمل ايه": قول إحساسك ناحيته بس.
+- ممنوع تتكلم عن الأدوات أو التغييرات اللي بتعملها. غيّر في صمت.
+- لو حد قالك "قول تاني": نفس المعنى بكلام مختلف.
 
-لما تشوف صورة: اقرأ المزاج مش الشكل، نادي update_node.
+صورة: اقرأ المزاج بجملة. استنى الرد.
 
-ممنوع: أرقام، ألوان hex، تفاصيل تقنية، تكرار كلام قلته قبل كده.
-
-لو المستخدم قال "قول تاني" أو "من الأول": لخّص بكلام مختلف تماماً، ما تعيدش نفس الجمل.
-
-قاعدة ذهبية: كل رد = جملة واحدة بس + سؤال قصير. ما تزيدش عن كده أبداً.`
+[سري]:
+update_node: id(1/2/3), radius(30-100), color(hex). نادِه بناءً على حالة المستخدم النفسية من غير ما تتكلم عنه أبداً.`
     }],
 };
+
 const toCompatMessage = (message) => {
     const payload = JSON.parse(JSON.stringify(message ?? {}));
 
@@ -420,7 +485,7 @@ wss.on('connection', (ws) => {
                     if (BUCKET_NAME) {
                         const filename = `session_report_${Date.now()}.md`;
                         const content = `
-# Dawayir Session Report 🧠
+# Dawayir Session Report
 **Date:** ${new Date().toLocaleString()}
 
 ## Executive Summary
@@ -583,7 +648,8 @@ ${recommendations || "N/A"}
                         const toolCall = payload.toolCall || payload.tool_call;
                         if (toolCall) {
                             const functionCalls = toolCall.functionCalls || toolCall.function_calls || [];
-                            const serverTools = ['get_expert_insight', 'save_mental_map', 'generate_session_report'];
+                            // save_mental_map removed from serverTools so it routes to client to capture nodes
+                            const serverTools = ['get_expert_insight', 'generate_session_report'];
                             const clientTools = functionCalls.filter(fc => !serverTools.includes(fc.name));
                             const serverOnlyTools = functionCalls.filter(fc => serverTools.includes(fc.name));
 
@@ -767,7 +833,7 @@ const resolveServerToolCalls = (functionCalls, liveSession) => {
 
                 if (BUCKET_NAME) {
                     const filename = `session_report_${Date.now()}.md`;
-                    const content = `# Dawayir Session Report 🧠\n**Date:** ${new Date().toLocaleString()}\n\n## Executive Summary\n${summary || 'N/A'}\n\n## Core Insights\n${insights || 'N/A'}\n\n## Recommendations\n${recommendations || 'N/A'}\n\n---\n*Generated by Dawayir Live Agent (Gemini 2.5 Flash)*`;
+                    const content = `# Dawayir Session Report\n**Date:** ${new Date().toLocaleString()}\n\n## Executive Summary\n${summary || 'N/A'}\n\n## Core Insights\n${insights || 'N/A'}\n\n## Recommendations\n${recommendations || 'N/A'}\n\n---\n*Generated by Dawayir Live Agent (Gemini 2.5 Flash)*`;
 
                     const file = storage.bucket(BUCKET_NAME).file(filename);
                     file.save(content, { contentType: 'text/markdown' })
@@ -824,4 +890,5 @@ server.listen(PORT, () => {
     logInfo(`Log level: ${LOG_LEVEL}`);
     logInfo(`Live API version: ${LIVE_API_VERSION}`);
 });
+
 

@@ -29,6 +29,7 @@ const STRINGS = {
     enterSpaceVision: 'Enter Mental Space (with Vision)',
     agentSpeaking: 'Dawayir is speaking...',
     updateVisual: '📸 Update Visual Context',
+    lookAtMe: '👁️ Look at me',
     endSession: 'End Session',
     hint: 'Speak freely and explore your mental space. ✨',
     liveChat: '💬 Live Conversation',
@@ -38,22 +39,23 @@ const STRINGS = {
   ar: {
     brandName: 'دوائر',
     brandSub: 'مساحتك الذهنية الحية',
-    statusActive: 'الجلسة نشطة',
+    statusActive: 'متصل',
     statusDisconnected: 'غير متصل',
-    captureBtn: '📸 فحص الحالة البصرية',
+    captureBtn: '📸 خليني أشوفك',
     capture: '🎯 التقاط',
     cancel: '✕ إغلاق',
     initialState: 'حالتك المبدئية',
     retake: '🔄 إعادة الالتقاط',
     connectedMsg: '✨ متصل بمساحتك الذهنية',
     connecting: 'جاري الاتصال',
-    enterSpace: 'ادخل المساحة الذهنية 🧠',
-    enterSpaceVision: 'ادخل المساحة الذهنية (مع الرؤية)',
-    agentSpeaking: 'دوائر يتكلم...',
-    updateVisual: '📸 تحديث السياق البصري',
+    enterSpace: 'يلا نبدأ 🧠',
+    enterSpaceVision: 'يلا نبدأ (مع الرؤية) 🧠',
+    agentSpeaking: 'بيتكلم...',
+    updateVisual: '📸 شوفني تاني',
+    lookAtMe: '👁️ شوفني',
     endSession: 'إنهاء الجلسة',
-    hint: 'تحدث بحرية واستكشف مساحتك الذهنية. ✨',
-    liveChat: '💬 المحادثة الحية',
+    hint: 'اتكلم براحتك ✨',
+    liveChat: '💬 الدردشة',
     memoryBank: 'بنك الذاكرة',
     dashboardBtn: '💾',
   }
@@ -1068,7 +1070,7 @@ function App() {
     // Synthetic commands (server_cmd_, text_cmd_, client_cmd_) don't need a response.
     const geminiResponses = responses.filter(r => {
       const id = String(r.id);
-      return !id.startsWith('server_cmd_') && !id.startsWith('text_cmd_') && !id.startsWith('client_cmd_');
+      return !id.startsWith('server_cmd_') && !id.startsWith('text_cmd_') && !id.startsWith('client_cmd_') && !id.startsWith('sentiment_');
     });
     const socket = wsRef.current;
     if (socket && socket.readyState === WebSocket.OPEN && geminiResponses.length > 0) {
@@ -1108,6 +1110,53 @@ function App() {
   }, []);
 
   // Quick circle action (from UI buttons)
+  const handleLookAtMe = useCallback(async () => {
+    console.log("[App] Look at me requested");
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
+    try {
+      // 1. Start Camera temporarily
+      await startCamera();
+      // Wait for camera to warm up
+      await new Promise(r => setTimeout(r, 1000));
+
+      // 2. Capture Snapshot
+      // Note: captureSnapshot calls stopCamera() internally
+      const base64Data = captureSnapshot();
+      if (!base64Data) {
+        console.error("Failed to capture snapshot");
+        stopCamera();
+        return;
+      }
+
+      // 3. Send to Gemini
+      console.log("[App] Sending Look at me snapshot...");
+      wsRef.current.send(JSON.stringify({
+        realtimeInput: {
+          mediaChunks: [{
+            mimeType: "image/jpeg",
+            data: base64Data
+          }]
+        }
+      }));
+
+      // 4. Prompt the model to react
+      wsRef.current.send(JSON.stringify({
+        clientContent: {
+          turns: [{
+            role: "user",
+            parts: [{ text: lang === "ar" ? "(صورة جديدة. قول إحساسك بجملة.)" : "(New photo. Say what you feel in one sentence.)" }]
+          }],
+          turnComplete: true
+        }
+      }));
+
+    } catch (e) {
+      console.error("Look at me failed:", e);
+      stopCamera();
+    }
+  }, [lang, startCamera, stopCamera]);
+
   const handleCircleAction = useCallback((circleId, action) => {
     const radius = action === 'shrink' ? 35 : action === 'grow' ? 90 : 60;
     const colors = { 1: '#FFD700', 2: '#00CED1', 3: '#4169E1' };
@@ -1249,8 +1298,8 @@ function App() {
           restoreAfterGeminiReconnectRef.current = true;
         }
         lastModelAudioAtRef.current = Date.now();
-        resetAgentTurnState();
-        stopPlayback();
+        // DON'T stop playback or reset state — let buffered audio finish naturally.
+        // Cutting audio mid-speech causes jarring stuttering.
         const attempt = Number(serverStatus.attempt || 0);
         const maxAttempts = Number(serverStatus.maxAttempts || MAX_RECONNECT_ATTEMPTS);
         const delaySeconds = Math.max(1, Math.ceil(Number(serverStatus.delayMs || RECONNECT_DELAY_MS) / 1000));
@@ -1259,7 +1308,7 @@ function App() {
         return;
       }
       if (serverStatus?.state === 'gemini_recovered') {
-        resetAgentTurnState();
+        // Don't reset — audio may still be playing from before reconnect
         setStatus('Gemini reconnected. Restoring session...');
         setLastEvent('gemini_recovered');
         return;
@@ -1281,11 +1330,15 @@ function App() {
         setStatus('Connected to Gemini Live');
         setLastEvent('setup_complete');
         lastModelAudioAtRef.current = Date.now();
-        resetAgentTurnState();
-        stopPlayback();
+        const isGeminiReconnect = restoreAfterGeminiReconnectRef.current;
+        // On first connect: reset everything. On Gemini reconnect: let audio finish.
+        if (!isGeminiReconnect) {
+          resetAgentTurnState();
+          stopPlayback();
+        }
         // Pre-initialize AudioWorklet so first audio plays without delay
         ensurePcmWorklet().catch(() => {});
-        deferMicStartUntilFirstAgentReplyRef.current = true;
+        deferMicStartUntilFirstAgentReplyRef.current = !isMicActiveRef.current;
         if (micStartTimeoutRef.current) {
           window.clearTimeout(micStartTimeoutRef.current);
           micStartTimeoutRef.current = null;
@@ -1295,7 +1348,6 @@ function App() {
           if (wsRef.current?.readyState === WebSocket.OPEN && wsRef.current === socket) {
             const isReconnect = reconnectAttemptRef.current > 0;
             const isGeminiReconnect = restoreAfterGeminiReconnectRef.current;
-            const currentNodes = canvasRef.current?.getNodes() || [];
 
             if (!bootstrapPromptSentRef.current) {
               bootstrapPromptSentRef.current = true;
@@ -1314,11 +1366,11 @@ function App() {
 
               const bootstrapText = lang === 'ar'
                 ? (capturedImage
-                  ? 'دي صورتي دلوقتي. اقرأ حالتي النفسية من الصورة واربطها بالدوائر التلاتة. غيّر أحجام الدوائر بـ update_node عشان تعكس حالتي.'
-                  : 'رحب بيا بجملة قصيرة واحدة بالعامية المصرية.')
+                  ? 'دي صورتي. قولي حاسس بايه.'
+                  : 'يا صاحبي، ازيك؟')
                 : (capturedImage
-                  ? 'This is my photo. Greet me based on my appearance and connect it to the three circles. Use update_node to adjust circle sizes to reflect my state.'
-                  : 'Greet me with one short sentence.');
+                  ? 'This is my photo. Tell me what you sense.'
+                  : 'Hey, how are you?');
               parts.push({ text: bootstrapText });
 
               wsRef.current.send(JSON.stringify({
@@ -1331,13 +1383,14 @@ function App() {
                 return;
               }
               lastRestorePromptAtRef.current = now;
-              const nodesContext = currentNodes.length > 0
-                ? `\nحالة الدواير دلوقتي:\n${currentNodes.map(n => `- ${n.label} (id: ${n.id}, حجم: ${n.radius}, لون: ${n.color})`).join('\n')}`
-                : '';
+              // Send a minimal, invisible context restore — no "reconnection" language.
+              // The model should just continue naturally without acknowledging the gap.
               const lastConv = sessionContextRef.current.length > 0
-                ? `آخر حاجة كنا بنقولها كانت: "${sessionContextRef.current.join(' ... ')}"`
-                : "";
-              const promptText = `(نظام: تم استئناف الاتصال. كمّل الحوار من حيث وقفنا بالعامية المصرية بدون تنسيق.${nodesContext}\n${lastConv}\nرد بجملة قصيرة تكمل الحوار.)`;
+                ? sessionContextRef.current.slice(-3).join(' ... ')
+                : '';
+              const promptText = lastConv
+                ? `(كمّل من هنا بالظبط: "${lastConv}")`
+                : '(كمّل الحوار.)';
               wsRef.current.send(JSON.stringify({
                 clientContent: { turns: [{ role: 'user', parts: [{ text: promptText }] }], turnComplete: true }
               }));
@@ -1393,29 +1446,9 @@ function App() {
         }
         lastAgentContentAtRef.current = now;
       }
-      if (
-        deferMicStartUntilFirstAgentReplyRef.current
-        && parts.length > 0
-        && !isMicActiveRef.current
-        && wsRef.current?.readyState === WebSocket.OPEN
-        && wsRef.current === socket
-      ) {
-        if (micStartTimeoutRef.current) {
-          window.clearTimeout(micStartTimeoutRef.current);
-          micStartTimeoutRef.current = null;
-        }
-        deferMicStartUntilFirstAgentReplyRef.current = false;
-        try {
-          console.log('[App] Starting microphone after first agent reply...');
-          await startMicrophone();
-          console.log('[App] Microphone started successfully');
-        } catch (error) {
-          console.error('[App] Microphone start failed:', error);
-          setStatus('Error');
-          setErrorMessage(error.message);
-          setLastEvent('mic_start_error');
-        }
-      }
+      // Mic start is handled by the MIC_DEFER_TIMEOUT_MS timeout set in setupComplete.
+      // Do NOT start mic here during first response — getUserMedia blocks the main thread
+      // for 100-500ms which causes audio stuttering on the first few words.
 
       const audioParts = Array.isArray(parts)
         ? parts.filter((part) =>
@@ -1684,15 +1717,20 @@ function App() {
 
                 <div className="connected-actions">
                   {!isCameraActive ? (
-                    <button className="retake-live-btn" onClick={startCamera}>
-                      {t.updateVisual}
-                    </button>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button className="retake-live-btn" onClick={startCamera} style={{ flex: 1 }}>
+                        {t.updateVisual}
+                      </button>
+                      <button className="retake-live-btn" onClick={handleLookAtMe} style={{ flex: 1, background: "rgba(255, 209, 102, 0.15)", color: "#FFD700", borderColor: "rgba(255, 209, 102, 0.4)" }}>
+                        {t.lookAtMe}
+                      </button>
+                    </div>
                   ) : (
                     <div className="live-camera-mini">
                       <div className="video-container-mini">
                         <video autoPlay playsInline muted
                           ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />
                       </div>
                       <div className="mini-camera-actions">
