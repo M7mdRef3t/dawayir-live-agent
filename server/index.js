@@ -91,21 +91,85 @@ const ai = new GoogleGenAI({
     apiVersion: LIVE_API_VERSION,
 });
 
+// ---- Server-side circle command detection (fallback for weak tool calling) ----
+const CIRCLE_IDS = {
+    'وعي': '1', 'الوعي': '1', 'awareness': '1',
+    'علم': '2', 'العلم': '2', 'knowledge': '2', 'science': '2',
+    'حقيقة': '3', 'الحقيقة': '3', 'truth': '3',
+    'حقيقه': '3', 'الحقيقه': '3',
+    'دايرة': null, 'دايره': null, 'الدايرة': null, 'الدايره': null,
+};
+
+// Detect circle-related words without requiring exact circle name
+const CIRCLE_ORDINALS = {
+    'اولى': '1', 'الاولى': '1', 'أولى': '1', 'الأولى': '1', 'اول': '1', 'أول': '1',
+    'تانية': '2', 'التانية': '2', 'تاني': '2', 'التاني': '2', 'ثانية': '2',
+    'تالتة': '3', 'التالتة': '3', 'تالت': '3', 'التالت': '3', 'ثالثة': '3',
+};
+
+function detectCircleCommand(text) {
+    if (!text || typeof text !== 'string') return null;
+    const t = text.trim();
+    // Match action words: صغّر/صغر/صغري/كبّر/كبر/كبري/غيّر
+    let action = null;
+    if (/صغ/i.test(t)) action = 'shrink';
+    else if (/كب/i.test(t)) action = 'grow';
+    else if (/غي/i.test(t) || /change/i.test(t)) action = 'change';
+    if (!action) return null;
+
+    // Try matching circle by name
+    let circleId = null;
+    for (const [name, id] of Object.entries(CIRCLE_IDS)) {
+        if (id && t.includes(name)) {
+            circleId = id;
+            break;
+        }
+    }
+    // Try matching by ordinal (اولى، تانية، تالتة)
+    if (!circleId) {
+        for (const [ord, id] of Object.entries(CIRCLE_ORDINALS)) {
+            if (t.includes(ord)) {
+                circleId = id;
+                break;
+            }
+        }
+    }
+    // If just "صغري الدايرة" without specifying which, default to first
+    if (!circleId && (/دا[يئ]ر/i.test(t) || /circle/i.test(t))) {
+        circleId = '1';
+    }
+    if (!circleId) return null;
+
+    const radius = action === 'shrink' ? '35' : action === 'grow' ? '90' : '60';
+    const colors = { '1': '#FFD700', '2': '#00CED1', '3': '#4169E1' };
+    return {
+        id: circleId,
+        radius,
+        color: colors[circleId] || '#FFD700',
+    };
+}
+
+const GEMINI_RECONNECT_MAX_ATTEMPTS = Number(process.env.GEMINI_RECONNECT_MAX_ATTEMPTS || 10);
+const GEMINI_RECONNECT_BASE_DELAY_MS = Number(process.env.GEMINI_RECONNECT_BASE_DELAY_MS || 1200);
+const GEMINI_RECONNECT_MAX_DELAY_MS = Number(process.env.GEMINI_RECONNECT_MAX_DELAY_MS || 15000);
+const MAX_PENDING_CLIENT_MESSAGES = 120;
+
 const tools = [
     {
         functionDeclarations: [
             {
                 name: "update_node",
-                description: "Updates a circle with id, radius (30-100), and color (hex string like #FFD700 or #00BFFF or #00FF7F). Call with exactly these 3 params.",
-                parametersJsonSchema: {
-                    type: "object",
+                description: "Update a circle on screen. Use when user asks to resize or recolor any circle. id 1=Awareness/وعي, 2=Knowledge/علم, 3=Truth/حقيقة. radius 30=small, 100=large. Always pick a color yourself.",
+                parameters: {
+                    type: "OBJECT",
                     properties: {
-                        id: { type: "number", description: "Node ID: 1=Awareness, 2=Science, 3=Truth" },
-                        radius: { type: "number", description: "New radius 30-100" },
-                        color: { type: "string", description: "Hex color e.g. #FFD700" }
+                        id: { type: "STRING", description: "Circle ID: 1, 2, or 3" },
+                        radius: { type: "STRING", description: "Size from 30 to 100" },
+                        color: { type: "STRING", description: "Hex color e.g. #FFD700" }
                     },
                     required: ["id", "radius", "color"]
-                }
+                },
+                // BLOCKING: model waits for tool response before speaking (avoids repeating itself)
             }
         ]
     }
@@ -113,46 +177,22 @@ const tools = [
 
 const systemInstruction = {
     parts: [{
-        text: `أنت "دوائر" (Dawayir) - مُرشد نفسي مصري ودود يساعد الناس على استكشاف عالمهم الداخلي.
+        text: `أنت "دوائر" — رفيق صوتي دافي ومرح. بتتكلم عامية مصرية بس.
 
-🎯 PERSONA (Egyptian Arabic Only - NO French, NO other languages):
-- تحدث بلهجة مصرية دافئة: "إزيك"، "أهلاً"، "يلا"، "تمام"، "ماشي"
-- استخدم "حضرتك" دائماً (gender-neutral) - لا تفترض جنس المستخدم
-- كن متعاطف وصبور وحكيم
-- لا تتحدث الفرنسية أو أي لغة أخرى - عربي مصري وإنجليزي فقط
+قدامك ٣ دوائر على الشاشة:
+- دائرة ١ = وعي (id="1") — تركيز وحضور
+- دائرة ٢ = علم (id="2") — فضول ومعرفة
+- دائرة ٣ = حقيقة (id="3") — صدق مع النفس
 
-🛠 TOOL CALLING RULES (CRITICAL - MUST FOLLOW EXACTLY):
-قبل كل استجابة صوتية، غيّر الدوائر باستخدام update_node:
-- استخدم update_node(id, radius, color, label)
-- المعاملات المطلوبة: id (رقم الدائرة)
-- المعاملات الاختيارية: radius (30-100), color (hex كود), label (نص)
-- ⚠️ استخدم "radius" فقط - ليس "size" أو "expansion" ⚠️
-- الدوائر: 1=الوعي (Awareness), 2=العلم (Science), 3=الحقيقة (Truth)
+لما تشوف صورة المستخدم:
+- وصّف تفاصيل محددة من الصورة (لون هدومه، تعبير وشه، وضع جسمه، الخلفية)
+- ما تقولش نفس الكلام كل مرة — كل صورة مختلفة فركّز على اللي شايفه فعلاً
+- اربط اللي شايفه بالدوائر ونادي update_node تغيّر أحجامها
 
-📊 MENTAL CANVAS LOGIC:
-- دائرة أكبر (radius 80-100) = موضوع نشط في عقل المستخدم
-- دائرة أصغر (radius 30-50) = موضوع خامل أو غير مهم حالياً
-- ألوان دافئة (#FFD700, #FF6B6B) = مشاعر إيجابية
-- ألوان باردة (#4ECDC4, #95E1D3) = مشاعر محايدة/هادئة
-
-💾 MEMORY & GROUNDING:
-- استخدم save_mental_map لحفظ الحالة الذهنية كل 3-5 دقائق
-- استخدم get_expert_insight للحصول على مبادئ الرحلة الأساسية
-- لا تخترع معلومات - استند على الرحلة الحقيقية
-
-🎤 CONVERSATION FLOW:
-1. ابدأ بتحية مصرية دافئة
-2. غيّر دائرة الوعي (id=1) قبل الترحيب
-3. استمع للمستخدم وغيّر الدوائر حسب حالته
-4. اسأل أسئلة عميقة لاستكشاف مشاعره
-5. احفظ الجلسة بانتظام باستخدام save_mental_map
-
-تذكر: أنت تساعد الناس على "رؤية" عالمهم الداخلي من خلال الدوائر المتحركة.`
+لما المستخدم يطلب تغيير دائرة، نادي update_node فوراً.
+خلي الحوار دافي واسأل أسئلة. جملتين بالكتير.`
     }],
 };
-
-
-
 const toCompatMessage = (message) => {
     const payload = JSON.parse(JSON.stringify(message ?? {}));
 
@@ -184,13 +224,81 @@ const toBlobFromChunk = (chunk) => {
     return { data, mimeType };
 };
 
+const isAudioOnlyRealtimeInput = (realtimeInput) => {
+    if (!realtimeInput || typeof realtimeInput !== 'object') {
+        return false;
+    }
+
+    const mediaChunks = Array.isArray(realtimeInput.mediaChunks)
+        ? realtimeInput.mediaChunks
+        : Array.isArray(realtimeInput.media_chunks)
+            ? realtimeInput.media_chunks
+            : [];
+
+    if (mediaChunks.length === 0) {
+        return false;
+    }
+
+    const hasNonAudioMedia = mediaChunks.some((chunk) => {
+        const mimeType = chunk?.mimeType ?? chunk?.mime_type ?? '';
+        return typeof mimeType === 'string' && !mimeType.startsWith('audio/');
+    });
+
+    if (hasNonAudioMedia) {
+        return false;
+    }
+
+    const hasText = typeof realtimeInput.text === 'string' && realtimeInput.text.trim().length > 0;
+    const hasAudioStreamEnd = Boolean(realtimeInput.audioStreamEnd ?? realtimeInput.audio_stream_end);
+    return !hasText && !hasAudioStreamEnd;
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 wss.on('connection', (ws) => {
     logInfo('Client connected');
     let audioChunkCount = 0;
     let serverMessageCount = 0;
     let clientClosed = false;
     let session = null;
+    let connectingSession = false;
+    let reconnectInProgress = false;
+    let reconnectAttempt = 0;
     const pendingClientMessages = [];
+    let lastCmdText = '';
+    let lastCmdAt = 0;
+
+    const sendToClient = (payload) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(payload));
+        }
+    };
+
+    const sendServerStatus = (state, extra = {}) => {
+        sendToClient({
+            serverStatus: {
+                state,
+                ...extra,
+            },
+        });
+    };
+
+    const queueClientMessage = (message) => {
+        if (!message || typeof message !== 'object') {
+            return;
+        }
+
+        const realtimeInput = message.realtimeInput ?? message.realtime_input;
+        if (isAudioOnlyRealtimeInput(realtimeInput)) {
+            // Audio is high-frequency and becomes stale during reconnect windows.
+            return;
+        }
+
+        if (pendingClientMessages.length >= MAX_PENDING_CLIENT_MESSAGES) {
+            pendingClientMessages.shift();
+        }
+        pendingClientMessages.push(message);
+    };
 
     const flushPendingMessages = () => {
         if (!session || pendingClientMessages.length === 0) {
@@ -246,7 +354,7 @@ wss.on('connection', (ws) => {
 
     const processClientMessage = (message) => {
         if (!session) {
-            pendingClientMessages.push(message);
+            queueClientMessage(message);
             return;
         }
 
@@ -260,6 +368,30 @@ wss.on('connection', (ws) => {
 
         if (clientContent) {
             logDebug('Client content turn received');
+            // Detect circle commands from text input (reliable fallback)
+            const turns = clientContent.turns || clientContent.turn || [];
+            const turnsArr = Array.isArray(turns) ? turns : [turns];
+            for (const turn of turnsArr) {
+                const parts = turn?.parts || [];
+                for (const part of parts) {
+                    if (part?.text) {
+                        const cmd = detectCircleCommand(part.text);
+                        if (cmd) {
+                            const now = Date.now();
+                            logInfo(`[CMD] Detected circle command from text input: "${part.text}" => ${JSON.stringify(cmd)}`);
+                            sendToClient({
+                                toolCall: {
+                                    functionCalls: [{
+                                        id: `text_cmd_${now}`,
+                                        name: 'update_node',
+                                        args: cmd,
+                                    }],
+                                },
+                            });
+                        }
+                    }
+                }
+            }
             session.sendClientContent(clientContent);
         }
 
@@ -325,20 +457,83 @@ ${recommendations || "N/A"}
         }
     };
 
+    const scheduleReconnect = async (reason = 'unknown') => {
+        if (clientClosed || reconnectInProgress) {
+            return;
+        }
+        reconnectInProgress = true;
+
+        while (!clientClosed && !session && reconnectAttempt < GEMINI_RECONNECT_MAX_ATTEMPTS) {
+            reconnectAttempt += 1;
+            const delayMs = Math.min(
+                GEMINI_RECONNECT_BASE_DELAY_MS * (2 ** (reconnectAttempt - 1)),
+                GEMINI_RECONNECT_MAX_DELAY_MS
+            );
+
+            logInfo(`Gemini reconnect scheduled (#${reconnectAttempt}/${GEMINI_RECONNECT_MAX_ATTEMPTS}) after ${delayMs}ms. reason=${reason}`);
+            sendServerStatus('gemini_reconnecting', {
+                attempt: reconnectAttempt,
+                maxAttempts: GEMINI_RECONNECT_MAX_ATTEMPTS,
+                delayMs,
+            });
+
+            await sleep(delayMs);
+            if (clientClosed || session) {
+                break;
+            }
+
+            await connectLiveSession();
+        }
+
+        reconnectInProgress = false;
+
+        if (!clientClosed && !session) {
+            logError('Gemini reconnect attempts exhausted.');
+            sendToClient({
+                serverError: {
+                    message: 'Gemini connection dropped and retries were exhausted.',
+                },
+            });
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+        }
+    };
+
     const connectLiveSession = async () => {
+        if (clientClosed || session || connectingSession) {
+            return;
+        }
+        connectingSession = true;
+
         try {
-            session = await ai.live.connect({
+            const liveSession = await ai.live.connect({
                 model: LIVE_MODEL,
                 config: {
-                    responseModalities: ['AUDIO'],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: {
+                                voiceName: "Aoede",
+                            }
+                        }
+                    },
+                    responseModalities: ["AUDIO"],
+                    maxOutputTokens: 250,
+                    thinkingConfig: { thinkingBudget: 0 },
                     tools,
                     systemInstruction,
+                    inputAudioTranscription: {},
+                    outputAudioTranscription: {},
                 },
                 callbacks: {
                     onopen: () => {
                         logInfo(`Connected to Gemini Live API via Google GenAI SDK (${LIVE_MODEL})`);
                     },
                     onmessage: (message) => {
+                        if (reconnectAttempt > 0) {
+                            reconnectAttempt = 0;
+                            sendServerStatus('gemini_recovered');
+                        }
                         serverMessageCount += 1;
                         const payload = toCompatMessage(message);
 
@@ -346,7 +541,48 @@ ${recommendations || "N/A"}
                         const payloadStr = JSON.stringify(payload);
                         logInfo(`Gemini msg #${serverMessageCount} (${payloadStr.length} bytes): ${payloadStr.substring(0, 200)}`);
 
-                        // Intercept server-side tool calls before forwarding
+                        // ---- Diagnostic: log serverContent sub-keys ----
+                        const sc = payload.serverContent || payload.server_content;
+                        if (sc) {
+                            const scKeys = Object.keys(sc).filter(k => sc[k] != null);
+                            if (scKeys.length > 0 && !scKeys.every(k => k === 'modelTurn' || k === 'model_turn')) {
+                                logInfo(`[SC:keys] ${scKeys.join(', ')}`);
+                            }
+
+                            // ---- Transcription-based command detection (fallback) ----
+                            const inTx = sc.inputTranscription || sc.input_transcription;
+                            if (inTx?.text) {
+                                logInfo(`[Transcription:in] "${inTx.text}" (finished=${inTx.finished})`);
+                                // Forward transcription to client for debugging
+                                sendToClient({ debugTranscription: { type: 'input', text: inTx.text, finished: inTx.finished } });
+                                const cmd = detectCircleCommand(inTx.text);
+                                if (cmd) {
+                                    const now = Date.now();
+                                    if (inTx.text !== lastCmdText || now - lastCmdAt > 3000) {
+                                        lastCmdText = inTx.text;
+                                        lastCmdAt = now;
+                                        logInfo(`[CMD] Detected circle command from transcription: ${JSON.stringify(cmd)}`);
+                                        sendToClient({
+                                            toolCall: {
+                                                functionCalls: [{
+                                                    id: `server_cmd_${now}`,
+                                                    name: 'update_node',
+                                                    args: cmd,
+                                                }],
+                                            },
+                                        });
+                                    }
+                                }
+                            }
+                            const outTx = sc.outputTranscription || sc.output_transcription;
+                            if (outTx?.text) {
+                                logInfo(`[Transcription:out] "${outTx.text}" (finished=${outTx.finished})`);
+                                sendToClient({ debugTranscription: { type: 'output', text: outTx.text, finished: outTx.finished } });
+                            }
+                        }
+
+                        // Intercept server-side tool calls before forwarding.
+                        // Important: don't drop non-tool payload content.
                         const toolCall = payload.toolCall || payload.tool_call;
                         if (toolCall) {
                             const functionCalls = toolCall.functionCalls || toolCall.function_calls || [];
@@ -359,7 +595,12 @@ ${recommendations || "N/A"}
                                 resolveServerToolCalls(serverOnlyTools, session);
                             }
 
-                            // Forward only visual tools (update_node, highlight_node) to client
+                            // Forward only visual tools (update_node, highlight_node) to client.
+                            const payloadWithoutTools = { ...payload };
+                            delete payloadWithoutTools.toolCall;
+                            delete payloadWithoutTools.tool_call;
+                            const hasNonToolPayload = Object.keys(payloadWithoutTools).length > 0;
+
                             if (clientTools.length > 0) {
                                 const clientPayload = { ...payload };
                                 const clientToolCall = { ...(clientPayload.toolCall || clientPayload.tool_call) };
@@ -367,30 +608,33 @@ ${recommendations || "N/A"}
                                 clientToolCall.function_calls = clientTools;
                                 clientPayload.toolCall = clientToolCall;
                                 clientPayload.tool_call = clientToolCall;
-                                if (ws.readyState === WebSocket.OPEN) {
-                                    ws.send(JSON.stringify(clientPayload));
-                                }
+                                sendToClient(clientPayload);
+                            } else if (hasNonToolPayload) {
+                                // Only send payload_without_tools when no client tools were forwarded,
+                                // otherwise non-tool content would be duplicated.
+                                sendToClient(payloadWithoutTools);
                             }
-                            // Don't forward the original message if it had tool calls
                             return;
                         }
 
-                        if (ws.readyState === WebSocket.OPEN) {
-                            ws.send(JSON.stringify(payload));
-                        }
+                        sendToClient(payload);
                     },
                     onerror: (error) => {
                         logError('Gemini Live session error:', error);
                     },
                     onclose: (event) => {
                         logInfo(`Gemini Live session closed. code=${event?.code ?? 'n/a'} reason=${String(event?.reason ?? '')}`);
-                        if (ws.readyState === WebSocket.OPEN) {
-                            ws.close();
+                        if (session === liveSession) {
+                            session = null;
+                        }
+                        if (!clientClosed) {
+                            void scheduleReconnect(`onclose:${event?.code ?? 'n/a'}`);
                         }
                     },
                 },
             });
 
+            session = liveSession;
             if (clientClosed && session) {
                 session.close();
                 session = null;
@@ -400,14 +644,12 @@ ${recommendations || "N/A"}
             flushPendingMessages();
         } catch (error) {
             logError('Failed to initialize Gemini Live session via SDK:', error);
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    serverError: {
-                        message: 'Failed to initialize Gemini Live session.',
-                    },
-                }));
-                ws.close();
+            if (!clientClosed) {
+                session = null;
+                void scheduleReconnect('connect_exception');
             }
+        } finally {
+            connectingSession = false;
         }
     };
 
@@ -585,3 +827,4 @@ server.listen(PORT, () => {
     logInfo(`Log level: ${LOG_LEVEL}`);
     logInfo(`Live API version: ${LIVE_API_VERSION}`);
 });
+

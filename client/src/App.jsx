@@ -5,8 +5,12 @@ import './App.css';
 const INPUT_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
 const MIC_WORKLET_NAME = 'dawayir-mic-processor';
-const MAX_RECONNECT_ATTEMPTS = 3;
-const RECONNECT_DELAY_MS = 5000;
+const MAX_RECONNECT_ATTEMPTS = 12;
+const RECONNECT_DELAY_MS = 2000;
+const MAX_RECONNECT_DELAY_MS = 20000;
+const TTS_FALLBACK_GRACE_MS = 4500;
+const MIC_DEFER_TIMEOUT_MS = 5000;
+// Client-side VAD removed — Gemini's built-in VAD handles turn detection.
 
 const STRINGS = {
   en: {
@@ -104,6 +108,36 @@ const float32ToPcm16Buffer = (float32Samples) => {
   return int16.buffer;
 };
 
+const downsampleFloat32 = (input, inputRate, outputRate = INPUT_SAMPLE_RATE) => {
+  if (!input || input.length === 0) return new Float32Array(0);
+  if (!Number.isFinite(inputRate) || inputRate <= 0) return input;
+  if (inputRate === outputRate) return input;
+  if (inputRate < outputRate) return input;
+
+  const ratio = inputRate / outputRate;
+  const outputLength = Math.round(input.length / ratio);
+  const output = new Float32Array(outputLength);
+
+  let outputIndex = 0;
+  let inputIndex = 0;
+  while (outputIndex < outputLength) {
+    const nextInputIndex = Math.round((outputIndex + 1) * ratio);
+    let sum = 0;
+    let count = 0;
+
+    for (let i = inputIndex; i < nextInputIndex && i < input.length; i += 1) {
+      sum += input[i];
+      count += 1;
+    }
+
+    output[outputIndex] = count > 0 ? sum / count : 0;
+    outputIndex += 1;
+    inputIndex = nextInputIndex;
+  }
+
+  return output;
+};
+
 const tryParseJson = (text) => {
   try {
     return JSON.parse(text);
@@ -111,6 +145,41 @@ const tryParseJson = (text) => {
     return null;
   }
 };
+
+// ---- Client-side circle command detection ----
+const CIRCLE_IDS_CLIENT = {
+  'وعي': 1, 'الوعي': 1, 'awareness': 1,
+  'علم': 2, 'العلم': 2, 'knowledge': 2,
+  'حقيقة': 3, 'الحقيقة': 3, 'حقيقه': 3, 'الحقيقه': 3, 'truth': 3,
+};
+const CIRCLE_ORDINALS_CLIENT = {
+  'اولى': 1, 'الاولى': 1, 'أولى': 1, 'الأولى': 1, 'اول': 1, 'أول': 1,
+  'تانية': 2, 'التانية': 2, 'تاني': 2, 'ثانية': 2, 'الثانية': 2,
+  'تالتة': 3, 'التالتة': 3, 'تالت': 3, 'ثالثة': 3, 'الثالثة': 3,
+};
+function detectCircleCommandClient(text) {
+  if (!text || typeof text !== 'string') return null;
+  const t = text.trim();
+  let action = null;
+  if (/صغ/i.test(t)) action = 'shrink';
+  else if (/كب/i.test(t)) action = 'grow';
+  else if (/غي/i.test(t) || /change/i.test(t) || /لون/i.test(t)) action = 'change';
+  if (!action) return null;
+  let circleId = null;
+  for (const [name, id] of Object.entries(CIRCLE_IDS_CLIENT)) {
+    if (t.includes(name)) { circleId = id; break; }
+  }
+  if (!circleId) {
+    for (const [ord, id] of Object.entries(CIRCLE_ORDINALS_CLIENT)) {
+      if (t.includes(ord)) { circleId = id; break; }
+    }
+  }
+  if (!circleId && (/دا[يئ]ر/i.test(t) || /circle/i.test(t))) circleId = 1;
+  if (!circleId) return null;
+  const radius = action === 'shrink' ? 35 : action === 'grow' ? 90 : 60;
+  const colors = { 1: '#FFD700', 2: '#00CED1', 3: '#4169E1' };
+  return { id: circleId, radius, color: colors[circleId] || '#FFD700', action };
+}
 
 const getInlineData = (part) => part?.inlineData ?? part?.inline_data;
 const getServerContent = (message) => message?.serverContent ?? message?.server_content;
@@ -125,6 +194,12 @@ const getServerErrorMessage = (message) =>
 const isInterruptedMessage = (message) =>
   Boolean(getServerContent(message)?.interrupted ?? getServerContent(message)?.is_interrupted);
 const isAudioMimeType = (mimeType = '') => mimeType.startsWith('audio/pcm');
+const parsePcmSampleRate = (mimeType = '') => {
+  const match = /rate=(\d+)/i.exec(mimeType);
+  if (!match) return OUTPUT_SAMPLE_RATE;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : OUTPUT_SAMPLE_RATE;
+};
 const normalizeBlob = (blob) => {
   const data = blob?.data;
   const mimeType = blob?.mimeType ?? blob?.mime_type;
@@ -259,7 +334,7 @@ const Visualizer = ({ stream, isConnected }) => {
 };
 
 function App() {
-  const [lang, setLang] = useState('en');
+  const [lang, setLang] = useState('ar');
   const t = STRINGS[lang];
   const [status, setStatus] = useState('Disconnected');
   const [errorMessage, setErrorMessage] = useState(null);
@@ -267,11 +342,13 @@ function App() {
   const [isStarting, setIsStarting] = useState(false);
   const [lastEvent, setLastEvent] = useState('none');
   const [toolCallsCount, setToolCallsCount] = useState(0);
-  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [_reconnectAttempt, setReconnectAttempt] = useState(0);
   const [isMicActive, setIsMicActive] = useState(false);
   const [appView, setAppView] = useState('live'); // 'live' or 'dashboard'
   const [transcript, setTranscript] = useState([]); // Live transcript entries
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
+  const isAgentSpeakingRef = useRef(false);
+  const [commandText, setCommandText] = useState('');
 
   // Update canvas node labels when language changes
   useEffect(() => {
@@ -299,8 +376,27 @@ function App() {
   const bootstrapPromptSentRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef(null);
+  const micStartTimeoutRef = useRef(null);
   const manualCloseRef = useRef(false);
   const sessionContextRef = useRef([]); // Stores last few text segments for context preservation
+  const restoreAfterGeminiReconnectRef = useRef(false);
+  const lastRestorePromptAtRef = useRef(0);
+  const deferMicStartUntilFirstAgentReplyRef = useRef(false);
+  const isMicActiveRef = useRef(false);
+  const ttsDecisionTimeoutRef = useRef(null);
+  const currentTurnModeRef = useRef('none'); // none | model | tts
+  const bufferedTurnTextRef = useRef('');
+  const lastAgentContentAtRef = useRef(0);
+  const vadStateRef = useRef({
+    speaking: false,
+    speechMs: 0,
+    silenceMs: 0,
+    noiseFloor: 90,
+  });
+
+  useEffect(() => {
+    isMicActiveRef.current = isMicActive;
+  }, [isMicActive]);
 
   const startCamera = async () => {
     console.log("[Camera] Starting camera...");
@@ -423,6 +519,12 @@ function App() {
   const speakerContextRef = useRef(null);
   const activeSourcesRef = useRef(new Set());
   const nextPlaybackTimeRef = useRef(0);
+  const speakingDebounceRef = useRef(null);
+  const ttsFallbackEnabledRef = useRef(false); // Disabled TTS fallback here
+  const lastModelAudioAtRef = useRef(Date.now());
+  const lastSpokenTextRef = useRef('');
+  const lastSpokenAtRef = useRef(0);
+  const pendingTtsTimeoutRef = useRef(null);
 
   const backendUrl = useMemo(() => {
     const envUrl = import.meta.env.VITE_BACKEND_WS_URL;
@@ -462,7 +564,90 @@ function App() {
     activeSourcesRef.current.clear();
   }, []);
 
+  const clearPendingTts = useCallback(() => {
+    if (ttsDecisionTimeoutRef.current) {
+      window.clearTimeout(ttsDecisionTimeoutRef.current);
+      ttsDecisionTimeoutRef.current = null;
+    }
+    if (pendingTtsTimeoutRef.current) {
+      window.clearTimeout(pendingTtsTimeoutRef.current);
+      pendingTtsTimeoutRef.current = null;
+    }
+  }, []);
+
+  const resetAgentTurnState = useCallback(() => {
+    clearPendingTts();
+    currentTurnModeRef.current = 'none';
+    bufferedTurnTextRef.current = '';
+    lastAgentContentAtRef.current = 0;
+    setIsAgentSpeaking(false);
+    isAgentSpeakingRef.current = false;
+  }, [clearPendingTts]);
+
+  const stopTextToSpeechFallback = useCallback(() => {
+    clearPendingTts();
+    if (typeof window === 'undefined') return;
+    if (!('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      // Ignore synthesis cancellation errors.
+    }
+  }, [clearPendingTts]);
+
+  const speakTextFallback = useCallback((text) => {
+    if (!ttsFallbackEnabledRef.current || typeof text !== 'string' || text.trim().length === 0) {
+      return;
+    }
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return;
+    }
+
+    // Avoid reading markdown artifacts literally.
+    const cleanedText = text.replace(/[*_`#]/g, '').trim();
+    if (!cleanedText) {
+      return;
+    }
+
+    const now = Date.now();
+    if (cleanedText === lastSpokenTextRef.current && now - lastSpokenAtRef.current < 5000) {
+      return;
+    }
+
+    stopTextToSpeechFallback();
+
+    const utterance = new SpeechSynthesisUtterance(cleanedText);
+    utterance.lang = /[\u0600-\u06FF]/.test(cleanedText) ? 'ar-EG' : 'en-US';
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.onend = () => {
+      if (currentTurnModeRef.current === 'tts') {
+        setIsAgentSpeaking(false);
+        isAgentSpeakingRef.current = false;
+        currentTurnModeRef.current = 'none';
+        bufferedTurnTextRef.current = '';
+      }
+    };
+    utterance.onerror = () => {
+      setIsAgentSpeaking(false);
+      isAgentSpeakingRef.current = false;
+      currentTurnModeRef.current = 'none';
+      bufferedTurnTextRef.current = '';
+    };
+    window.speechSynthesis.speak(utterance);
+    lastSpokenTextRef.current = cleanedText;
+    lastSpokenAtRef.current = now;
+  }, [stopTextToSpeechFallback]);
+
   const stopPlayback = useCallback(() => {
+    stopTextToSpeechFallback();
+    if (speakingDebounceRef.current) {
+      clearTimeout(speakingDebounceRef.current);
+      speakingDebounceRef.current = null;
+    }
+    // Reset playback timeline so next audio starts fresh
+    nextPlaybackTimeRef.current = 0;
+
     for (const source of activeSourcesRef.current) {
       try {
         source.stop();
@@ -484,7 +669,9 @@ function App() {
     } else {
       nextPlaybackTimeRef.current = 0;
     }
-  }, []);
+    setIsAgentSpeaking(false);
+    isAgentSpeakingRef.current = false;
+  }, [stopTextToSpeechFallback]);
 
   const ensureSpeakerContext = useCallback(async () => {
     if (speakerContextRef.current) {
@@ -509,28 +696,54 @@ function App() {
     return ctx;
   }, []);
 
+  // Direct per-chunk scheduling — Web Audio's scheduler runs on a separate thread
+  // so it handles gapless playback even when the main thread is busy.
   const playPcmChunk = useCallback(
-    async (arrayBuffer) => {
+    async (arrayBuffer, sampleRate = OUTPUT_SAMPLE_RATE) => {
       if (!arrayBuffer || arrayBuffer.byteLength === 0) return;
 
-      const audioContext = await ensureSpeakerContext();
+      stopTextToSpeechFallback();
       const float32 = pcm16ToFloat32(arrayBuffer);
       if (float32.length === 0) return;
 
-      const audioBuffer = audioContext.createBuffer(1, float32.length, OUTPUT_SAMPLE_RATE);
+      const safeSampleRate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : OUTPUT_SAMPLE_RATE;
+      const audioContext = await ensureSpeakerContext();
+
+      const audioBuffer = audioContext.createBuffer(1, float32.length, safeSampleRate);
       audioBuffer.getChannelData(0).set(float32);
 
       const source = audioContext.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(audioContext.destination);
 
-      const startAt = Math.max(audioContext.currentTime + 0.02, nextPlaybackTimeRef.current);
+      // Schedule gaplessly: if we have a future scheduled end time, chain after it.
+      // Otherwise start immediately. Web Audio scheduler is sample-accurate on its own thread.
+      const now = audioContext.currentTime;
+      const startAt = (nextPlaybackTimeRef.current > now) ? nextPlaybackTimeRef.current : now;
       source.start(startAt);
       nextPlaybackTimeRef.current = startAt + audioBuffer.duration;
+      lastModelAudioAtRef.current = Date.now();
+
+      // Cancel any pending "speaking ended" debounce since new audio arrived
+      if (speakingDebounceRef.current) {
+        clearTimeout(speakingDebounceRef.current);
+        speakingDebounceRef.current = null;
+      }
 
       activeSourcesRef.current.add(source);
       source.onended = () => {
         activeSourcesRef.current.delete(source);
+        if (activeSourcesRef.current.size === 0) {
+          if (speakingDebounceRef.current) clearTimeout(speakingDebounceRef.current);
+          speakingDebounceRef.current = setTimeout(() => {
+            if (activeSourcesRef.current.size === 0) {
+              console.log('[Audio] Agent finished speaking (debounced)');
+              setIsAgentSpeaking(false);
+              isAgentSpeakingRef.current = false;
+            }
+            speakingDebounceRef.current = null;
+          }, 600);
+        }
         try {
           source.disconnect();
         } catch {
@@ -538,10 +751,17 @@ function App() {
         }
       };
     },
-    [ensureSpeakerContext]
+    [ensureSpeakerContext, stopTextToSpeechFallback]
   );
 
   const stopMicrophone = useCallback(async () => {
+    vadStateRef.current = {
+      speaking: false,
+      speechMs: 0,
+      silenceMs: 0,
+      noiseFloor: 90,
+    };
+
     if (micSourceRef.current) {
       try {
         micSourceRef.current.disconnect();
@@ -597,11 +817,22 @@ function App() {
   }, []);
 
   const sendRealtimeAudioChunk = useCallback((arrayBuffer, sampleRate) => {
-    if (!arrayBuffer || !setupCompleteRef.current) return;
+    if (!arrayBuffer || !setupCompleteRef.current) {
+      return;
+    }
+    // Block mic while agent is speaking to prevent echo feedback
+    // which causes Gemini's VAD to think user is interrupting.
+    if (isAgentSpeakingRef.current) {
+      return;
+    }
 
     const socket = wsRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
 
+    // Send all audio continuously to Gemini — let Gemini's built-in VAD
+    // handle turn detection. No client-side gating or audioStreamEnd.
     socket.send(
       JSON.stringify({
         realtimeInput: {
@@ -618,6 +849,12 @@ function App() {
 
   const startMicrophone = useCallback(async () => {
     await stopMicrophone();
+    vadStateRef.current = {
+      speaking: false,
+      speechMs: 0,
+      silenceMs: 0,
+      noiseFloor: 90,
+    };
 
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error('Microphone capture is not supported in this browser.');
@@ -631,6 +868,8 @@ function App() {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
+        sampleRate: INPUT_SAMPLE_RATE,
+        sampleSize: 16,
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
@@ -653,8 +892,9 @@ function App() {
         const worklet = new AudioWorkletNode(micContext, MIC_WORKLET_NAME);
         worklet.port.onmessage = (event) => {
           const int16arrayBuffer = event.data?.int16arrayBuffer;
+          const sampleRate = Number(event.data?.sampleRate) || INPUT_SAMPLE_RATE;
           if (!int16arrayBuffer) return;
-          sendRealtimeAudioChunk(int16arrayBuffer, micContext.sampleRate);
+          sendRealtimeAudioChunk(int16arrayBuffer, sampleRate);
         };
 
         source.connect(worklet);
@@ -671,7 +911,8 @@ function App() {
       processor.onaudioprocess = (event) => {
         const input = event.inputBuffer?.getChannelData(0);
         if (!input || input.length === 0) return;
-        sendRealtimeAudioChunk(float32ToPcm16Buffer(input), micContext.sampleRate);
+        const downsampled = downsampleFloat32(input, micContext.sampleRate, INPUT_SAMPLE_RATE);
+        sendRealtimeAudioChunk(float32ToPcm16Buffer(downsampled), INPUT_SAMPLE_RATE);
       };
 
       source.connect(processor);
@@ -712,7 +953,11 @@ function App() {
       try {
         if (call.name === 'update_node') {
           // Smart ID resolution — handle strings like "circle", "awareness", etc.
-          const NAME_TO_ID = { awareness: 1, science: 2, truth: 3, circle: 1, '1': 1, '2': 2, '3': 3 };
+          const NAME_TO_ID = {
+            awareness: 1, science: 2, truth: 3, knowledge: 2, circle: 1,
+            'وعي': 1, 'علم': 2, 'حقيقة': 3, 'الوعي': 1, 'العلم': 2, 'الحقيقة': 3,
+            '1': 1, '2': 2, '3': 3,
+          };
           const rawId = args.id ?? args.node_id ?? args.nodeId ?? 1;
           const resolvedId = NAME_TO_ID[String(rawId).toLowerCase()] ?? Number(rawId);
           const id = Number.isFinite(resolvedId) ? resolvedId : 1;
@@ -781,12 +1026,18 @@ function App() {
       }
     }
 
+    // Only send toolResponse back to server for Gemini-originated tool calls.
+    // Synthetic commands (server_cmd_, text_cmd_, client_cmd_) don't need a response.
+    const geminiResponses = responses.filter(r => {
+      const id = String(r.id);
+      return !id.startsWith('server_cmd_') && !id.startsWith('text_cmd_') && !id.startsWith('client_cmd_');
+    });
     const socket = wsRef.current;
-    if (socket && socket.readyState === WebSocket.OPEN && responses.length > 0) {
+    if (socket && socket.readyState === WebSocket.OPEN && geminiResponses.length > 0) {
       socket.send(
         JSON.stringify({
           toolResponse: {
-            functionResponses: responses,
+            functionResponses: geminiResponses,
           },
         })
       );
@@ -795,11 +1046,49 @@ function App() {
     setLastEvent(`tool_call:${functionCalls.length}`);
   }, []);
 
+  // Handle text command submission - detect circles locally + send to Gemini
+  const handleTextCommand = useCallback((text) => {
+    if (!text?.trim()) return;
+    const cmd = detectCircleCommandClient(text);
+    if (cmd) {
+      console.log(`[App] Local circle command detected: "${text}" =>`, cmd);
+      canvasRef.current?.updateNode(cmd.id, { radius: cmd.radius, color: cmd.color });
+      canvasRef.current?.pulseNode(cmd.id);
+      setToolCallsCount((prev) => prev + 1);
+      setLastEvent(`local_cmd:${cmd.action}`);
+    }
+    // Also send to server/Gemini so the agent can respond conversationally
+    const socket = wsRef.current;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        clientContent: {
+          turns: [{ role: 'user', parts: [{ text }] }],
+          turnComplete: true,
+        },
+      }));
+    }
+  }, []);
+
+  // Quick circle action (from UI buttons)
+  const handleCircleAction = useCallback((circleId, action) => {
+    const radius = action === 'shrink' ? 35 : action === 'grow' ? 90 : 60;
+    const colors = { 1: '#FFD700', 2: '#00CED1', 3: '#4169E1' };
+    console.log(`[App] Circle button: ${action} circle ${circleId}`);
+    canvasRef.current?.updateNode(circleId, { radius, color: colors[circleId] });
+    canvasRef.current?.pulseNode(circleId);
+    setToolCallsCount((prev) => prev + 1);
+    setLastEvent(`btn_cmd:${action}_${circleId}`);
+  }, []);
+
   const disconnect = useCallback(async () => {
     manualCloseRef.current = true;
     if (reconnectTimeoutRef.current) {
       window.clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
+    }
+    if (micStartTimeoutRef.current) {
+      window.clearTimeout(micStartTimeoutRef.current);
+      micStartTimeoutRef.current = null;
     }
     reconnectAttemptRef.current = 0;
     setReconnectAttempt(0);
@@ -808,6 +1097,10 @@ function App() {
 
     setupCompleteRef.current = false;
     bootstrapPromptSentRef.current = false;
+    restoreAfterGeminiReconnectRef.current = false;
+    deferMicStartUntilFirstAgentReplyRef.current = false;
+    lastModelAudioAtRef.current = Date.now();
+    resetAgentTurnState();
     setIsStarting(false);
     setIsConnected(false);
 
@@ -826,10 +1119,17 @@ function App() {
 
     setStatus('Disconnected');
     setLastEvent('manual_disconnect');
-  }, [closeSpeakerContext, stopMicrophone, stopPlayback]);
+  }, [closeSpeakerContext, resetAgentTurnState, stopMicrophone, stopPlayback]);
 
   const connect = useCallback(async () => {
     if (isStarting || isConnected) return;
+    const existingSocket = wsRef.current;
+    if (
+      existingSocket
+      && (existingSocket.readyState === WebSocket.OPEN || existingSocket.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
     manualCloseRef.current = false;
 
     setErrorMessage('');
@@ -852,6 +1152,11 @@ function App() {
     wsRef.current = socket;
 
     socket.onopen = () => {
+      if (wsRef.current !== socket) return;
+      if (reconnectTimeoutRef.current) {
+        window.clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
       reconnectAttemptRef.current = 0;
       setReconnectAttempt(0);
       setIsConnected(true);
@@ -861,6 +1166,7 @@ function App() {
     };
 
     socket.onmessage = async (event) => {
+      if (wsRef.current !== socket) return;
       let message = null;
 
       if (typeof event.data === 'string') {
@@ -888,11 +1194,47 @@ function App() {
 
       if (!message) return;
 
+      // Diagnostic: log every parsed server message type
+      const msgKeys = Object.keys(message).join(',');
+      console.log(`[WS] Message received — keys: [${msgKeys}]`);
+
+      // Debug: log transcription data forwarded from server
+      if (message.debugTranscription) {
+        const dt = message.debugTranscription;
+        console.log(`%c[Transcription:${dt.type}] "${dt.text}" (finished=${dt.finished})`, 'color: #00ff00; font-weight: bold');
+        return; // Don't process debug messages further
+      }
+
+      const serverStatus = message?.serverStatus ?? message?.server_status;
+      if (serverStatus?.state === 'gemini_reconnecting') {
+        if (bootstrapPromptSentRef.current) {
+          restoreAfterGeminiReconnectRef.current = true;
+        }
+        lastModelAudioAtRef.current = Date.now();
+        resetAgentTurnState();
+        stopPlayback();
+        const attempt = Number(serverStatus.attempt || 0);
+        const maxAttempts = Number(serverStatus.maxAttempts || MAX_RECONNECT_ATTEMPTS);
+        const delaySeconds = Math.max(1, Math.ceil(Number(serverStatus.delayMs || RECONNECT_DELAY_MS) / 1000));
+        setStatus(`Gemini reconnecting (${attempt}/${maxAttempts}) in ${delaySeconds}s...`);
+        setLastEvent('gemini_reconnecting');
+        return;
+      }
+      if (serverStatus?.state === 'gemini_recovered') {
+        resetAgentTurnState();
+        setStatus('Gemini reconnected. Restoring session...');
+        setLastEvent('gemini_recovered');
+        return;
+      }
+
       const serverError = getServerErrorMessage(message);
       if (serverError) {
         setStatus('Error');
         setErrorMessage(serverError);
         setLastEvent('server_error');
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.close();
+        }
         return;
       }
 
@@ -900,41 +1242,90 @@ function App() {
         setupCompleteRef.current = true;
         setStatus('Connected to Gemini Live');
         setLastEvent('setup_complete');
+        lastModelAudioAtRef.current = Date.now();
+        resetAgentTurnState();
+        stopPlayback();
+        deferMicStartUntilFirstAgentReplyRef.current = true;
+        if (micStartTimeoutRef.current) {
+          window.clearTimeout(micStartTimeoutRef.current);
+          micStartTimeoutRef.current = null;
+        }
 
         try {
-          await startMicrophone();
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
+          if (wsRef.current?.readyState === WebSocket.OPEN && wsRef.current === socket) {
             const isReconnect = reconnectAttemptRef.current > 0;
+            const isGeminiReconnect = restoreAfterGeminiReconnectRef.current;
             const currentNodes = canvasRef.current?.getNodes() || [];
 
             if (!bootstrapPromptSentRef.current) {
               bootstrapPromptSentRef.current = true;
               console.log('[App] Sending bootstrap prompt...');
 
+              const parts = [];
+
+              // Include camera snapshot if available so agent can greet based on appearance
+              if (capturedImage) {
+                const base64Data = capturedImage.split(',')[1];
+                if (base64Data) {
+                  parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
+                  console.log('[App] Including camera snapshot in bootstrap prompt');
+                }
+              }
+
               const bootstrapText = lang === 'ar'
-                ? '\u0627\u0628\u062f\u0623 \u0627\u0644\u0643\u0644\u0627\u0645 \u0641\u0648\u0631\u0627\u064b. \u0631\u062d\u0628 \u0628\u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0628\u0644\u0647\u062c\u0629 \u0645\u0635\u0631\u064a\u0629 \u062f\u0627\u0641\u0626\u0629 \u0648\u0627\u0633\u0623\u0644\u0647 \u0639\u0646 \u062d\u0627\u0644\u0647. \u0627\u0633\u062a\u062e\u062f\u0645 update_node \u0642\u0628\u0644 \u0627\u0644\u0643\u0644\u0627\u0645.'
-                : 'Start speaking immediately. Welcome the user warmly and ask how they feel. Call update_node before speaking.';
-              const parts = [{ text: bootstrapText }];
+                ? (capturedImage
+                  ? 'دي صورتي دلوقتي. اوصف حاجة محددة شايفها في الصورة (لون هدومي، تعبير وشي، وضعي) وقولي ازاي ده بيأثر على دوائري. استخدم update_node تغيّر حجم الدوائر.'
+                  : 'رحب بيا بجملة قصيرة واحدة بالعامية المصرية.')
+                : (capturedImage
+                  ? 'This is my photo. Greet me based on my appearance and connect it to the three circles. Use update_node to adjust circle sizes to reflect my state.'
+                  : 'Greet me with one short sentence.');
+              parts.push({ text: bootstrapText });
 
               wsRef.current.send(JSON.stringify({
                 clientContent: { turns: [{ role: 'user', parts }], turnComplete: true }
               }));
-            } else if (isReconnect) {
-              const nodesContext = currentNodes.map(n => `- ${n.label} (id: ${n.id}, size: ${n.radius}, color: ${n.color})`).join('\n');
+            } else if (isReconnect || isGeminiReconnect) {
+              const now = Date.now();
+              if (now - lastRestorePromptAtRef.current < 6000) {
+                restoreAfterGeminiReconnectRef.current = false;
+                return;
+              }
+              lastRestorePromptAtRef.current = now;
+              const nodesContext = currentNodes.length > 0
+                ? `\nحالة الدواير دلوقتي:\n${currentNodes.map(n => `- ${n.label} (id: ${n.id}, حجم: ${n.radius}, لون: ${n.color})`).join('\n')}`
+                : '';
               const lastConv = sessionContextRef.current.length > 0
-                ? `\u0622\u062e\u0631 \u062d\u0627\u062c\u0629 \u0643\u0646\u0627 \u0628\u0646\u0642\u0648\u0644\u0647\u0627 \u0643\u0627\u0646\u062a: "${sessionContextRef.current.join(' ... ')}"`
+                ? `آخر حاجة كنا بنقولها كانت: "${sessionContextRef.current.join(' ... ')}"`
                 : "";
-              const promptText = '\u062d\u0635\u0644 \u0627\u0646\u0642\u0637\u0627\u0639 \u0628\u0633\u064a\u0637 \u0641\u064a \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0648\u0631\u062c\u0639\u0646\u0627 \u062a\u0627\u0646\u064a. ' +
-                '\u062e\u0644\u064a\u0643 \u0641\u0627\u0643\u0631 \u0625\u0646\u0646\u0627 \u0628\u0646\u0643\u0645\u0644 \u0646\u0641\u0633 \u0627\u0644\u062c\u0644\u0633\u0629. ' +
-                lastConv + ' ' +
-                '\u062d\u0627\u0644\u0629 \u0627\u0644\u062f\u0648\u0627\u0626\u0631 \u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0642\u062f\u0627\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0647\u064a:\n' + nodesContext + '\n' +
-                '\u0643\u0645\u0644 \u0643\u0644\u0627\u0645\u0643 \u0645\u0639 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0645\u0646 \u0645\u0643\u0627\u0646 \u0645\u0627 \u0648\u0642\u0641\u0646\u0627 \u0628\u0623\u0633\u0644\u0648\u0628 \u0637\u0628\u064a\u0639\u064a \u062c\u062f\u0627\u064b.';
+              const promptText = `(نظام: تم استئناف الاتصال. كمّل الحوار من حيث وقفنا بالعامية المصرية بدون تنسيق.${nodesContext}\n${lastConv}\nرد بجملة قصيرة تكمل الحوار.)`;
               wsRef.current.send(JSON.stringify({
                 clientContent: { turns: [{ role: 'user', parts: [{ text: promptText }] }], turnComplete: true }
               }));
+              restoreAfterGeminiReconnectRef.current = false;
             }
-
           }
+
+          micStartTimeoutRef.current = window.setTimeout(async () => {
+            if (wsRef.current !== socket || wsRef.current?.readyState !== WebSocket.OPEN) {
+              micStartTimeoutRef.current = null;
+              return;
+            }
+            if (!setupCompleteRef.current || isMicActiveRef.current || !deferMicStartUntilFirstAgentReplyRef.current) {
+              micStartTimeoutRef.current = null;
+              return;
+            }
+            deferMicStartUntilFirstAgentReplyRef.current = false;
+            try {
+              await startMicrophone();
+              setLastEvent('mic_autostart_timeout');
+            } catch (error) {
+              setStatus('Error');
+              setErrorMessage(error.message);
+              setLastEvent('mic_start_error');
+            } finally {
+              micStartTimeoutRef.current = null;
+            }
+          }, MIC_DEFER_TIMEOUT_MS);
         } catch (error) {
           setStatus('Error');
           setErrorMessage(error.message);
@@ -949,11 +1340,43 @@ function App() {
       }
 
       if (isInterruptedMessage(message)) {
+        resetAgentTurnState();
         stopPlayback();
         setLastEvent('server_interrupted');
       }
 
       const parts = getParts(message);
+      if (parts.length > 0) {
+        const now = Date.now();
+        if (now - lastAgentContentAtRef.current > 1800) {
+          resetAgentTurnState();
+        }
+        lastAgentContentAtRef.current = now;
+      }
+      if (
+        deferMicStartUntilFirstAgentReplyRef.current
+        && parts.length > 0
+        && !isMicActiveRef.current
+        && wsRef.current?.readyState === WebSocket.OPEN
+        && wsRef.current === socket
+      ) {
+        if (micStartTimeoutRef.current) {
+          window.clearTimeout(micStartTimeoutRef.current);
+          micStartTimeoutRef.current = null;
+        }
+        deferMicStartUntilFirstAgentReplyRef.current = false;
+        try {
+          console.log('[App] Starting microphone after first agent reply...');
+          await startMicrophone();
+          console.log('[App] Microphone started successfully');
+        } catch (error) {
+          console.error('[App] Microphone start failed:', error);
+          setStatus('Error');
+          setErrorMessage(error.message);
+          setLastEvent('mic_start_error');
+        }
+      }
+
       const audioParts = Array.isArray(parts)
         ? parts.filter((part) =>
           isAudioMimeType(getInlineData(part)?.mimeType)
@@ -961,38 +1384,79 @@ function App() {
         )
         : [];
 
-      for (const part of audioParts) {
-        const inline = getInlineData(part);
-        if (inline?.data) {
-          await playPcmChunk(base64ToArrayBuffer(inline.data));
-          setLastEvent('audio_chunk');
-        }
-      }
+      const directAudioBlobs = audioParts
+        .map((part) => {
+          const inline = getInlineData(part);
+          if (!inline?.data) return null;
+          return {
+            data: inline.data,
+            mimeType: inline?.mimeType ?? inline?.mime_type ?? `audio/pcm;rate=${OUTPUT_SAMPLE_RATE}`,
+          };
+        })
+        .filter(Boolean);
 
       // Capture text for context preservation and live transcript
       const textParts = Array.isArray(parts) ? parts.filter(p => p.text).map(p => p.text) : [];
       if (textParts.length > 0) {
         sessionContextRef.current = [...sessionContextRef.current, ...textParts].slice(-5);
         setIsAgentSpeaking(true);
+        isAgentSpeakingRef.current = true;
         // Update live transcript with latest agent text
         setTranscript(prev => [
           ...prev,
           { role: 'agent', text: textParts.join(' '), time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) }
         ].slice(-4));
+
+        bufferedTurnTextRef.current = `${bufferedTurnTextRef.current} ${textParts.join(' ')}`.trim();
+        if (currentTurnModeRef.current === 'none' && ttsFallbackEnabledRef.current) {
+          if (ttsDecisionTimeoutRef.current) {
+            window.clearTimeout(ttsDecisionTimeoutRef.current);
+          }
+          ttsDecisionTimeoutRef.current = window.setTimeout(() => {
+            if (currentTurnModeRef.current === 'none' && bufferedTurnTextRef.current.trim().length > 0) {
+              currentTurnModeRef.current = 'tts';
+              speakTextFallback(bufferedTurnTextRef.current.trim());
+            }
+            ttsDecisionTimeoutRef.current = null;
+          }, 900);
+        } else if (currentTurnModeRef.current === 'none' && !ttsFallbackEnabledRef.current) {
+          // TTS disabled and no audio yet — release mic after a short wait
+          // so conversation doesn't get stuck on text-only responses.
+          if (ttsDecisionTimeoutRef.current) {
+            window.clearTimeout(ttsDecisionTimeoutRef.current);
+          }
+          ttsDecisionTimeoutRef.current = window.setTimeout(() => {
+            if (currentTurnModeRef.current === 'none' && isAgentSpeakingRef.current) {
+              setIsAgentSpeaking(false);
+              isAgentSpeakingRef.current = false;
+            }
+            ttsDecisionTimeoutRef.current = null;
+          }, 1200);
+        }
       }
 
       const turnAudioBlobs = getTurnDataAudioBlobs(message);
-      if (audioParts.length === 0 && turnAudioBlobs.length === 0) return;
-
-      for (const blob of turnAudioBlobs) {
-        if (blob?.data) {
-          await playPcmChunk(base64ToArrayBuffer(blob.data));
-          setLastEvent('audio_chunk_turn_data');
+      const selectedAudioBlobs = directAudioBlobs.length > 0 ? directAudioBlobs : turnAudioBlobs;
+      if (selectedAudioBlobs.length > 0) {
+        setIsAgentSpeaking(true);
+        isAgentSpeakingRef.current = true;
+        // If TTS already started for this turn, ignore late model audio to avoid overlap.
+        if (currentTurnModeRef.current !== 'tts') {
+          currentTurnModeRef.current = 'model';
+          clearPendingTts();
+          for (const blob of selectedAudioBlobs) {
+            if (blob?.data) {
+              await playPcmChunk(base64ToArrayBuffer(blob.data), parsePcmSampleRate(blob.mimeType));
+              setLastEvent('audio_chunk');
+            }
+          }
         }
+        return;
       }
     };
 
     socket.onerror = () => {
+      if (wsRef.current !== socket) return;
       setStatus('Error');
       setErrorMessage('WebSocket error. Retrying if possible.');
       setIsStarting(false);
@@ -1000,6 +1464,13 @@ function App() {
     };
 
     socket.onclose = async () => {
+      if (wsRef.current !== socket) return;
+      if (micStartTimeoutRef.current) {
+        window.clearTimeout(micStartTimeoutRef.current);
+        micStartTimeoutRef.current = null;
+      }
+      deferMicStartUntilFirstAgentReplyRef.current = false;
+      resetAgentTurnState();
       wsRef.current = null;
       setupCompleteRef.current = false;
       setIsConnected(false);
@@ -1016,13 +1487,20 @@ function App() {
 
       const nextAttempt = reconnectAttemptRef.current + 1;
       if (nextAttempt <= MAX_RECONNECT_ATTEMPTS) {
+        const delayMs = Math.min(
+          RECONNECT_DELAY_MS * (2 ** (nextAttempt - 1)),
+          MAX_RECONNECT_DELAY_MS
+        );
+        if (reconnectTimeoutRef.current) {
+          window.clearTimeout(reconnectTimeoutRef.current);
+        }
         reconnectAttemptRef.current = nextAttempt;
         setReconnectAttempt(nextAttempt);
-        setStatus(`Reconnecting (${nextAttempt}/${MAX_RECONNECT_ATTEMPTS})...`);
+        setStatus(`Reconnecting (${nextAttempt}/${MAX_RECONNECT_ATTEMPTS}) in ${Math.ceil(delayMs / 1000)}s...`);
         setLastEvent('ws_closed_retrying');
         reconnectTimeoutRef.current = window.setTimeout(() => {
           connect();
-        }, RECONNECT_DELAY_MS);
+        }, delayMs);
         return;
       }
 
@@ -1033,11 +1511,15 @@ function App() {
   }, [
     backendUrl,
     capturedImage,
+    clearPendingTts,
     ensureSpeakerContext,
     handleToolCall,
     isConnected,
     isStarting,
+    lang,
+    resetAgentTurnState,
     playPcmChunk,
+    speakTextFallback,
     startMicrophone,
     stopMicrophone,
     stopPlayback,
@@ -1182,6 +1664,45 @@ function App() {
                     {t.endSession}
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Circle Control Panel */}
+            {isConnected && (
+              <div className="circle-controls">
+                <div className="circle-controls-row">
+                  {[
+                    { id: 1, label: lang === 'ar' ? 'الوعي' : 'Awareness', color: '#FFD700' },
+                    { id: 2, label: lang === 'ar' ? 'العلم' : 'Knowledge', color: '#00CED1' },
+                    { id: 3, label: lang === 'ar' ? 'الحقيقة' : 'Truth', color: '#4169E1' },
+                  ].map(c => (
+                    <div key={c.id} className="circle-control-item">
+                      <span className="circle-control-label" style={{ color: c.color }}>{c.label}</span>
+                      <div className="circle-control-btns">
+                        <button onClick={() => handleCircleAction(c.id, 'shrink')} title={lang === 'ar' ? 'صغّر' : 'Shrink'}>−</button>
+                        <button onClick={() => handleCircleAction(c.id, 'grow')} title={lang === 'ar' ? 'كبّر' : 'Grow'}>+</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Text command input */}
+                <form className="command-input-form" onSubmit={(e) => {
+                  e.preventDefault();
+                  handleTextCommand(commandText);
+                  setCommandText('');
+                }}>
+                  <input
+                    type="text"
+                    className="command-input"
+                    value={commandText}
+                    onChange={(e) => setCommandText(e.target.value)}
+                    placeholder={lang === 'ar' ? 'اكتب أمر... مثال: صغّر دايرة الوعي' : 'Type command... e.g. shrink awareness circle'}
+                    dir={lang === 'ar' ? 'rtl' : 'ltr'}
+                  />
+                  <button type="submit" className="command-send-btn" disabled={!commandText.trim()}>
+                    {lang === 'ar' ? 'نفّذ' : 'Send'}
+                  </button>
+                </form>
               </div>
             )}
 

@@ -3,6 +3,8 @@ class DawayirMicProcessor extends AudioWorkletProcessor {
     super();
     this.buffer = new Int16Array(2048);
     this.writeIndex = 0;
+    this.targetSampleRate = 16000;
+    this.resampleCursor = 0;
   }
 
   process(inputs) {
@@ -16,17 +18,40 @@ class DawayirMicProcessor extends AudioWorkletProcessor {
       return true;
     }
 
-    for (let i = 0; i < channel.length; i += 1) {
-      const clamped = Math.max(-1, Math.min(1, channel[i]));
-      this.buffer[this.writeIndex] = clamped < 0 ? clamped * 32768 : clamped * 32767;
-      this.writeIndex += 1;
+    const inputSampleRate = Number.isFinite(globalThis.sampleRate)
+      ? globalThis.sampleRate
+      : this.targetSampleRate;
 
-      if (this.writeIndex >= this.buffer.length) {
-        this.flush();
+    if (inputSampleRate === this.targetSampleRate) {
+      for (let i = 0; i < channel.length; i += 1) {
+        this.pushSample(channel[i]);
       }
+      return true;
     }
 
+    const ratio = inputSampleRate / this.targetSampleRate;
+    let position = this.resampleCursor;
+    while (position + 1 < channel.length) {
+      const index = Math.floor(position);
+      const nextIndex = Math.min(index + 1, channel.length - 1);
+      const fraction = position - index;
+      const sample = channel[index] + (channel[nextIndex] - channel[index]) * fraction;
+      this.pushSample(sample);
+      position += ratio;
+    }
+    this.resampleCursor = position - channel.length;
+
     return true;
+  }
+
+  pushSample(sample) {
+    const clamped = Math.max(-1, Math.min(1, sample));
+    this.buffer[this.writeIndex] = clamped < 0 ? clamped * 32768 : clamped * 32767;
+    this.writeIndex += 1;
+
+    if (this.writeIndex >= this.buffer.length) {
+      this.flush();
+    }
   }
 
   flush() {
@@ -35,7 +60,10 @@ class DawayirMicProcessor extends AudioWorkletProcessor {
     }
 
     const chunk = this.buffer.slice(0, this.writeIndex);
-    this.port.postMessage({ int16arrayBuffer: chunk.buffer });
+    this.port.postMessage({
+      int16arrayBuffer: chunk.buffer,
+      sampleRate: this.targetSampleRate,
+    });
     this.writeIndex = 0;
   }
 }

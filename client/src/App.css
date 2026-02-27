@@ -995,3 +995,113 @@ button:disabled {
     overflow-y: auto;
   }
 }
+
+/* ============================
+   CIRCLE CONTROLS
+   ============================ */
+.circle-controls {
+  padding: 12px 0;
+}
+
+.circle-controls-row {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.circle-control-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.circle-control-label {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Noto Kufi Arabic', sans-serif;
+}
+
+.circle-control-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.circle-control-btns button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.circle-control-btns button:hover {
+  background: rgba(0, 245, 255, 0.15);
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(0, 245, 255, 0.2);
+}
+
+.circle-control-btns button:active {
+  transform: scale(0.9);
+}
+
+.command-input-form {
+  display: flex;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.command-input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--panel-border);
+  background: rgba(8, 8, 28, 0.6);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: 'Noto Kufi Arabic', 'Inter', sans-serif;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.command-input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.15);
+}
+
+.command-input::placeholder {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.command-send-btn {
+  padding: 10px 18px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--cyan);
+  background: rgba(0, 245, 255, 0.1);
+  color: var(--cyan);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'Noto Kufi Arabic', 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.command-send-btn:hover:not(:disabled) {
+  background: rgba(0, 245, 255, 0.2);
+}
+
+.command-send-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

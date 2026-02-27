@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef } f
 
 const DawayirCanvas = forwardRef((props, ref) => {
     const PANEL_WIDTH = 380; // Left sidebar width + padding
+    const TARGET_FPS = 30;
+    const DEBUG_CANVAS = false;
     const canvasRef = useRef(null);
     const nodesRef = useRef([
         { id: 1, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.25, y: window.innerHeight / 2, radius: 70, targetRadius: 70, color: '#00F5FF', targetColor: '#00F5FF', label: 'Awareness', pulse: 0, velocity: { x: 0.2, y: 0.1 } },
@@ -10,12 +12,13 @@ const DawayirCanvas = forwardRef((props, ref) => {
     ]);
     const particlesRef = useRef([]);
     const dashOffsetRef = useRef(0);
+    const lastFrameTimeRef = useRef(0);
     const [draggingNode, setDraggingNode] = useState(null);
 
     // Initialize particles for the "Mental Space" background
     useEffect(() => {
         const particles = [];
-        for (let i = 0; i < 80; i++) {
+        for (let i = 0; i < 40; i++) {
             particles.push({
                 x: Math.random() * window.innerWidth,
                 y: Math.random() * window.innerHeight,
@@ -51,7 +54,9 @@ const DawayirCanvas = forwardRef((props, ref) => {
 
     useImperativeHandle(ref, () => ({
         updateNode: (id, updates) => {
-            console.log(`[Canvas] updateNode called: id=${id}, updates=`, updates);
+            if (DEBUG_CANVAS) {
+                console.log(`[Canvas] updateNode called: id=${id}, updates=`, updates);
+            }
             const node = nodesRef.current.find(n => n.id === id);
             if (!node) return;
             if (updates.radius !== undefined) node.targetRadius = Number(updates.radius);
@@ -59,7 +64,9 @@ const DawayirCanvas = forwardRef((props, ref) => {
             if (updates.label !== undefined) node.label = updates.label;
             if (updates.x !== undefined) node.x = updates.x;
             if (updates.y !== undefined) node.y = updates.y;
-            console.log(`[Canvas] Node ${id} MUTATED: targetRadius=${node.targetRadius}, targetColor=${node.targetColor}, currentRadius=${node.radius}`);
+            if (DEBUG_CANVAS) {
+                console.log(`[Canvas] Node ${id} MUTATED: targetRadius=${node.targetRadius}, targetColor=${node.targetColor}, currentRadius=${node.radius}`);
+            }
         },
         pulseNode: (id) => {
             nodesRef.current = nodesRef.current.map(node =>
@@ -99,7 +106,14 @@ const DawayirCanvas = forwardRef((props, ref) => {
         const ctx = canvas.getContext('2d');
         let animationFrameId;
 
-        const render = () => {
+        const render = (timestamp) => {
+            const frameInterval = 1000 / TARGET_FPS;
+            if (timestamp - lastFrameTimeRef.current < frameInterval) {
+                animationFrameId = window.requestAnimationFrame(render);
+                return;
+            }
+            lastFrameTimeRef.current = timestamp;
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // 1. Draw Background Gradient
@@ -115,22 +129,8 @@ const DawayirCanvas = forwardRef((props, ref) => {
             // 2. Update and Draw Particles (with node attraction)
             const currentNodes = nodesRef.current;
             particlesRef.current.forEach(p => {
-                // Subtle attraction to nearest node
-                let closestDist = Infinity;
-                let attractX = 0, attractY = 0;
-                currentNodes.forEach(node => {
-                    const dx = node.x - p.x;
-                    const dy = node.y - p.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < closestDist && dist < 250) {
-                        closestDist = dist;
-                        attractX = dx / dist * 0.02;
-                        attractY = dy / dist * 0.02;
-                    }
-                });
-
-                p.x += p.speedX + attractX;
-                p.y += p.speedY + attractY;
+                p.x += p.speedX;
+                p.y += p.speedY;
                 if (p.x < 0) p.x = canvas.width;
                 if (p.x > canvas.width) p.x = 0;
                 if (p.y < 0) p.y = canvas.height;
@@ -183,7 +183,7 @@ const DawayirCanvas = forwardRef((props, ref) => {
             });
 
             // 4. Draw animated connections with dashed lines
-            dashOffsetRef.current += 0.3;
+            dashOffsetRef.current += 0.2;
             ctx.setLineDash([8, 6]);
             ctx.lineDashOffset = -dashOffsetRef.current;
             ctx.lineWidth = 1.5;
@@ -226,7 +226,7 @@ const DawayirCanvas = forwardRef((props, ref) => {
                 }
 
                 // Shadow/Glow
-                ctx.shadowBlur = 35 + (node.pulse * 50);
+                ctx.shadowBlur = 18 + (node.pulse * 25);
                 ctx.shadowColor = node.color;
 
                 // Main Circle Gradient (Glass-like)
