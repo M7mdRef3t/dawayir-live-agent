@@ -7,6 +7,7 @@ import { Storage } from '@google-cloud/storage';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { isValidReportFilename } from './report-filename.js';
 
 dotenv.config();
 
@@ -52,9 +53,14 @@ app.get('/api/reports', async (req, res) => {
 
 // API: Get report content
 app.get('/api/reports/:filename', async (req, res) => {
+    const { filename } = req.params;
+    if (!isValidReportFilename(filename)) {
+        return res.status(400).json({ error: 'Invalid filename format' });
+    }
+
     try {
         if (!BUCKET_NAME) throw new Error('Bucket not configured');
-        const file = storage.bucket(BUCKET_NAME).file(req.params.filename);
+        const file = storage.bucket(BUCKET_NAME).file(filename);
         const [content] = await file.download();
         res.send(content.toString());
     } catch (error) {
@@ -166,6 +172,57 @@ function detectCircleCommand(text) {
         color: colors[circleId] || '#FFD700',
     };
 }
+// --- Sentiment-based auto-update (backup when Gemini doesn't call update_node) ---
+const SENTIMENT_KEYWORDS = {
+    1: {
+        positive: ['هدوء', 'هادي', 'سكينة', 'سلام', 'تأمل', 'مركز', 'واعي', 'صافي', 'مرتاح', 'راحة', 'calm', 'peace', 'mindful', 'relaxed'],
+        negative: ['مشتت', 'قلق', 'توتر', 'مضغوط', 'تايه', 'anxious', 'stressed', 'confused'],
+    },
+    2: {
+        positive: ['فضول', 'تعلم', 'اكتشاف', 'فاهم', 'ذكي', 'فكرة', 'معرفة', 'نمو', 'curious', 'learn', 'discover', 'idea', 'growth'],
+        negative: ['جاهل', 'مش فاهم', 'ضايع', 'lost', 'clueless'],
+    },
+    3: {
+        positive: ['صادق', 'قوي', 'شجاع', 'حقيقي', 'واثق', 'ثبات', 'إيمان', 'strong', 'brave', 'honest', 'confident', 'authentic'],
+        negative: ['خايف', 'ضعيف', 'كذب', 'شك', 'weak', 'afraid', 'doubt'],
+    },
+};
+const SENTIMENT_COLORS = {
+    1: { positive: '#00F5FF', negative: '#334455' },
+    2: { positive: '#00FF41', negative: '#335533' },
+    3: { positive: '#FF00E5', negative: '#553355' },
+};
+let lastSentimentUpdateAt = 0;
+const SENTIMENT_THROTTLE_MS = 10000;
+let accumulatedTranscript = '';
+
+function autoUpdateCirclesFromSentiment(text, sendToClient) {
+    accumulatedTranscript += ' ' + text;
+    const now = Date.now();
+    if (now - lastSentimentUpdateAt < SENTIMENT_THROTTLE_MS) return;
+    const fullText = accumulatedTranscript.toLowerCase();
+    const updates = [];
+    for (const [circleId, keywords] of Object.entries(SENTIMENT_KEYWORDS)) {
+        let score = 0;
+        for (const word of keywords.positive) { if (fullText.includes(word)) score += 1; }
+        for (const word of keywords.negative) { if (fullText.includes(word)) score -= 1; }
+        if (score !== 0) {
+            const isPositive = score > 0;
+            const intensity = Math.min(Math.abs(score), 3);
+            const radius = isPositive ? String(50 + intensity * 15) : String(50 - intensity * 10);
+            const color = isPositive ? SENTIMENT_COLORS[circleId].positive : SENTIMENT_COLORS[circleId].negative;
+            updates.push({ id: String(circleId), radius, color });
+        }
+    }
+    if (updates.length > 0) {
+        lastSentimentUpdateAt = now;
+        accumulatedTranscript = '';
+        for (const update of updates) {
+            sendToClient({ toolCall: { functionCalls: [{ id: `sentiment_${now}_${update.id}`, name: 'update_node', args: update }] } });
+        }
+    }
+}
+
 const GEMINI_RECONNECT_MAX_ATTEMPTS = Number(process.env.GEMINI_RECONNECT_MAX_ATTEMPTS || 10);
 const GEMINI_RECONNECT_BASE_DELAY_MS = Number(process.env.GEMINI_RECONNECT_BASE_DELAY_MS || 1200);
 const GEMINI_RECONNECT_MAX_DELAY_MS = Number(process.env.GEMINI_RECONNECT_MAX_DELAY_MS || 15000);
@@ -176,24 +233,24 @@ const tools = [
         functionDeclarations: [
             {
                 name: "update_node",
-                description: "Update a circle on screen. Use when user asks to resize or recolor any circle. id 1=Awareness/وعي, 2=Knowledge/علم, 3=Truth/حقيقة. radius 30=small, 100=large. Always pick a color yourself.",
+                description: "Silently update a visual element. Call this when you sense the user's emotional state shifting. NEVER mention this tool or its effects in speech.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        id: { type: "STRING", description: "Circle ID: 1, 2, or 3" },
-                        radius: { type: "STRING", description: "Radius in pixels (30-100). Larger = more active." },
-                        color: { type: "STRING", description: "Hex color e.g. #FFD700" }
+                        id: { type: "STRING", description: "ID: 1, 2, or 3" },
+                        radius: { type: "STRING", description: "Size (30-100)" },
+                        color: { type: "STRING", description: "Hex color" }
                     },
                     required: ["id", "radius", "color"]
                 },
             },
             {
                 name: "highlight_node",
-                description: "Highlight a specific circle to draw attention to it. Use when you want to emphasize a specific concept (Awareness, Science, or Truth).",
+                description: "Silently highlight a visual element. NEVER mention this in speech.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        id: { type: "STRING", description: "Circle ID: 1, 2, or 3" }
+                        id: { type: "STRING", description: "ID: 1, 2, or 3" }
                     },
                     required: ["id"]
                 }
@@ -238,20 +295,17 @@ const tools = [
 
 const systemInstruction = {
     parts: [{
-        text: `أنت صاحب مصري. اتكلم عامية طبيعية.
+        text: `You are a warm Egyptian friend. Speak ONLY in Egyptian Arabic dialect (عامية مصرية).
 
-ممنوع — لو كسرت أي قاعدة هتتقفل:
-- ممنوع تقول أكتر من جملة واحدة + سؤال واحد. خمس كلمات لكل جملة بالكتير.
-- ممنوع تسأل سؤال وترد عليه بنفسك. لما تسأل — وقّف واستنى.
-- ممنوع تذكر: دوائر، وعي، علم، حقيقة، دايرة، هكبّر، هغيّر، ألوان، أرقام.
-- ممنوع تشرح نفسك أو شغلك. لو حد سألك "فهمت ايه" أو "بتعمل ايه": قول إحساسك ناحيته بس.
-- ممنوع تتكلم عن الأدوات أو التغييرات اللي بتعملها. غيّر في صمت.
-- لو حد قالك "قول تاني": نفس المعنى بكلام مختلف.
+Rules:
+1. One short sentence + one question. Then STOP and wait.
+2. Never talk about what happens on screen. Never describe visual changes.
+3. When you see a photo: say what you feel about the person in one sentence, then ask one question. Stop.
+4. Be natural. Never explain yourself. If asked what you do — just say you're a friend who listens.
+5. Call update_node silently whenever you sense a shift in the user's emotional state. Never mention it. Never announce it. Just call it.
+6. When you ask a question: STOP. Wait for user reply. NEVER answer your own question.
 
-صورة: اقرأ المزاج بجملة. استنى الرد.
-
-[سري]:
-update_node: id(1/2/3), radius(30-100), color(hex). نادِه بناءً على حالة المستخدم النفسية من غير ما تتكلم عنه أبداً.`
+Keep every response under 15 words total.`
     }],
 };
 
@@ -329,6 +383,33 @@ wss.on('connection', (ws) => {
     const pendingClientMessages = [];
     let lastCmdText = '';
     let lastCmdAt = 0;
+    let inputTranscriptBuffer = '';
+    let inputTranscriptTimer = null;
+    const INPUT_TRANSCRIPT_FLUSH_MS = 1500; // flush after 1.5s of silence
+
+    function flushInputTranscriptBuffer() {
+        if (!inputTranscriptBuffer.trim()) return;
+        const fullText = inputTranscriptBuffer.trim();
+        inputTranscriptBuffer = '';
+        const cmd = detectCircleCommand(fullText);
+        if (cmd) {
+            const now = Date.now();
+            if (fullText !== lastCmdText || now - lastCmdAt > 3000) {
+                lastCmdText = fullText;
+                lastCmdAt = now;
+                logInfo(`[CMD] Detected circle command from accumulated transcription: "${fullText}" => ${JSON.stringify(cmd)}`);
+                sendToClient({
+                    toolCall: {
+                        functionCalls: [{
+                            id: `server_cmd_${now}`,
+                            name: 'update_node',
+                            args: cmd,
+                        }],
+                    },
+                });
+            }
+        }
+    }
 
     const sendToClient = (payload) => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -460,9 +541,26 @@ wss.on('connection', (ws) => {
         if (toolResponse) {
             logDebug('Client tool response received');
 
-            // Intercept save_mental_map for GCS upload
+            // Filter out visual tool responses — they were already resolved server-side
             const responses = toolResponse.functionResponses || toolResponse.function_responses || [];
-            for (const resp of responses) {
+            const visualToolPrefixes = ['gemini_visual_', 'sentiment_', 'server_cmd_', 'text_cmd_', 'client_cmd_'];
+            const filteredResponses = responses.filter(resp => {
+                const id = resp.id || '';
+                return !visualToolPrefixes.some(prefix => id.startsWith(prefix));
+            });
+            if (filteredResponses.length === 0) {
+                logInfo('[FILTER] All tool responses were visual — not forwarding to Gemini');
+                return;
+            }
+            // Update the tool response with only non-visual responses
+            if (filteredResponses.length < responses.length) {
+                toolResponse.functionResponses = filteredResponses;
+                toolResponse.function_responses = filteredResponses;
+                logInfo(`[FILTER] Filtered ${responses.length - filteredResponses.length} visual tool response(s)`);
+            }
+
+            // Intercept save_mental_map for GCS upload
+            for (const resp of filteredResponses) {
                 if (resp.name === 'save_mental_map' && resp.response?.result?.ok) {
                     const nodes = resp.response.result.nodes;
                     if (nodes && BUCKET_NAME) {
@@ -617,29 +715,24 @@ ${recommendations || "N/A"}
                                 logInfo(`[Transcription:in] "${inTx.text}" (finished=${inTx.finished})`);
                                 // Forward transcription to client for debugging
                                 sendToClient({ debugTranscription: { type: 'input', text: inTx.text, finished: inTx.finished } });
-                                const cmd = detectCircleCommand(inTx.text);
-                                if (cmd) {
-                                    const now = Date.now();
-                                    if (inTx.text !== lastCmdText || now - lastCmdAt > 3000) {
-                                        lastCmdText = inTx.text;
-                                        lastCmdAt = now;
-                                        logInfo(`[CMD] Detected circle command from transcription: ${JSON.stringify(cmd)}`);
-                                        sendToClient({
-                                            toolCall: {
-                                                functionCalls: [{
-                                                    id: `server_cmd_${now}`,
-                                                    name: 'update_node',
-                                                    args: cmd,
-                                                }],
-                                            },
-                                        });
-                                    }
+                                // Accumulate fragments instead of processing each one
+                                inputTranscriptBuffer += inTx.text;
+                                // Reset the flush timer on each new fragment
+                                if (inputTranscriptTimer) clearTimeout(inputTranscriptTimer);
+                                if (inTx.finished) {
+                                    // Sentence complete — flush immediately
+                                    flushInputTranscriptBuffer();
+                                } else {
+                                    // Set a timeout to flush after silence
+                                    inputTranscriptTimer = setTimeout(flushInputTranscriptBuffer, INPUT_TRANSCRIPT_FLUSH_MS);
                                 }
                             }
                             const outTx = sc.outputTranscription || sc.output_transcription;
                             if (outTx?.text) {
                                 logInfo(`[Transcription:out] "${outTx.text}" (finished=${outTx.finished})`);
                                 sendToClient({ debugTranscription: { type: 'output', text: outTx.text, finished: outTx.finished } });
+                                // Auto-update circles based on sentiment (backup for when Gemini doesn't call update_node)
+                                autoUpdateCirclesFromSentiment(outTx.text, sendToClient);
                             }
                         }
 
@@ -648,17 +741,45 @@ ${recommendations || "N/A"}
                         const toolCall = payload.toolCall || payload.tool_call;
                         if (toolCall) {
                             const functionCalls = toolCall.functionCalls || toolCall.function_calls || [];
-                            // save_mental_map removed from serverTools so it routes to client to capture nodes
                             const serverTools = ['get_expert_insight', 'generate_session_report'];
-                            const clientTools = functionCalls.filter(fc => !serverTools.includes(fc.name));
+                            // Visual tools: forward to client for rendering, but resolve server-side
+                            // so Gemini doesn't get a tool response that triggers repetition
+                            const visualTools = ['update_node', 'highlight_node'];
+                            const clientTools = functionCalls.filter(fc => !serverTools.includes(fc.name) && !visualTools.includes(fc.name));
                             const serverOnlyTools = functionCalls.filter(fc => serverTools.includes(fc.name));
+                            const visualOnlyTools = functionCalls.filter(fc => visualTools.includes(fc.name));
 
                             // Resolve server-side tools immediately
                             if (serverOnlyTools.length > 0) {
                                 resolveServerToolCalls(serverOnlyTools, session);
                             }
 
-                            // Forward only visual tools (update_node, highlight_node) to client.
+                            // Visual tools: forward to client for rendering + resolve immediately on server
+                            if (visualOnlyTools.length > 0) {
+                                // Send to client so circles update visually
+                                sendToClient({
+                                    toolCall: {
+                                        functionCalls: visualOnlyTools.map(fc => ({
+                                            ...fc,
+                                            id: `gemini_visual_${fc.id || Date.now()}`,
+                                        })),
+                                    },
+                                });
+                                // Resolve immediately on Gemini side so it doesn't repeat speech
+                                const visualResponses = visualOnlyTools.map(fc => ({
+                                    id: fc.id,
+                                    name: fc.name,
+                                    response: { result: { ok: true } },
+                                }));
+                                try {
+                                    session.sendToolResponse({ functionResponses: visualResponses });
+                                    logInfo(`[VISUAL] Resolved ${visualOnlyTools.length} visual tool(s) server-side`);
+                                } catch (err) {
+                                    logError('[VISUAL] Failed to send tool response:', err);
+                                }
+                            }
+
+                            // Forward remaining client tools
                             const payloadWithoutTools = { ...payload };
                             delete payloadWithoutTools.toolCall;
                             delete payloadWithoutTools.tool_call;
@@ -673,8 +794,6 @@ ${recommendations || "N/A"}
                                 clientPayload.tool_call = clientToolCall;
                                 sendToClient(clientPayload);
                             } else if (hasNonToolPayload) {
-                                // Only send payload_without_tools when no client tools were forwarded,
-                                // otherwise non-tool content would be duplicated.
                                 sendToClient(payloadWithoutTools);
                             }
                             return;

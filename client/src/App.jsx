@@ -1070,7 +1070,7 @@ function App() {
     // Synthetic commands (server_cmd_, text_cmd_, client_cmd_) don't need a response.
     const geminiResponses = responses.filter(r => {
       const id = String(r.id);
-      return !id.startsWith('server_cmd_') && !id.startsWith('text_cmd_') && !id.startsWith('client_cmd_') && !id.startsWith('sentiment_');
+      return !id.startsWith('server_cmd_') && !id.startsWith('text_cmd_') && !id.startsWith('client_cmd_') && !id.startsWith('sentiment_') && !id.startsWith('gemini_visual_');
     });
     const socket = wsRef.current;
     if (socket && socket.readyState === WebSocket.OPEN && geminiResponses.length > 0) {
