@@ -164,7 +164,7 @@ const tools = [
                     type: "OBJECT",
                     properties: {
                         id: { type: "STRING", description: "Circle ID: 1, 2, or 3" },
-                        radius: { type: "STRING", description: "Size from 30 to 100" },
+                        radius: { type: "STRING", description: "Radius in pixels (30-100). Larger = more active." },
                         color: { type: "STRING", description: "Hex color e.g. #FFD700" }
                     },
                     required: ["id", "radius", "color"]
@@ -181,7 +181,7 @@ const systemInstruction = {
 
 ٣ دوائر: وعي (id=1)، علم (id=2)، حقيقة (id=3).
 
-لما تشوف صورة: اقرأ المزاج مش الشكل، نادي update_node.
+لما تشوف صورة (Look at me): حلل تعبيرات الوش، واستخدم update_node فوراً لتغيير أحجام الدوائر (radius) لتعكس الحالة الشعورية.
 
 ممنوع: أرقام، ألوان hex، تفاصيل تقنية، تكرار كلام قلته قبل كده.
 
