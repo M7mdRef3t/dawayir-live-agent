@@ -1145,7 +1145,7 @@ function App() {
         clientContent: {
           turns: [{
             role: "user",
-            parts: [{ text: lang === "ar" ? "(صورة جديدة. قول إحساسك بجملة.)" : "(New photo. Say what you feel in one sentence.)" }]
+            parts: [{ text: lang === "ar" ? "(صورة جديدة. قول إحساسك بجملة، ولو هتغير الدواير استخدم update_node بمفاتيح id وradius وcolor بس.)" : "(New photo. Say what you feel in one sentence. If you update the circles, use update_node with id, radius, and color only.)" }]
           }],
           turnComplete: true
         }
@@ -1366,10 +1366,10 @@ function App() {
 
               const bootstrapText = lang === 'ar'
                 ? (capturedImage
-                  ? 'دي صورتي. قولي حاسس بايه.'
+                  ? 'دي صورتي. قولي حاسس بايه، ولو هتغير الدواير استخدم update_node بمفاتيح id وradius وcolor بس.'
                   : 'يا صاحبي، ازيك؟')
                 : (capturedImage
-                  ? 'This is my photo. Tell me what you sense.'
+                  ? 'This is my photo. Tell me what you sense, and if you change the circles use update_node with id, radius, and color only.'
                   : 'Hey, how are you?');
               parts.push({ text: bootstrapText });
 
