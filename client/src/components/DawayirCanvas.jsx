@@ -1,6 +1,6 @@
-import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef } from 'react';
+import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef, memo } from 'react';
 
-const DawayirCanvas = forwardRef((props, ref) => {
+const DawayirCanvas = memo(forwardRef((props, ref) => {
     const PANEL_WIDTH = 380;
     const TARGET_FPS = 12;
     const DEBUG_CANVAS = false;
@@ -253,6 +253,6 @@ const DawayirCanvas = forwardRef((props, ref) => {
             style={{ display: 'block' }}
         />
     );
-});
+}));
 
 export default DawayirCanvas;
