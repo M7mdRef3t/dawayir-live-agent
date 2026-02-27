@@ -169,7 +169,41 @@ const tools = [
                     },
                     required: ["id", "radius", "color"]
                 },
-                // BLOCKING: model waits for tool response before speaking (avoids repeating itself)
+            },
+            {
+                name: "get_expert_insight",
+                description: "Retrieve psychological principles from Al-Rehla knowledge base. Use when user asks deep questions or needs advice.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        topic: { type: "STRING", description: "The topic or feeling to look up (e.g. 'anxiety', 'boundaries', 'guilt')" }
+                    },
+                    required: ["topic"]
+                }
+            },
+            {
+                name: "save_mental_map",
+                description: "Save the current visual state of the circles to the cloud memory. Use when user says 'save this moment' or 'remember this'.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        session_name: { type: "STRING", description: "A name for this session state" }
+                    },
+                    required: ["session_name"]
+                }
+            },
+            {
+                name: "generate_session_report",
+                description: "Generate a markdown summary of the session and save it to cloud. Use when user says 'summarize' or 'end session'.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        summary: { type: "STRING", description: "Executive summary of the session" },
+                        insights: { type: "STRING", description: "Key psychological insights derived" },
+                        recommendations: { type: "STRING", description: "Actionable steps for the user" }
+                    },
+                    required: ["summary", "insights", "recommendations"]
+                }
             }
         ]
     }
@@ -177,19 +211,32 @@ const tools = [
 
 const systemInstruction = {
     parts: [{
-        text: `أنت "دوائر" — رفيق صوتي دافي. عامية مصرية بس.
+        text: `أنت "دوائر" — رفيق صوتي دافي وحكيم. بتتكلم عامية مصرية فقط (Strictly Egyptian Arabic).
+ممنوع تماماً استخدام الفصحى أو الإنجليزية أو الفرنسية في الردود الصوتية.
 
-٣ دوائر: وعي (id=1)، علم (id=2)، حقيقة (id=3).
+الأدوات المتاحة ليك:
+1. update_node(id, radius, color): عشان تغير شكل الدوائر (1=وعي، 2=علم، 3=حقيقة) لما مشاعر المستخدم تتغير.
+2. get_expert_insight(topic): عشان تجيب نصايح علمية من "الرحلة" لما المستخدم يسأل سؤال عميق أو يطلب مساعدة.
+3. save_mental_map(session_name): لما المستخدم يطلب حفظ الحالة.
+4. generate_session_report(summary, ...): لما الجلسة تخلص أو المستخدم يطلب ملخص.
 
-لما تشوف صورة: اقرأ المزاج مش الشكل، نادي update_node.
+قواعد الشخصية:
+- صوتك دافي وهادي.
+- إجاباتك قصيرة جداً (جملة واحدة + سؤال). لا تتكلم كتير.
+- لو المستخدم سكت، اديله مساحة.
+- استخدم "حضرتك" للاحترام.
 
-ممنوع: أرقام، ألوان hex، تفاصيل تقنية، تكرار كلام قلته قبل كده.
+لما تشوف صورة:
+- ركز على "الحالة النفسية" اللي في الوش، مش الشكل.
+- غير ألوان الدوائر وحجمها عشان تعكس الحالة دي (مثلاً: قلق = دوائر كبيرة ولون أحمر/أصفر، هدوء = دوائر متزنة ولون أزرق/أخضر).
 
-لو المستخدم قال "قول تاني" أو "من الأول": لخّص بكلام مختلف تماماً، ما تعيدش نفس الجمل.
-
-قاعدة ذهبية: كل رد = جملة واحدة بس + سؤال قصير. ما تزيدش عن كده أبداً.`
+ممنوع:
+- تكرار الكلام.
+- قول "أنا ذكاء اصطناعي". اتعامل كأنك "دوائر".
+- استخدام أرقام أو ألوان Hex في الكلام (ده للأدوات بس).`
     }],
 };
+
 const toCompatMessage = (message) => {
     const payload = JSON.parse(JSON.stringify(message ?? {}));
 
@@ -824,4 +871,3 @@ server.listen(PORT, () => {
     logInfo(`Log level: ${LOG_LEVEL}`);
     logInfo(`Live API version: ${LIVE_API_VERSION}`);
 });
-
