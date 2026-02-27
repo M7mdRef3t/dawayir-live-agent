@@ -52,6 +52,10 @@ app.get('/api/reports', async (req, res) => {
 
 // API: Get report content
 app.get('/api/reports/:filename', async (req, res) => {
+    const { filename } = req.params;
+    if (!/^session_report_\d+\.md$/.test(filename)) {
+        return res.status(400).json({ error: 'Invalid filename format' });
+    }
     try {
         if (!BUCKET_NAME) throw new Error('Bucket not configured');
         const file = storage.bucket(BUCKET_NAME).file(req.params.filename);
