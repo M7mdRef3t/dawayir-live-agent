@@ -29,6 +29,7 @@ const STRINGS = {
     enterSpaceVision: 'Enter Mental Space (with Vision)',
     agentSpeaking: 'Dawayir is speaking...',
     updateVisual: '📸 Update Visual Context',
+    lookAtMe: '👁️ Look at me',
     endSession: 'End Session',
     hint: 'Speak freely and explore your mental space. ✨',
     liveChat: '💬 Live Conversation',
@@ -51,6 +52,7 @@ const STRINGS = {
     enterSpaceVision: 'ادخل المساحة الذهنية (مع الرؤية)',
     agentSpeaking: 'دوائر يتكلم...',
     updateVisual: '📸 تحديث السياق البصري',
+    lookAtMe: '👁️ شوفني',
     endSession: 'إنهاء الجلسة',
     hint: 'تحدث بحرية واستكشف مساحتك الذهنية. ✨',
     liveChat: '💬 المحادثة الحية',
@@ -1108,6 +1110,53 @@ function App() {
   }, []);
 
   // Quick circle action (from UI buttons)
+  const handleLookAtMe = useCallback(async () => {
+    console.log("[App] Look at me requested");
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
+    try {
+      // 1. Start Camera temporarily
+      await startCamera();
+      // Wait for camera to warm up
+      await new Promise(r => setTimeout(r, 1000));
+
+      // 2. Capture Snapshot
+      // Note: captureSnapshot calls stopCamera() internally
+      const base64Data = captureSnapshot();
+      if (!base64Data) {
+        console.error("Failed to capture snapshot");
+        stopCamera();
+        return;
+      }
+
+      // 3. Send to Gemini
+      console.log("[App] Sending Look at me snapshot...");
+      wsRef.current.send(JSON.stringify({
+        realtimeInput: {
+          mediaChunks: [{
+            mimeType: "image/jpeg",
+            data: base64Data
+          }]
+        }
+      }));
+
+      // 4. Prompt the model to react
+      wsRef.current.send(JSON.stringify({
+        clientContent: {
+          turns: [{
+            role: "user",
+            parts: [{ text: lang === "ar" ? "(المستخدم بيبعتلك صورته دلوقتي. بص عليها وعلق على حالته.)" : "(User sent a photo. Look at it and comment on their state.)" }]
+          }],
+          turnComplete: true
+        }
+      }));
+
+    } catch (e) {
+      console.error("Look at me failed:", e);
+      stopCamera();
+    }
+  }, [lang, startCamera, stopCamera]);
+
   const handleCircleAction = useCallback((circleId, action) => {
     const radius = action === 'shrink' ? 35 : action === 'grow' ? 90 : 60;
     const colors = { 1: '#FFD700', 2: '#00CED1', 3: '#4169E1' };
@@ -1684,15 +1733,20 @@ function App() {
 
                 <div className="connected-actions">
                   {!isCameraActive ? (
-                    <button className="retake-live-btn" onClick={startCamera}>
-                      {t.updateVisual}
-                    </button>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button className="retake-live-btn" onClick={startCamera} style={{ flex: 1 }}>
+                        {t.updateVisual}
+                      </button>
+                      <button className="retake-live-btn" onClick={handleLookAtMe} style={{ flex: 1, background: "rgba(255, 209, 102, 0.15)", color: "#FFD700", borderColor: "rgba(255, 209, 102, 0.4)" }}>
+                        {t.lookAtMe}
+                      </button>
+                    </div>
                   ) : (
                     <div className="live-camera-mini">
                       <div className="video-container-mini">
                         <video autoPlay playsInline muted
                           ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />
                       </div>
                       <div className="mini-camera-actions">
