@@ -1587,11 +1587,11 @@ function App() {
                   <div className="brand-arabic">{t.brandSub}</div>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="icon-btn lang-toggle" onClick={() => setLang(l => l === 'en' ? 'ar' : 'en')} title="Toggle Language">
+                  <button aria-label={lang === 'en' ? 'Switch to Arabic' : 'Switch to English'} className="icon-btn lang-toggle" onClick={() => setLang(l => l === 'en' ? 'ar' : 'en')} title="Toggle Language">
                     {lang === 'en' ? 'AR' : 'EN'}
                   </button>
                   {!isConnected && !isStarting && (
-                    <button className="icon-btn" onClick={() => setAppView('dashboard')} title={t.memoryBank}>
+                    <button aria-label={t.memoryBank} className="icon-btn" onClick={() => setAppView('dashboard')} title={t.memoryBank}>
                       {t.dashboardBtn}
                     </button>
                   )}
@@ -1720,8 +1720,8 @@ function App() {
                     <div key={c.id} className="circle-control-item">
                       <span className="circle-control-label" style={{ color: c.color }}>{c.label}</span>
                       <div className="circle-control-btns">
-                        <button onClick={() => handleCircleAction(c.id, 'shrink')} title={lang === 'ar' ? 'صغّر' : 'Shrink'}>−</button>
-                        <button onClick={() => handleCircleAction(c.id, 'grow')} title={lang === 'ar' ? 'كبّر' : 'Grow'}>+</button>
+                        <button aria-label={`${lang === 'ar' ? 'صغّر' : 'Shrink'} ${c.label}`} onClick={() => handleCircleAction(c.id, 'shrink')} title={lang === 'ar' ? 'صغّر' : 'Shrink'}>−</button>
+                        <button aria-label={`${lang === 'ar' ? 'كبّر' : 'Grow'} ${c.label}`} onClick={() => handleCircleAction(c.id, 'grow')} title={lang === 'ar' ? 'كبّر' : 'Grow'}>+</button>
                       </div>
                     </div>
                   ))}
