@@ -887,7 +887,31 @@ function App() {
     );
   }, []);
 
+
+  const setupAudioWorklet = useCallback(async (micContext, source, silentGain) => {
+    if (!micContext.audioWorklet || typeof AudioWorkletNode === 'undefined') return false;
+    try {
+      await micContext.audioWorklet.addModule(new URL('./audio/mic-processor.js', import.meta.url));
+      const worklet = new AudioWorkletNode(micContext, MIC_WORKLET_NAME);
+      worklet.port.onmessage = (event) => {
+        const int16arrayBuffer = event.data?.int16arrayBuffer;
+        const sampleRate = Number(event.data?.sampleRate) || INPUT_SAMPLE_RATE;
+        if (!int16arrayBuffer) return;
+        sendRealtimeAudioChunk(int16arrayBuffer, sampleRate);
+      };
+
+      source.connect(worklet);
+      worklet.connect(silentGain);
+      micWorkletRef.current = worklet;
+      return true;
+    } catch {
+      // Fall back to ScriptProcessor when Worklet fails on specific browsers/extensions.
+      return false;
+    }
+  }, [sendRealtimeAudioChunk]);
+
   const startMicrophone = useCallback(async () => {
+
     await stopMicrophone();
     vadStateRef.current = {
       speaking: false,
@@ -924,27 +948,7 @@ function App() {
     const source = micContext.createMediaStreamSource(stream);
     const silentGain = micContext.createGain();
     silentGain.gain.value = 0;
-    let workletReady = false;
-
-    if (micContext.audioWorklet && typeof AudioWorkletNode !== 'undefined') {
-      try {
-        await micContext.audioWorklet.addModule(new URL('./audio/mic-processor.js', import.meta.url));
-        const worklet = new AudioWorkletNode(micContext, MIC_WORKLET_NAME);
-        worklet.port.onmessage = (event) => {
-          const int16arrayBuffer = event.data?.int16arrayBuffer;
-          const sampleRate = Number(event.data?.sampleRate) || INPUT_SAMPLE_RATE;
-          if (!int16arrayBuffer) return;
-          sendRealtimeAudioChunk(int16arrayBuffer, sampleRate);
-        };
-
-        source.connect(worklet);
-        worklet.connect(silentGain);
-        micWorkletRef.current = worklet;
-        workletReady = true;
-      } catch {
-        // Fall back to ScriptProcessor when Worklet fails on specific browsers/extensions.
-      }
-    }
+    const workletReady = await setupAudioWorklet(micContext, source, silentGain);
 
     if (!workletReady) {
       const processor = micContext.createScriptProcessor(2048, 1, 1);
@@ -968,7 +972,7 @@ function App() {
     micSourceRef.current = source;
     micSilentGainRef.current = silentGain;
     setIsMicActive(true);
-  }, [sendRealtimeAudioChunk, stopMicrophone]);
+  }, [sendRealtimeAudioChunk, stopMicrophone, setupAudioWorklet]);
 
   const handleToolCall = useCallback((toolCall) => {
     const functionCalls = Array.isArray(toolCall?.functionCalls)
@@ -991,64 +995,73 @@ function App() {
       }
 
       try {
-        if (call.name === 'update_node') {
-          // Smart ID resolution — handle strings like "circle", "awareness", etc.
-          const NAME_TO_ID = {
-            awareness: 1, science: 2, truth: 3, knowledge: 2, circle: 1,
-            'وعي': 1, 'علم': 2, 'حقيقة': 3, 'الوعي': 1, 'العلم': 2, 'الحقيقة': 3,
-            '1': 1, '2': 2, '3': 3,
-          };
-          const rawId = args.id ?? args.node_id ?? args.nodeId ?? 1;
-          const resolvedId = NAME_TO_ID[String(rawId).toLowerCase()] ?? Number(rawId);
-          const id = Number.isFinite(resolvedId) ? resolvedId : 1;
-          const currentNodes = canvasRef.current?.getNodes() || [];
-          const safeId = currentNodes.some(n => n.id === id) ? id : 1;
+        switch (call.name) {
+          case 'update_node': {
+            // Smart ID resolution — handle strings like "circle", "awareness", etc.
+            const NAME_TO_ID = {
+              awareness: 1, science: 2, truth: 3, knowledge: 2, circle: 1,
+              'وعي': 1, 'علم': 2, 'حقيقة': 3, 'الوعي': 1, 'العلم': 2, 'الحقيقة': 3,
+              '1': 1, '2': 2, '3': 3,
+            };
+            const rawId = args.id ?? args.node_id ?? args.nodeId ?? 1;
+            const resolvedId = NAME_TO_ID[String(rawId).toLowerCase()] ?? Number(rawId);
+            const id = Number.isFinite(resolvedId) ? resolvedId : 1;
+            const currentNodes = canvasRef.current?.getNodes() || [];
+            const safeId = currentNodes.some(n => n.id === id) ? id : 1;
 
-          const updates = { ...args };
-          delete updates.id; delete updates.node_id; delete updates.nodeId;
-          console.log(`[App] Updating node ${safeId} (raw: ${rawId}):`, updates);
-          canvasRef.current?.updateNode(safeId, updates);
-          // Auto-pulse so the change is visually obvious
-          canvasRef.current?.pulseNode(safeId);
-        } else if (call.name === 'highlight_node') {
-          const id = Number(args.id);
-          const currentNodes = canvasRef.current?.getNodes() || [];
-          if (!Number.isFinite(id) || !currentNodes.some(n => n.id === id)) {
-            throw new Error(`Invalid or non-existent node id: ${args.id}`);
+            const updates = { ...args };
+            delete updates.id; delete updates.node_id; delete updates.nodeId;
+            console.log(`[App] Updating node ${safeId} (raw: ${rawId}):`, updates);
+            canvasRef.current?.updateNode(safeId, updates);
+            // Auto-pulse so the change is visually obvious
+            canvasRef.current?.pulseNode(safeId);
+            break;
           }
+          case 'highlight_node': {
+            const id = Number(args.id);
+            const currentNodes = canvasRef.current?.getNodes() || [];
+            if (!Number.isFinite(id) || !currentNodes.some(n => n.id === id)) {
+              throw new Error(`Invalid or non-existent node id: ${args.id}`);
+            }
 
-          console.log(`[App] Highlighting node ${id}`);
-          canvasRef.current?.pulseNode(id);
-        } else if (call.name === 'save_mental_map') {
-          const nodes = canvasRef.current?.getNodes() || [];
-          console.log(`[App] Saving mental map with ${nodes.length} nodes`);
-          responses.push({
-            id: call.id,
-            name: call.name,
-            response: { nodes, ok: true },
-          });
-          continue;
-        } else if (call.name === 'generate_session_report') {
-          const { summary, insights, recommendations } = args;
-          console.log(`[App] Generating session report:`, { summary, insights });
-          responses.push({
-            id: call.id,
-            name: call.name,
-            response: {
-              ok: true,
-              summary,
-              insights,
-              recommendations,
-              timestamp: new Date().toISOString()
-            },
-          });
-          continue;
-        } else if (call.name === 'save_mental_map' || call.name === 'generate_session_report' || call.name === 'get_expert_insight') {
-          // These are now resolved server-side; skip silently on client
-          console.log(`[App] Tool ${call.name} handled server-side, skipping client handler`);
-          continue;
-        } else {
-          throw new Error(`Unsupported tool: ${call.name}`);
+            console.log(`[App] Highlighting node ${id}`);
+            canvasRef.current?.pulseNode(id);
+            break;
+          }
+          case 'save_mental_map': {
+            const nodes = canvasRef.current?.getNodes() || [];
+            console.log(`[App] Saving mental map with ${nodes.length} nodes`);
+            responses.push({
+              id: call.id,
+              name: call.name,
+              response: { nodes, ok: true },
+            });
+            continue;
+          }
+          case 'generate_session_report': {
+            const { summary, insights, recommendations } = args;
+            console.log(`[App] Generating session report:`, { summary, insights });
+            responses.push({
+              id: call.id,
+              name: call.name,
+              response: {
+                ok: true,
+                summary,
+                insights,
+                recommendations,
+                timestamp: new Date().toISOString()
+              },
+            });
+            continue;
+          }
+          case 'get_expert_insight': {
+            // These are now resolved server-side; skip silently on client
+            console.log(`[App] Tool ${call.name} handled server-side, skipping client handler`);
+            continue;
+          }
+          default: {
+            throw new Error(`Unsupported tool: ${call.name}`);
+          }
         }
 
         responses.push({
