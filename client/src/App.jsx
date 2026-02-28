@@ -729,20 +729,23 @@ function App() {
     });
     workletNode.connect(audioContext.destination);
     workletNode.port.onmessage = (e) => {
-      if (e.data.type === 'drained') {
-        // Worklet buffer fully drained after playing audio.
-        // Use a debounce to wait for potential new chunks before declaring speech ended.
-        if (speakingDebounceRef.current) clearTimeout(speakingDebounceRef.current);
-        speakingDebounceRef.current = setTimeout(() => {
-          const elapsed = Date.now() - lastPcmPushAtRef.current;
-          if (elapsed > 500) {
-            console.log('[Audio] Agent finished speaking (worklet drained)');
-            setIsAgentSpeaking(false);
-            isAgentSpeakingRef.current = false;
-          }
+      if (e.data.type !== 'drained') return;
+
+      // Worklet buffer fully drained after playing audio.
+      // Use a debounce to wait for potential new chunks before declaring speech ended.
+      if (speakingDebounceRef.current) clearTimeout(speakingDebounceRef.current);
+      speakingDebounceRef.current = setTimeout(() => {
+        const elapsed = Date.now() - lastPcmPushAtRef.current;
+        if (elapsed <= 500) {
           speakingDebounceRef.current = null;
-        }, 500);
-      }
+          return;
+        }
+
+        console.log('[Audio] Agent finished speaking (worklet drained)');
+        setIsAgentSpeaking(false);
+        isAgentSpeakingRef.current = false;
+        speakingDebounceRef.current = null;
+      }, 500);
     };
     pcmWorkletRef.current = workletNode;
     workletReadyRef.current = true;
