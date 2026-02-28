@@ -991,64 +991,78 @@ function App() {
       }
 
       try {
-        if (call.name === 'update_node') {
-          // Smart ID resolution — handle strings like "circle", "awareness", etc.
-          const NAME_TO_ID = {
-            awareness: 1, science: 2, truth: 3, knowledge: 2, circle: 1,
-            'وعي': 1, 'علم': 2, 'حقيقة': 3, 'الوعي': 1, 'العلم': 2, 'الحقيقة': 3,
-            '1': 1, '2': 2, '3': 3,
-          };
-          const rawId = args.id ?? args.node_id ?? args.nodeId ?? 1;
-          const resolvedId = NAME_TO_ID[String(rawId).toLowerCase()] ?? Number(rawId);
-          const id = Number.isFinite(resolvedId) ? resolvedId : 1;
-          const currentNodes = canvasRef.current?.getNodes() || [];
-          const safeId = currentNodes.some(n => n.id === id) ? id : 1;
+        switch (call.name) {
+          case 'update_node': {
+            // Smart ID resolution — handle strings like "circle", "awareness", etc.
+            const NAME_TO_ID = {
+              awareness: 1, science: 2, truth: 3, knowledge: 2, circle: 1,
+              'وعي': 1, 'علم': 2, 'حقيقة': 3, 'الوعي': 1, 'العلم': 2, 'الحقيقة': 3,
+              '1': 1, '2': 2, '3': 3,
+            };
+            const rawId = args.id ?? args.node_id ?? args.nodeId ?? 1;
+            const resolvedId = NAME_TO_ID[String(rawId).toLowerCase()] ?? Number(rawId);
+            const id = Number.isFinite(resolvedId) ? resolvedId : 1;
+            const currentNodes = canvasRef.current?.getNodes() || [];
+            const safeId = currentNodes.some(n => n.id === id) ? id : 1;
 
-          const updates = { ...args };
-          delete updates.id; delete updates.node_id; delete updates.nodeId;
-          console.log(`[App] Updating node ${safeId} (raw: ${rawId}):`, updates);
-          canvasRef.current?.updateNode(safeId, updates);
-          // Auto-pulse so the change is visually obvious
-          canvasRef.current?.pulseNode(safeId);
-        } else if (call.name === 'highlight_node') {
-          const id = Number(args.id);
-          const currentNodes = canvasRef.current?.getNodes() || [];
-          if (!Number.isFinite(id) || !currentNodes.some(n => n.id === id)) {
-            throw new Error(`Invalid or non-existent node id: ${args.id}`);
+            const updates = { ...args };
+            delete updates.id; delete updates.node_id; delete updates.nodeId;
+            console.log(`[App] Updating node ${safeId} (raw: ${rawId}):`, updates);
+            canvasRef.current?.updateNode(safeId, updates);
+            // Auto-pulse so the change is visually obvious
+            canvasRef.current?.pulseNode(safeId);
+            break;
           }
 
-          console.log(`[App] Highlighting node ${id}`);
-          canvasRef.current?.pulseNode(id);
-        } else if (call.name === 'save_mental_map') {
-          const nodes = canvasRef.current?.getNodes() || [];
-          console.log(`[App] Saving mental map with ${nodes.length} nodes`);
-          responses.push({
-            id: call.id,
-            name: call.name,
-            response: { nodes, ok: true },
-          });
-          continue;
-        } else if (call.name === 'generate_session_report') {
-          const { summary, insights, recommendations } = args;
-          console.log(`[App] Generating session report:`, { summary, insights });
-          responses.push({
-            id: call.id,
-            name: call.name,
-            response: {
-              ok: true,
-              summary,
-              insights,
-              recommendations,
-              timestamp: new Date().toISOString()
-            },
-          });
-          continue;
-        } else if (call.name === 'save_mental_map' || call.name === 'generate_session_report' || call.name === 'get_expert_insight') {
-          // These are now resolved server-side; skip silently on client
-          console.log(`[App] Tool ${call.name} handled server-side, skipping client handler`);
-          continue;
-        } else {
-          throw new Error(`Unsupported tool: ${call.name}`);
+          case 'highlight_node': {
+            const id = Number(args.id);
+            const currentNodes = canvasRef.current?.getNodes() || [];
+            if (!Number.isFinite(id) || !currentNodes.some(n => n.id === id)) {
+              throw new Error(`Invalid or non-existent node id: ${args.id}`);
+            }
+
+            console.log(`[App] Highlighting node ${id}`);
+            canvasRef.current?.pulseNode(id);
+            break;
+          }
+
+          case 'save_mental_map': {
+            const nodes = canvasRef.current?.getNodes() || [];
+            console.log(`[App] Saving mental map with ${nodes.length} nodes`);
+            responses.push({
+              id: call.id,
+              name: call.name,
+              response: { nodes, ok: true },
+            });
+            continue;
+          }
+
+          case 'generate_session_report': {
+            const { summary, insights, recommendations } = args;
+            console.log(`[App] Generating session report:`, { summary, insights });
+            responses.push({
+              id: call.id,
+              name: call.name,
+              response: {
+                ok: true,
+                summary,
+                insights,
+                recommendations,
+                timestamp: new Date().toISOString()
+              },
+            });
+            continue;
+          }
+
+          case 'get_expert_insight': {
+            // These are now resolved server-side; skip silently on client
+            console.log(`[App] Tool ${call.name} handled server-side, skipping client handler`);
+            continue;
+          }
+
+          default: {
+            throw new Error(`Unsupported tool: ${call.name}`);
+          }
         }
 
         responses.push({
