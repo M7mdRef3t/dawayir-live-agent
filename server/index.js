@@ -341,8 +341,20 @@ const isAudioOnlyRealtimeInput = (realtimeInput) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
     logInfo('Client connected');
+
+    const authToken = process.env.DAWAYIR_AUTH_TOKEN;
+    if (authToken) {
+        const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        const token = url.searchParams.get('token');
+        if (token !== authToken) {
+            logError('Unauthorized WebSocket connection attempt');
+            ws.close(1008, 'Unauthorized');
+            return;
+        }
+    }
+
     let audioChunkCount = 0;
     let serverMessageCount = 0;
     let clientClosed = false;
