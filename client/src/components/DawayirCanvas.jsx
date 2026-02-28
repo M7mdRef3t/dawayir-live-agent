@@ -2,12 +2,25 @@ import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef, me
 
 const lerp = (a, b, t) => a + (b - a) * t;
 
-const lerpColor = (colorA, colorB, t) => {
-    const parseHex = (hex) => {
-        hex = hex.replace('#', '');
-        return [parseInt(hex.substring(0, 2), 16), parseInt(hex.substring(2, 4), 16), parseInt(hex.substring(4, 6), 16)];
-    };
+const hexCache = new Map();
 
+const parseHex = (hex) => {
+    let cached = hexCache.get(hex);
+    if (cached) return cached;
+
+    let cleanHex = hex;
+    if (hex[0] === '#') cleanHex = hex.slice(1);
+
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+
+    cached = [r, g, b];
+    hexCache.set(hex, cached);
+    return cached;
+};
+
+const lerpColor = (colorA, colorB, t) => {
     try {
         const [rA, gA, bA] = parseHex(colorA);
         const [rB, gB, bB] = parseHex(colorB);
@@ -21,10 +34,7 @@ const lerpColor = (colorA, colorB, t) => {
 };
 
 const hexToRgba = (hex, alpha) => {
-    hex = hex.replace('#', '');
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
+    const [r, g, b] = parseHex(hex);
     return `rgba(${r},${g},${b},${alpha})`;
 };
 const DawayirCanvas = memo(forwardRef((props, ref) => {
