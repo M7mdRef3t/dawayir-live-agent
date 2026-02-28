@@ -385,7 +385,7 @@ function App() {
   const lastRestorePromptAtRef = useRef(0);
   const deferMicStartUntilFirstAgentReplyRef = useRef(false);
   const isMicActiveRef = useRef(false);
-  const ttsDecisionTimeoutRef = useRef(null);
+  const agentMicReleaseTimeoutRef = useRef(null);
   const currentTurnModeRef = useRef('none'); // none | model | tts
   const bufferedTurnTextRef = useRef('');
   const lastAgentContentAtRef = useRef(0);
@@ -527,11 +527,7 @@ function App() {
   const lastPcmPushAtRef = useRef(0);
   const pendingPcmChunksRef = useRef([]);
   const pcmFlushScheduledRef = useRef(false);
-  const ttsFallbackEnabledRef = useRef(false); // Disabled TTS fallback here
-  const lastModelAudioAtRef = useRef(Date.now());
-  const lastSpokenTextRef = useRef('');
-  const lastSpokenAtRef = useRef(0);
-  const pendingTtsTimeoutRef = useRef(null);
+    const lastModelAudioAtRef = useRef(Date.now());
 
   const backendUrl = useMemo(() => {
     const envUrl = import.meta.env.VITE_BACKEND_WS_URL;
@@ -583,83 +579,23 @@ function App() {
     activeSourcesRef.current.clear();
   }, []);
 
-  const clearPendingTts = useCallback(() => {
-    if (ttsDecisionTimeoutRef.current) {
-      window.clearTimeout(ttsDecisionTimeoutRef.current);
-      ttsDecisionTimeoutRef.current = null;
-    }
-    if (pendingTtsTimeoutRef.current) {
-      window.clearTimeout(pendingTtsTimeoutRef.current);
-      pendingTtsTimeoutRef.current = null;
+  const clearAgentMicReleaseTimeout = useCallback(() => {
+    if (agentMicReleaseTimeoutRef.current) {
+      window.clearTimeout(agentMicReleaseTimeoutRef.current);
+      agentMicReleaseTimeoutRef.current = null;
     }
   }, []);
 
   const resetAgentTurnState = useCallback(() => {
-    clearPendingTts();
+    clearAgentMicReleaseTimeout();
     currentTurnModeRef.current = 'none';
     bufferedTurnTextRef.current = '';
     lastAgentContentAtRef.current = 0;
     setIsAgentSpeaking(false);
     isAgentSpeakingRef.current = false;
-  }, [clearPendingTts]);
+  }, [clearAgentMicReleaseTimeout]);
 
-  const stopTextToSpeechFallback = useCallback(() => {
-    clearPendingTts();
-    if (typeof window === 'undefined') return;
-    if (!('speechSynthesis' in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-    } catch {
-      // Ignore synthesis cancellation errors.
-    }
-  }, [clearPendingTts]);
-
-  const speakTextFallback = useCallback((text) => {
-    if (!ttsFallbackEnabledRef.current || typeof text !== 'string' || text.trim().length === 0) {
-      return;
-    }
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      return;
-    }
-
-    // Avoid reading markdown artifacts literally.
-    const cleanedText = text.replace(/[*_`#]/g, '').trim();
-    if (!cleanedText) {
-      return;
-    }
-
-    const now = Date.now();
-    if (cleanedText === lastSpokenTextRef.current && now - lastSpokenAtRef.current < 5000) {
-      return;
-    }
-
-    stopTextToSpeechFallback();
-
-    const utterance = new SpeechSynthesisUtterance(cleanedText);
-    utterance.lang = /[\u0600-\u06FF]/.test(cleanedText) ? 'ar-EG' : 'en-US';
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.onend = () => {
-      if (currentTurnModeRef.current === 'tts') {
-        setIsAgentSpeaking(false);
-        isAgentSpeakingRef.current = false;
-        currentTurnModeRef.current = 'none';
-        bufferedTurnTextRef.current = '';
-      }
-    };
-    utterance.onerror = () => {
-      setIsAgentSpeaking(false);
-      isAgentSpeakingRef.current = false;
-      currentTurnModeRef.current = 'none';
-      bufferedTurnTextRef.current = '';
-    };
-    window.speechSynthesis.speak(utterance);
-    lastSpokenTextRef.current = cleanedText;
-    lastSpokenAtRef.current = now;
-  }, [stopTextToSpeechFallback]);
-
-  const stopPlayback = useCallback(() => {
-    stopTextToSpeechFallback();
+      const stopPlayback = useCallback(() => {
     if (speakingDebounceRef.current) {
       clearTimeout(speakingDebounceRef.current);
       speakingDebounceRef.current = null;
@@ -689,7 +625,7 @@ function App() {
     nextPlaybackTimeRef.current = 0;
     setIsAgentSpeaking(false);
     isAgentSpeakingRef.current = false;
-  }, [stopTextToSpeechFallback]);
+  }, []);
 
   const ensureSpeakerContext = useCallback(async () => {
     if (speakerContextRef.current) {
@@ -773,7 +709,6 @@ function App() {
     async (arrayBuffer) => {
       if (!arrayBuffer || arrayBuffer.byteLength === 0) return;
 
-      stopTextToSpeechFallback();
       const float32 = pcm16ToFloat32(arrayBuffer);
       if (float32.length === 0) return;
 
@@ -791,7 +726,7 @@ function App() {
         speakingDebounceRef.current = null;
       }
     },
-    [flushPcmChunks, stopTextToSpeechFallback]
+    [flushPcmChunks]
   );
 
   const stopMicrophone = useCallback(async () => {
@@ -1485,29 +1420,17 @@ function App() {
         ].slice(-4));
 
         bufferedTurnTextRef.current = `${bufferedTurnTextRef.current} ${textParts.join(' ')}`.trim();
-        if (currentTurnModeRef.current === 'none' && ttsFallbackEnabledRef.current) {
-          if (ttsDecisionTimeoutRef.current) {
-            window.clearTimeout(ttsDecisionTimeoutRef.current);
+        if (currentTurnModeRef.current === 'none') {
+          // Release mic after a short wait so conversation doesn't get stuck on text-only responses.
+          if (agentMicReleaseTimeoutRef.current) {
+            window.clearTimeout(agentMicReleaseTimeoutRef.current);
           }
-          ttsDecisionTimeoutRef.current = window.setTimeout(() => {
-            if (currentTurnModeRef.current === 'none' && bufferedTurnTextRef.current.trim().length > 0) {
-              currentTurnModeRef.current = 'tts';
-              speakTextFallback(bufferedTurnTextRef.current.trim());
-            }
-            ttsDecisionTimeoutRef.current = null;
-          }, 900);
-        } else if (currentTurnModeRef.current === 'none' && !ttsFallbackEnabledRef.current) {
-          // TTS disabled and no audio yet — release mic after a short wait
-          // so conversation doesn't get stuck on text-only responses.
-          if (ttsDecisionTimeoutRef.current) {
-            window.clearTimeout(ttsDecisionTimeoutRef.current);
-          }
-          ttsDecisionTimeoutRef.current = window.setTimeout(() => {
+          agentMicReleaseTimeoutRef.current = window.setTimeout(() => {
             if (currentTurnModeRef.current === 'none' && isAgentSpeakingRef.current) {
               setIsAgentSpeaking(false);
               isAgentSpeakingRef.current = false;
             }
-            ttsDecisionTimeoutRef.current = null;
+            agentMicReleaseTimeoutRef.current = null;
           }, 1200);
         }
       }
@@ -1520,7 +1443,7 @@ function App() {
         // If TTS already started for this turn, ignore late model audio to avoid overlap.
         if (currentTurnModeRef.current !== 'tts') {
           currentTurnModeRef.current = 'model';
-          clearPendingTts();
+          clearAgentMicReleaseTimeout();
           for (const blob of selectedAudioBlobs) {
             if (blob?.data) {
               await playPcmChunk(base64ToArrayBuffer(blob.data), parsePcmSampleRate(blob.mimeType));
@@ -1588,7 +1511,7 @@ function App() {
   }, [
     backendUrl,
     capturedImage,
-    clearPendingTts,
+    clearAgentMicReleaseTimeout,
     ensureSpeakerContext,
     ensurePcmWorklet,
     handleToolCall,
@@ -1597,7 +1520,6 @@ function App() {
     lang,
     resetAgentTurnState,
     playPcmChunk,
-    speakTextFallback,
     startMicrophone,
     stopMicrophone,
     stopPlayback,
