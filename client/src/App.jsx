@@ -1145,7 +1145,11 @@ function App() {
         clientContent: {
           turns: [{
             role: "user",
-            parts: [{ text: lang === "ar" ? "(صورة جديدة. قول إحساسك بجملة، ولو هتغير الدواير استخدم update_node بمفاتيح id وradius وcolor بس.)" : "(New photo. Say what you feel in one sentence. If you update the circles, use update_node with id, radius, and color only.)" }]
+            parts: [{
+              text: lang === "ar"
+                ? "شوفني كده. اقرأ حالتي النفسية من الصورة وغيّر بهدوء في صمت. لو هتستخدم update_node استخدم id وradius وcolor بس."
+                : "Look at me. Read my emotional state from the photo and update the circles silently. If you use update_node, use only id, radius, and color."
+            }]
           }],
           turnComplete: true
         }
@@ -1155,7 +1159,7 @@ function App() {
       console.error("Look at me failed:", e);
       stopCamera();
     }
-  }, [lang, startCamera, stopCamera]);
+  }, [captureSnapshot, lang, startCamera, stopCamera]);
 
   const handleCircleAction = useCallback((circleId, action) => {
     const radius = action === 'shrink' ? 35 : action === 'grow' ? 90 : 60;
@@ -1366,10 +1370,10 @@ function App() {
 
               const bootstrapText = lang === 'ar'
                 ? (capturedImage
-                  ? 'دي صورتي. قولي حاسس بايه، ولو هتغير الدواير استخدم update_node بمفاتيح id وradius وcolor بس.'
+                  ? 'دي صورتي دلوقتي. اقرأ حالتي النفسية من الصورة ونادي update_node عشان تغيّر radius وcolor لكل دايرة على حسب قرايتك. استخدم id وradius وcolor بس.'
                   : 'يا صاحبي، ازيك؟')
                 : (capturedImage
-                  ? 'This is my photo. Tell me what you sense, and if you change the circles use update_node with id, radius, and color only.'
+                  ? 'This is my photo. Read my emotional state from the image and call update_node to change radius and color for each circle based on your reading. Use only id, radius, and color.'
                   : 'Hey, how are you?');
               parts.push({ text: bootstrapText });
 

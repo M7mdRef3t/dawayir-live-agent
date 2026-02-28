@@ -1,5 +1,32 @@
 import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef, memo } from 'react';
 
+const lerp = (a, b, t) => a + (b - a) * t;
+
+const lerpColor = (colorA, colorB, t) => {
+    const parseHex = (hex) => {
+        hex = hex.replace('#', '');
+        return [parseInt(hex.substring(0, 2), 16), parseInt(hex.substring(2, 4), 16), parseInt(hex.substring(4, 6), 16)];
+    };
+
+    try {
+        const [rA, gA, bA] = parseHex(colorA);
+        const [rB, gB, bB] = parseHex(colorB);
+        const r = Math.round(lerp(rA, rB, t));
+        const g = Math.round(lerp(gA, gB, t));
+        const b = Math.round(lerp(bA, bB, t));
+        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    } catch {
+        return colorB;
+    }
+};
+
+const hexToRgba = (hex, alpha) => {
+    hex = hex.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+};
 const DawayirCanvas = memo(forwardRef((props, ref) => {
     const PANEL_WIDTH = 380;
     const TARGET_FPS = 12;
@@ -29,34 +56,6 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
         }
         particlesRef.current = particles;
     }, []);
-
-    const lerp = (a, b, t) => a + (b - a) * t;
-
-    const lerpColor = (colorA, colorB, t) => {
-        const parseHex = (hex) => {
-            hex = hex.replace('#', '');
-            return [parseInt(hex.substring(0, 2), 16), parseInt(hex.substring(2, 4), 16), parseInt(hex.substring(4, 6), 16)];
-        };
-        try {
-            const [rA, gA, bA] = parseHex(colorA);
-            const [rB, gB, bB] = parseHex(colorB);
-            const r = Math.round(lerp(rA, rB, t));
-            const g = Math.round(lerp(gA, gB, t));
-            const b = Math.round(lerp(bA, bB, t));
-            return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-        } catch {
-            return colorB;
-        }
-    };
-
-    // Parse hex to rgba string helper
-    const hexToRgba = (hex, alpha) => {
-        hex = hex.replace('#', '');
-        const r = parseInt(hex.substring(0, 2), 16);
-        const g = parseInt(hex.substring(2, 4), 16);
-        const b = parseInt(hex.substring(4, 6), 16);
-        return `rgba(${r},${g},${b},${alpha})`;
-    };
 
     useImperativeHandle(ref, () => ({
         updateNode: (id, updates) => {

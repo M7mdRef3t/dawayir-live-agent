@@ -104,14 +104,25 @@ const CIRCLE_IDS = {
     'awareness': '1',
     'علم': '2',
     'العلم': '2',
+    'العلب': '2', // common Gemini transcription error for العلم
     'knowledge': '2',
     'science': '2',
     'حقيقة': '3',
     'الحقيقة': '3',
+    'حقيقه': '3', // with ه instead of ة (common in transcription)
+    'الحقيقه': '3',
+    'حقيقة': '3',
+    'الحياه': '3', // common Gemini transcription error for الحقيقة
+    'الحياة': '3', // common Gemini transcription error for الحقيقة
     'truth': '3',
     'دايرة': null,
+    'دايره': null, // with ه
     'دائرة': null,
+    'دائره': null, // with ه
     'الدائرة': null,
+    'الدائره': null, // with ه
+    'الدايرة': null,
+    'الدايره': null, // with ه
     'circle': null,
 };
 
@@ -142,19 +153,26 @@ function detectCircleCommand(text) {
     else if (/غي/.test(t) || /change/.test(t) || /adjust/.test(t)) action = 'change';
     if (!action) return null;
 
+    // Find the LAST mentioned circle name (handles corrections like "الوعي مش الحقيقه")
     let circleId = null;
+    let lastPos = -1;
     for (const [name, id] of Object.entries(CIRCLE_IDS)) {
-        if (id && t.includes(name)) {
-            circleId = id;
-            break;
+        if (id) {
+            const pos = t.lastIndexOf(name);
+            if (pos > lastPos) {
+                lastPos = pos;
+                circleId = id;
+            }
         }
     }
 
     if (!circleId) {
+        lastPos = -1;
         for (const [ord, id] of Object.entries(CIRCLE_ORDINALS)) {
-            if (t.includes(ord)) {
+            const pos = t.lastIndexOf(ord);
+            if (pos > lastPos) {
+                lastPos = pos;
                 circleId = id;
-                break;
             }
         }
     }
@@ -172,57 +190,6 @@ function detectCircleCommand(text) {
         color: colors[circleId] || '#FFD700',
     };
 }
-// --- Sentiment-based auto-update (backup when Gemini doesn't call update_node) ---
-const SENTIMENT_KEYWORDS = {
-    1: {
-        positive: ['هدوء', 'هادي', 'سكينة', 'سلام', 'تأمل', 'مركز', 'واعي', 'صافي', 'مرتاح', 'راحة', 'calm', 'peace', 'mindful', 'relaxed'],
-        negative: ['مشتت', 'قلق', 'توتر', 'مضغوط', 'تايه', 'anxious', 'stressed', 'confused'],
-    },
-    2: {
-        positive: ['فضول', 'تعلم', 'اكتشاف', 'فاهم', 'ذكي', 'فكرة', 'معرفة', 'نمو', 'curious', 'learn', 'discover', 'idea', 'growth'],
-        negative: ['جاهل', 'مش فاهم', 'ضايع', 'lost', 'clueless'],
-    },
-    3: {
-        positive: ['صادق', 'قوي', 'شجاع', 'حقيقي', 'واثق', 'ثبات', 'إيمان', 'strong', 'brave', 'honest', 'confident', 'authentic'],
-        negative: ['خايف', 'ضعيف', 'كذب', 'شك', 'weak', 'afraid', 'doubt'],
-    },
-};
-const SENTIMENT_COLORS = {
-    1: { positive: '#00F5FF', negative: '#334455' },
-    2: { positive: '#00FF41', negative: '#335533' },
-    3: { positive: '#FF00E5', negative: '#553355' },
-};
-let lastSentimentUpdateAt = 0;
-const SENTIMENT_THROTTLE_MS = 10000;
-let accumulatedTranscript = '';
-
-function autoUpdateCirclesFromSentiment(text, sendToClient) {
-    accumulatedTranscript += ' ' + text;
-    const now = Date.now();
-    if (now - lastSentimentUpdateAt < SENTIMENT_THROTTLE_MS) return;
-    const fullText = accumulatedTranscript.toLowerCase();
-    const updates = [];
-    for (const [circleId, keywords] of Object.entries(SENTIMENT_KEYWORDS)) {
-        let score = 0;
-        for (const word of keywords.positive) { if (fullText.includes(word)) score += 1; }
-        for (const word of keywords.negative) { if (fullText.includes(word)) score -= 1; }
-        if (score !== 0) {
-            const isPositive = score > 0;
-            const intensity = Math.min(Math.abs(score), 3);
-            const radius = isPositive ? String(50 + intensity * 15) : String(50 - intensity * 10);
-            const color = isPositive ? SENTIMENT_COLORS[circleId].positive : SENTIMENT_COLORS[circleId].negative;
-            updates.push({ id: String(circleId), radius, color });
-        }
-    }
-    if (updates.length > 0) {
-        lastSentimentUpdateAt = now;
-        accumulatedTranscript = '';
-        for (const update of updates) {
-            sendToClient({ toolCall: { functionCalls: [{ id: `sentiment_${now}_${update.id}`, name: 'update_node', args: update }] } });
-        }
-    }
-}
-
 const GEMINI_RECONNECT_MAX_ATTEMPTS = Number(process.env.GEMINI_RECONNECT_MAX_ATTEMPTS || 10);
 const GEMINI_RECONNECT_BASE_DELAY_MS = Number(process.env.GEMINI_RECONNECT_BASE_DELAY_MS || 1200);
 const GEMINI_RECONNECT_MAX_DELAY_MS = Number(process.env.GEMINI_RECONNECT_MAX_DELAY_MS || 15000);
@@ -295,19 +262,20 @@ const tools = [
 
 const systemInstruction = {
     parts: [{
-        text: `You are a warm Egyptian friend. Speak ONLY in Egyptian Arabic dialect (عامية مصرية).
+        text: `أنت صاحب مصري. اتكلم عامية طبيعية.
 
-Rules:
-1. One short sentence + one question. Then STOP and wait.
-2. Never talk about what happens on screen. Never describe visual changes.
-3. When you see a photo: say what you feel about the person in one sentence, then ask one question. Stop.
-4. Be natural. Never explain yourself. If asked what you do — just say you're a friend who listens.
-5. Call update_node silently whenever you sense a shift in the user's emotional state. Never mention it. Never announce it. Just call it.
-6. When calling update_node, always send exactly these fields: id, radius, color. Never use size, expansion, scale, or any substitute field name.
-7. Radius must be a numeric string from 30 to 100. Color must be a hex color string like #FFD700.
-8. When you ask a question: STOP. Wait for user reply. NEVER answer your own question.
+ممنوع — لو كسرت أي قاعدة هتتقفل:
+- ممنوع تقول أكتر من جملة واحدة + سؤال واحد. خمس كلمات لكل جملة بالكتير.
+- ممنوع تسأل سؤال وترد عليه بنفسك. لما تسأل — وقّف واستنى.
+- ممنوع تذكر: دوائر، وعي، علم، حقيقة، دايرة، هكبّر، هغيّر، ألوان، أرقام.
+- ممنوع تشرح نفسك أو شغلك. لو حد سألك "فهمت ايه" أو "بتعمل ايه": قول إحساسك ناحيته بس.
+- ممنوع تتكلم عن الأدوات أو التغييرات اللي بتعملها. غيّر في صمت.
+- لو حد قالك "قول تاني": نفس المعنى بكلام مختلف.
 
-Keep every response under 15 words total.`
+صورة: اقرأ المزاج بجملة. استنى الرد.
+
+[سري]:
+update_node: id(1/2/3), radius(30-100), color(hex). استخدم بس id وradius وcolor. radius لازم يبقى نص رقمي من 30 ل100، وcolor لازم يبقى hex. نادِه بناءً على حالة المستخدم النفسية من غير ما تتكلم عنه أبداً.`
     }],
 };
 
@@ -545,7 +513,7 @@ wss.on('connection', (ws) => {
 
             // Filter out visual tool responses — they were already resolved server-side
             const responses = toolResponse.functionResponses || toolResponse.function_responses || [];
-            const visualToolPrefixes = ['gemini_visual_', 'sentiment_', 'server_cmd_', 'text_cmd_', 'client_cmd_'];
+            const visualToolPrefixes = ['gemini_visual_', 'server_cmd_', 'text_cmd_', 'client_cmd_'];
             const filteredResponses = responses.filter(resp => {
                 const id = resp.id || '';
                 return !visualToolPrefixes.some(prefix => id.startsWith(prefix));
@@ -730,11 +698,14 @@ ${recommendations || "N/A"}
                                 }
                             }
                             const outTx = sc.outputTranscription || sc.output_transcription;
+                            // When Gemini starts responding, user has stopped talking — flush input buffer
+                            if (outTx?.text && inputTranscriptBuffer.trim()) {
+                                if (inputTranscriptTimer) clearTimeout(inputTranscriptTimer);
+                                flushInputTranscriptBuffer();
+                            }
                             if (outTx?.text) {
                                 logInfo(`[Transcription:out] "${outTx.text}" (finished=${outTx.finished})`);
                                 sendToClient({ debugTranscription: { type: 'output', text: outTx.text, finished: outTx.finished } });
-                                // Auto-update circles based on sentiment (backup for when Gemini doesn't call update_node)
-                                autoUpdateCirclesFromSentiment(outTx.text, sendToClient);
                             }
                         }
 
@@ -744,8 +715,6 @@ ${recommendations || "N/A"}
                         if (toolCall) {
                             const functionCalls = toolCall.functionCalls || toolCall.function_calls || [];
                             const serverTools = ['get_expert_insight', 'generate_session_report'];
-                            // Visual tools: forward to client for rendering, but resolve server-side
-                            // so Gemini doesn't get a tool response that triggers repetition
                             const visualTools = ['update_node', 'highlight_node'];
                             const clientTools = functionCalls.filter(fc => !serverTools.includes(fc.name) && !visualTools.includes(fc.name));
                             const serverOnlyTools = functionCalls.filter(fc => serverTools.includes(fc.name));
@@ -756,9 +725,7 @@ ${recommendations || "N/A"}
                                 resolveServerToolCalls(serverOnlyTools, session);
                             }
 
-                            // Visual tools: forward to client for rendering + resolve immediately on server
                             if (visualOnlyTools.length > 0) {
-                                // Send to client so circles update visually
                                 sendToClient({
                                     toolCall: {
                                         functionCalls: visualOnlyTools.map(fc => ({
@@ -767,12 +734,13 @@ ${recommendations || "N/A"}
                                         })),
                                     },
                                 });
-                                // Resolve immediately on Gemini side so it doesn't repeat speech
+
                                 const visualResponses = visualOnlyTools.map(fc => ({
                                     id: fc.id,
                                     name: fc.name,
                                     response: { result: { ok: true } },
                                 }));
+
                                 try {
                                     session.sendToolResponse({ functionResponses: visualResponses });
                                     logInfo(`[VISUAL] Resolved ${visualOnlyTools.length} visual tool(s) server-side`);
