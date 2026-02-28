@@ -924,29 +924,28 @@ function App() {
     const source = micContext.createMediaStreamSource(stream);
     const silentGain = micContext.createGain();
     silentGain.gain.value = 0;
-    let workletReady = false;
 
-    if (micContext.audioWorklet && typeof AudioWorkletNode !== 'undefined') {
-      try {
-        await micContext.audioWorklet.addModule(new URL('./audio/mic-processor.js', import.meta.url));
-        const worklet = new AudioWorkletNode(micContext, MIC_WORKLET_NAME);
-        worklet.port.onmessage = (event) => {
-          const int16arrayBuffer = event.data?.int16arrayBuffer;
-          const sampleRate = Number(event.data?.sampleRate) || INPUT_SAMPLE_RATE;
-          if (!int16arrayBuffer) return;
-          sendRealtimeAudioChunk(int16arrayBuffer, sampleRate);
-        };
+    const setupAudioProcessor = async () => {
+      if (micContext.audioWorklet && typeof AudioWorkletNode !== 'undefined') {
+        try {
+          await micContext.audioWorklet.addModule(new URL('./audio/mic-processor.js', import.meta.url));
+          const worklet = new AudioWorkletNode(micContext, MIC_WORKLET_NAME);
+          worklet.port.onmessage = (event) => {
+            const int16arrayBuffer = event.data?.int16arrayBuffer;
+            const sampleRate = Number(event.data?.sampleRate) || INPUT_SAMPLE_RATE;
+            if (!int16arrayBuffer) return;
+            sendRealtimeAudioChunk(int16arrayBuffer, sampleRate);
+          };
 
-        source.connect(worklet);
-        worklet.connect(silentGain);
-        micWorkletRef.current = worklet;
-        workletReady = true;
-      } catch {
-        // Fall back to ScriptProcessor when Worklet fails on specific browsers/extensions.
+          source.connect(worklet);
+          worklet.connect(silentGain);
+          micWorkletRef.current = worklet;
+          return;
+        } catch {
+          // Fall back to ScriptProcessor when Worklet fails on specific browsers/extensions.
+        }
       }
-    }
 
-    if (!workletReady) {
       const processor = micContext.createScriptProcessor(2048, 1, 1);
       processor.onaudioprocess = (event) => {
         const input = event.inputBuffer?.getChannelData(0);
@@ -958,7 +957,9 @@ function App() {
       source.connect(processor);
       processor.connect(silentGain);
       micProcessorRef.current = processor;
-    }
+    };
+
+    await setupAudioProcessor();
 
     // Keep microphone graph active without audible loopback.
     silentGain.connect(micContext.destination);
