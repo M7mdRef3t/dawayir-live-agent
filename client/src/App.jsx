@@ -1238,7 +1238,14 @@ function App() {
       return;
     }
 
-    const socket = new WebSocket(backendUrl);
+    const token = import.meta.env.VITE_DAWAYIR_AUTH_TOKEN || '';
+    let wsUrlString = backendUrl;
+    if (token) {
+      const wsUrl = new URL(backendUrl);
+      wsUrl.searchParams.set('token', token);
+      wsUrlString = wsUrl.toString();
+    }
+    const socket = new WebSocket(wsUrlString);
     socket.binaryType = 'arraybuffer';
     wsRef.current = socket;
 

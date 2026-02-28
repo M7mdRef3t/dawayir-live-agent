@@ -37,6 +37,113 @@ const hexToRgba = (hex, alpha) => {
     const [r, g, b] = parseHex(hex);
     return `rgba(${r},${g},${b},${alpha})`;
 };
+
+const drawBackground = (ctx, canvasWidth, canvasHeight) => {
+    ctx.fillStyle = '#080812';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+};
+
+const drawParticles = (ctx, particles, canvasWidth, canvasHeight) => {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    particles.forEach(p => {
+        p.x += p.speedX;
+        p.y += p.speedY;
+        if (p.x < 0) p.x = canvasWidth;
+        if (p.x > canvasWidth) p.x = 0;
+        if (p.y < 0) p.y = canvasHeight;
+        if (p.y > canvasHeight) p.y = 0;
+        ctx.globalAlpha = p.opacity;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1.0;
+};
+
+const updateNodesPhysics = (nodes, draggingNode, canvasWidth, canvasHeight, panelWidth) => {
+    const lerpSpeed = 0.06;
+    nodes.forEach(node => {
+        if (Math.abs(node.radius - node.targetRadius) > 0.5) {
+            node.radius = lerp(node.radius, node.targetRadius, lerpSpeed);
+        } else {
+            node.radius = node.targetRadius;
+        }
+        if (node.color !== node.targetColor) {
+            node.color = lerpColor(node.color, node.targetColor, lerpSpeed * 2);
+            if (lerpColor(node.color, node.targetColor, 0) === node.targetColor) {
+                node.color = node.targetColor;
+            }
+        }
+        if (node.pulse > 0) node.pulse -= 0.015;
+        if (node.pulse < 0) node.pulse = 0;
+        if (!draggingNode || draggingNode !== node.id) {
+            node.x += node.velocity.x;
+            node.y += node.velocity.y;
+            if (node.x - node.radius < panelWidth || node.x + node.radius > canvasWidth) node.velocity.x *= -1;
+            if (node.y - node.radius < 0 || node.y + node.radius > canvasHeight) node.velocity.y *= -1;
+            node.x = Math.max(panelWidth + node.radius, Math.min(canvasWidth - node.radius, node.x));
+            node.y = Math.max(node.radius, Math.min(canvasHeight - node.radius, node.y));
+        }
+    });
+};
+
+const drawConnections = (ctx, nodes, dashOffsetRef) => {
+    dashOffsetRef.current += 0.2;
+    ctx.setLineDash([8, 6]);
+    ctx.lineDashOffset = -dashOffsetRef.current;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.stroke();
+        }
+    }
+    ctx.setLineDash([]);
+};
+
+const drawNodes = (ctx, nodes) => {
+    nodes.forEach(node => {
+        const currentRadius = node.radius + (node.pulse * 20);
+
+        // Pulse ring
+        if (node.pulse > 0.1) {
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, currentRadius + 10, 0, Math.PI * 2);
+            ctx.strokeStyle = hexToRgba(node.color, node.pulse * 0.5);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // Outer glow circle
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, currentRadius + 6, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(node.color, 0.15);
+        ctx.fill();
+
+        // Main circle
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, currentRadius, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(node.color, 0.6);
+        ctx.fill();
+
+        // Highlight dot
+        ctx.beginPath();
+        ctx.arc(node.x - currentRadius / 3, node.y - currentRadius / 3, currentRadius / 5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.fill();
+
+        // Label
+        ctx.fillStyle = '#FFF';
+        ctx.font = `600 ${Math.floor(currentRadius / 3.5)}px 'Outfit', sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(node.label, node.x, node.y);
+    });
+};
+
 const DawayirCanvas = memo(forwardRef((props, ref) => {
     const PANEL_WIDTH = 380;
     const TARGET_FPS = 12;
@@ -118,107 +225,15 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
             }
             lastFrameTimeRef.current = timestamp;
 
-            // 1. Solid background (no gradient - much faster)
-            ctx.fillStyle = '#080812';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // 2. Particles (reduced count)
             const currentNodes = nodesRef.current;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-            particlesRef.current.forEach(p => {
-                p.x += p.speedX;
-                p.y += p.speedY;
-                if (p.x < 0) p.x = canvas.width;
-                if (p.x > canvas.width) p.x = 0;
-                if (p.y < 0) p.y = canvas.height;
-                if (p.y > canvas.height) p.y = 0;
-                ctx.globalAlpha = p.opacity;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                ctx.fill();
-            });
-            ctx.globalAlpha = 1.0;
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
 
-            // 3. Smooth transitions
-            const lerpSpeed = 0.06;
-            currentNodes.forEach(node => {
-                if (Math.abs(node.radius - node.targetRadius) > 0.5) {
-                    node.radius = lerp(node.radius, node.targetRadius, lerpSpeed);
-                } else {
-                    node.radius = node.targetRadius;
-                }
-                if (node.color !== node.targetColor) {
-                    node.color = lerpColor(node.color, node.targetColor, lerpSpeed * 2);
-                    if (lerpColor(node.color, node.targetColor, 0) === node.targetColor) {
-                        node.color = node.targetColor;
-                    }
-                }
-                if (node.pulse > 0) node.pulse -= 0.015;
-                if (node.pulse < 0) node.pulse = 0;
-                if (!draggingNode || draggingNode !== node.id) {
-                    node.x += node.velocity.x;
-                    node.y += node.velocity.y;
-                    if (node.x - node.radius < PANEL_WIDTH || node.x + node.radius > canvas.width) node.velocity.x *= -1;
-                    if (node.y - node.radius < 0 || node.y + node.radius > canvas.height) node.velocity.y *= -1;
-                    node.x = Math.max(PANEL_WIDTH + node.radius, Math.min(canvas.width - node.radius, node.x));
-                    node.y = Math.max(node.radius, Math.min(canvas.height - node.radius, node.y));
-                }
-            });
-
-            // 4. Simple connections (solid lines, no gradients)
-            dashOffsetRef.current += 0.2;
-            ctx.setLineDash([8, 6]);
-            ctx.lineDashOffset = -dashOffsetRef.current;
-            ctx.lineWidth = 1;
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-            for (let i = 0; i < currentNodes.length; i++) {
-                for (let j = i + 1; j < currentNodes.length; j++) {
-                    ctx.beginPath();
-                    ctx.moveTo(currentNodes[i].x, currentNodes[i].y);
-                    ctx.lineTo(currentNodes[j].x, currentNodes[j].y);
-                    ctx.stroke();
-                }
-            }
-            ctx.setLineDash([]);
-
-            // 5. Draw nodes (simple fills, no gradients, no shadows)
-            currentNodes.forEach(node => {
-                const currentRadius = node.radius + (node.pulse * 20);
-
-                // Pulse ring
-                if (node.pulse > 0.1) {
-                    ctx.beginPath();
-                    ctx.arc(node.x, node.y, currentRadius + 10, 0, Math.PI * 2);
-                    ctx.strokeStyle = hexToRgba(node.color, node.pulse * 0.5);
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-                }
-
-                // Outer glow circle (simple semi-transparent, no gradient)
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, currentRadius + 6, 0, Math.PI * 2);
-                ctx.fillStyle = hexToRgba(node.color, 0.15);
-                ctx.fill();
-
-                // Main circle
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, currentRadius, 0, Math.PI * 2);
-                ctx.fillStyle = hexToRgba(node.color, 0.6);
-                ctx.fill();
-
-                // Highlight dot
-                ctx.beginPath();
-                ctx.arc(node.x - currentRadius / 3, node.y - currentRadius / 3, currentRadius / 5, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-                ctx.fill();
-
-                // Label
-                ctx.fillStyle = '#FFF';
-                ctx.font = `600 ${Math.floor(currentRadius / 3.5)}px 'Outfit', sans-serif`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(node.label, node.x, node.y);
-            });
+            drawBackground(ctx, canvasWidth, canvasHeight);
+            drawParticles(ctx, particlesRef.current, canvasWidth, canvasHeight);
+            updateNodesPhysics(currentNodes, draggingNode, canvasWidth, canvasHeight, PANEL_WIDTH);
+            drawConnections(ctx, currentNodes, dashOffsetRef);
+            drawNodes(ctx, currentNodes);
 
             animationFrameId = window.requestAnimationFrame(render);
         };
