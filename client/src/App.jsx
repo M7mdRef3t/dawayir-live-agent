@@ -1213,6 +1213,55 @@ function App() {
   }, [closeSpeakerContext, resetAgentTurnState, stopMicrophone, stopPlayback]);
 
   const connect = useCallback(async () => {
+    const sendBootstrapPrompt = () => {
+      if (bootstrapPromptSentRef.current) return;
+      bootstrapPromptSentRef.current = true;
+      console.log('[App] Sending bootstrap prompt...');
+
+      const parts = [];
+
+      if (capturedImage) {
+        const base64Data = capturedImage.split(',')[1];
+        if (base64Data) {
+          parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
+          console.log('[App] Including camera snapshot in bootstrap prompt');
+        }
+      }
+
+      const bootstrapText = lang === 'ar'
+        ? (capturedImage
+          ? 'دي صورتي دلوقتي. اقرأ حالتي النفسية من الصورة ونادي update_node عشان تغيّر radius وcolor لكل دايرة على حسب قرايتك. استخدم id وradius وcolor بس.'
+          : 'يا صاحبي، ازيك؟')
+        : (capturedImage
+          ? 'This is my photo. Read my emotional state from the image and call update_node to change radius and color for each circle based on your reading. Use only id, radius, and color.'
+          : 'Hey, how are you?');
+      parts.push({ text: bootstrapText });
+
+      wsRef.current.send(JSON.stringify({
+        clientContent: { turns: [{ role: 'user', parts }], turnComplete: true }
+      }));
+    };
+
+    const sendRestorePrompt = () => {
+      const now = Date.now();
+      if (now - lastRestorePromptAtRef.current < 6000) {
+        restoreAfterGeminiReconnectRef.current = false;
+        return;
+      }
+      lastRestorePromptAtRef.current = now;
+      const lastConv = sessionContextRef.current.length > 0
+        ? sessionContextRef.current.slice(-3).join(' ... ')
+        : '';
+      const promptText = lastConv
+        ? `(كمّل من هنا بالظبط: "${lastConv}")`
+        : '(كمّل الحوار.)';
+      wsRef.current.send(JSON.stringify({
+        clientContent: { turns: [{ role: 'user', parts: [{ text: promptText }] }], turnComplete: true }
+      }));
+      restoreAfterGeminiReconnectRef.current = false;
+    };
+
+
     if (isStarting || isConnected) return;
     const existingSocket = wsRef.current;
     if (
@@ -1354,51 +1403,9 @@ function App() {
             const isGeminiReconnect = restoreAfterGeminiReconnectRef.current;
 
             if (!bootstrapPromptSentRef.current) {
-              bootstrapPromptSentRef.current = true;
-              console.log('[App] Sending bootstrap prompt...');
-
-              const parts = [];
-
-              // Include camera snapshot if available so agent can greet based on appearance
-              if (capturedImage) {
-                const base64Data = capturedImage.split(',')[1];
-                if (base64Data) {
-                  parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
-                  console.log('[App] Including camera snapshot in bootstrap prompt');
-                }
-              }
-
-              const bootstrapText = lang === 'ar'
-                ? (capturedImage
-                  ? 'دي صورتي دلوقتي. اقرأ حالتي النفسية من الصورة ونادي update_node عشان تغيّر radius وcolor لكل دايرة على حسب قرايتك. استخدم id وradius وcolor بس.'
-                  : 'يا صاحبي، ازيك؟')
-                : (capturedImage
-                  ? 'This is my photo. Read my emotional state from the image and call update_node to change radius and color for each circle based on your reading. Use only id, radius, and color.'
-                  : 'Hey, how are you?');
-              parts.push({ text: bootstrapText });
-
-              wsRef.current.send(JSON.stringify({
-                clientContent: { turns: [{ role: 'user', parts }], turnComplete: true }
-              }));
+              sendBootstrapPrompt();
             } else if (isReconnect || isGeminiReconnect) {
-              const now = Date.now();
-              if (now - lastRestorePromptAtRef.current < 6000) {
-                restoreAfterGeminiReconnectRef.current = false;
-                return;
-              }
-              lastRestorePromptAtRef.current = now;
-              // Send a minimal, invisible context restore — no "reconnection" language.
-              // The model should just continue naturally without acknowledging the gap.
-              const lastConv = sessionContextRef.current.length > 0
-                ? sessionContextRef.current.slice(-3).join(' ... ')
-                : '';
-              const promptText = lastConv
-                ? `(كمّل من هنا بالظبط: "${lastConv}")`
-                : '(كمّل الحوار.)';
-              wsRef.current.send(JSON.stringify({
-                clientContent: { turns: [{ role: 'user', parts: [{ text: promptText }] }], turnComplete: true }
-              }));
-              restoreAfterGeminiReconnectRef.current = false;
+              sendRestorePrompt();
             }
           }
 
@@ -1587,20 +1594,20 @@ function App() {
     };
   }, [
     backendUrl,
-    capturedImage,
     clearPendingTts,
     ensureSpeakerContext,
     ensurePcmWorklet,
     handleToolCall,
     isConnected,
     isStarting,
-    lang,
     resetAgentTurnState,
     playPcmChunk,
     speakTextFallback,
     startMicrophone,
     stopMicrophone,
     stopPlayback,
+    capturedImage,
+    lang,
   ]);
 
   useEffect(() => {
