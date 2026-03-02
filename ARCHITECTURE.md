@@ -74,7 +74,7 @@ To ensure the AI operates as a trustworthy psychological coach rather than a gen
 ```mermaid
 graph LR
     FE[Browser Frontend] <-->|WSS Relay + Audio/PCM16| CR[Google Cloud Run]
-    CR <-->|Google GenAI SDK| GEM[Gemini 2.5 Flash Live API]
+    CR <-->|Google GenAI SDK| GEM[Gemini 2.0 Flash Live API]
     CR -->|save_mental_map| GCS[(Google Cloud Storage)]
     CR <-->|get_expert_insight| KB[(Al-Rehla Knowledge Base)]
     GEM -->|update_node / highlight_node| CR

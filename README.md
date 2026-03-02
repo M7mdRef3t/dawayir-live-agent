@@ -38,7 +38,7 @@ graph TD
     end
 
     subgraph "🧠 The Intelligence (Google AI)"
-        GL <-->|LLM Reasoning + Tool Calls| GEM[Gemini 2.5 Flash]
+        GL <-->|LLM Reasoning + Tool Calls| GEM[Gemini 2.0 Flash]
         GEM -->|update_node / highlight_node| NB
         GEM -->|Low-Latency Audio Stream| NB
     end
@@ -98,7 +98,7 @@ GOOGLE_PROJECT_ID=your_gcp_project_id
 GOOGLE_CLOUD_STORAGE_BUCKET=your_gcs_bucket_name
 
 # Optional (defaults shown)
-GEMINI_LIVE_MODEL=gemini-2.5-flash-native-audio-preview-12-2025
+GEMINI_LIVE_MODEL=gemini-2.0-flash-exp
 GEMINI_API_VERSION=v1alpha
 PORT=8080
 LOG_LEVEL=info
@@ -211,7 +211,7 @@ dawayir-live-agent/
 | **Challenge** | Gemini Live Agent Challenge |
 | **Track** | Live Agents 🗣️ |
 | **Primary SDK** | Google GenAI SDK (`@google/genai` v1.42.0) |
-| **Model** | Gemini 2.5 Flash (Native Audio) |
+| **Model** | Gemini 2.0 Flash (Native Audio) |
 | **Cloud Services** | Google Cloud Run, Google Cloud Storage, Vertex AI API |
 | **IaC** | Terraform + Cloud Build |
 

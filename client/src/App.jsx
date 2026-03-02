@@ -352,6 +352,27 @@ function App() {
   const isAgentSpeakingRef = useRef(false);
   const [commandText, setCommandText] = useState('');
 
+  // --- PRE-CUE SPEECH STATE ---
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  const userSpeechActiveRef = useRef(false);
+  const lastSpeechAtRef = useRef(0);
+  const speechResetTimerRef = useRef(null);
+
+  const resetUserSpeaking = useCallback(() => {
+    userSpeechActiveRef.current = false;
+    setIsUserSpeaking(false);
+    if (speechResetTimerRef.current) {
+      clearTimeout(speechResetTimerRef.current);
+      speechResetTimerRef.current = null;
+    }
+  }, []);
+
+  const preCue = useCallback((partialText) => {
+    // Pulse all nodes to indicate the system is listening/reacting
+    canvasRef.current?.pulseAll?.();
+    console.log("%c🟣 PRE-CUE fired:", "color: #ff00ff; font-weight: bold", partialText);
+  }, []);
+
   // Update canvas node labels when language changes
   useEffect(() => {
     const labels = NODE_LABELS[lang];
@@ -1300,7 +1321,32 @@ function App() {
       if (message.debugTranscription) {
         const dt = message.debugTranscription;
         console.log(`%c[Transcription:${dt.type}] "${dt.text}" (finished=${dt.finished})`, 'color: #00ff00; font-weight: bold');
-        return; // Don't process debug messages further
+
+        if (dt.type === 'input') {
+          const now = Date.now();
+          lastSpeechAtRef.current = now;
+
+          // ✅ أول fragment غير نهائي = user started speaking
+          if (!dt.finished && !userSpeechActiveRef.current) {
+            userSpeechActiveRef.current = true;
+            setIsUserSpeaking(true);
+
+            // 🔥 pre-cue مرة واحدة لكل utterance
+            preCue(dt.text);
+
+            // احتياطي: لو finished ماوصلتش لأي سبب، نعمل reset بعد 900ms صمت
+            if (speechResetTimerRef.current) clearTimeout(speechResetTimerRef.current);
+            speechResetTimerRef.current = setTimeout(() => {
+              if (Date.now() - lastSpeechAtRef.current > 850) resetUserSpeaking();
+            }, 900);
+          }
+
+          // ✅ لما الكلام يخلص (final)
+          if (dt.finished) {
+            resetUserSpeaking();
+          }
+        }
+        return;
       }
 
       const serverStatus = message?.serverStatus ?? message?.server_status;
@@ -1348,7 +1394,7 @@ function App() {
           stopPlayback();
         }
         // Pre-initialize AudioWorklet so first audio plays without delay
-        ensurePcmWorklet().catch(() => {});
+        ensurePcmWorklet().catch(() => { });
         deferMicStartUntilFirstAgentReplyRef.current = !isMicActiveRef.current;
         if (micStartTimeoutRef.current) {
           window.clearTimeout(micStartTimeoutRef.current);

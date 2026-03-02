@@ -108,12 +108,12 @@ const drawNodes = (ctx, nodes) => {
     nodes.forEach(node => {
         const currentRadius = node.radius + (node.pulse * 20);
 
-        // Pulse ring
+        // Pulse ring - Refined for "Subtle Cognition" feel
         if (node.pulse > 0.1) {
             ctx.beginPath();
-            ctx.arc(node.x, node.y, currentRadius + 10, 0, Math.PI * 2);
-            ctx.strokeStyle = hexToRgba(node.color, node.pulse * 0.5);
-            ctx.lineWidth = 2;
+            ctx.arc(node.x, node.y, currentRadius + (node.pulse * 30), 0, Math.PI * 2);
+            ctx.strokeStyle = hexToRgba(node.color, node.pulse * 0.75);
+            ctx.lineWidth = 3;
             ctx.stroke();
         }
 
@@ -191,6 +191,9 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
             nodesRef.current = nodesRef.current.map(node =>
                 node.id === id ? { ...node, pulse: 1.0 } : node
             );
+        },
+        pulseAll: () => {
+            nodesRef.current = nodesRef.current.map(node => ({ ...node, pulse: 0.8 }));
         },
         getNodes: () => nodesRef.current.map(n => ({ id: n.id, x: n.x, y: n.y, radius: n.radius, color: n.color, label: n.label }))
     }));
