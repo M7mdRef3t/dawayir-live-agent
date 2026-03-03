@@ -1803,6 +1803,13 @@ function App() {
 
             {/* Main Controls */}
             <div className="section">
+              {!isConnected && !isStarting && toolCallsCount > 0 && (
+                <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+                  <button className="primary-btn" onClick={() => setAppView('dashboard')} style={{ background: 'linear-gradient(135deg, #00F5FF, #4169E1)', boxShadow: '0 4px 15px rgba(0, 245, 255, 0.3)' }}>
+                    {t.dashboardBtn}
+                  </button>
+                </div>
+              )}
               {!isConnected && !isStarting && (
                 <div className="camera-setup">
                   <video ref={videoRef} autoPlay playsInline muted style={{ display: 'none' }} />
