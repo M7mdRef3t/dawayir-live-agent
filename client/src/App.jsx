@@ -223,8 +223,9 @@ const getTurnDataAudioBlobs = (message) => {
     .filter((blob) => blob && isAudioMimeType(blob.mimeType));
 };
 
-const Visualizer = ({ stream, isConnected }) => {
+const Visualizer = ({ stream, isConnected, lang }) => {
   const canvasRef = useRef(null);
+  const [stressLevel, setStressLevel] = useState('calm');
 
   useEffect(() => {
     if (!stream || !isConnected) return;
@@ -241,12 +242,28 @@ const Visualizer = ({ stream, isConnected }) => {
 
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
+    const floatArray = new Float32Array(analyser.fftSize);
 
     let animationFrameId;
+    let stressTimer;
 
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       analyser.getByteFrequencyData(dataArray);
+
+      // RMS calculation for bio-feedback stress map
+      analyser.getFloatTimeDomainData(floatArray);
+      let sumSquares = 0.0;
+      for (let i = 0; i < floatArray.length; i++) {
+        sumSquares += floatArray[i] * floatArray[i];
+      }
+      const rms = Math.sqrt(sumSquares / floatArray.length);
+
+      if (rms > 0.15) {
+        setStressLevel('stressed');
+        if (stressTimer) clearTimeout(stressTimer);
+        stressTimer = setTimeout(() => setStressLevel('calm'), 2000);
+      }
 
       const barWidth = (canvas.width / bufferLength) * 2.5;
       let barHeight;
@@ -266,13 +283,22 @@ const Visualizer = ({ stream, isConnected }) => {
 
     return () => {
       cancelAnimationFrame(animationFrameId);
+      if (stressTimer) clearTimeout(stressTimer);
       analyser.disconnect();
       source.disconnect();
       audioContext.close();
     };
   }, [stream, isConnected]);
 
-  return <canvas ref={canvasRef} className="visualizer" width="300" height="80" />;
+  return (
+    <div className="visualizer-container" style={{ position: 'relative' }}>
+      <div className={`bio-badge bio-${stressLevel}`}>
+        <span className="bio-dot"></span>
+        {stressLevel === 'stressed' ? (lang === 'ar' ? 'توتر / ضغط' : 'Stress Detected') : (lang === 'ar' ? 'مسترخي' : 'Calm State')}
+      </div>
+      <canvas ref={canvasRef} className="visualizer" width="300" height="80" />
+    </div>
+  );
 }; const Dashboard = ({ onBack }) => {
   const [reports, setReports] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
@@ -385,6 +411,8 @@ function App() {
 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
+  const [journeyStage, setJourneyStage] = useState('Overwhelmed');
+
 
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
@@ -409,6 +437,7 @@ function App() {
   const ttsDecisionTimeoutRef = useRef(null);
   const currentTurnModeRef = useRef('none'); // none | model | tts
   const bufferedTurnTextRef = useRef('');
+  const bufferedUserTextRef = useRef('');
   const lastAgentContentAtRef = useRef(0);
   const vadStateRef = useRef({
     speaking: false,
@@ -622,6 +651,9 @@ function App() {
     lastAgentContentAtRef.current = 0;
     setIsAgentSpeaking(false);
     isAgentSpeakingRef.current = false;
+
+    // We intentionally keep the transcript up to date rather than clearing it on turn end,
+    // so that the conversation history stays visible until manually cleared.
   }, [clearPendingTts]);
 
   const stopTextToSpeechFallback = useCallback(() => {
@@ -1040,6 +1072,16 @@ function App() {
 
           console.log(`[App] Highlighting node ${id}`);
           canvasRef.current?.pulseNode(id);
+        } else if (call.name === 'update_journey') {
+          const STAGE_MAP = {
+            'overwhelmed': 'Overwhelmed',
+            'focus': 'Focus',
+            'clarity': 'Clarity'
+          };
+          const stage = args?.stage?.toLowerCase() || 'overwhelmed';
+          const resolvedStage = STAGE_MAP[stage] || 'Overwhelmed';
+          console.log(`[App] Updating journey stage to: ${resolvedStage}`);
+          setJourneyStage(resolvedStage);
         } else if (call.name === 'save_mental_map') {
           const nodes = canvasRef.current?.getNodes() || [];
           console.log(`[App] Saving mental map with ${nodes.length} nodes`);
@@ -1326,25 +1368,70 @@ function App() {
           const now = Date.now();
           lastSpeechAtRef.current = now;
 
-          // ✅ أول fragment غير نهائي = user started speaking
+          // Start of user speaking
           if (!dt.finished && !userSpeechActiveRef.current) {
             userSpeechActiveRef.current = true;
             setIsUserSpeaking(true);
-
-            // 🔥 pre-cue مرة واحدة لكل utterance
+            bufferedUserTextRef.current = ''; // Reset on new speech
             preCue(dt.text);
-
-            // احتياطي: لو finished ماوصلتش لأي سبب، نعمل reset بعد 900ms صمت
-            if (speechResetTimerRef.current) clearTimeout(speechResetTimerRef.current);
-            speechResetTimerRef.current = setTimeout(() => {
-              if (Date.now() - lastSpeechAtRef.current > 850) resetUserSpeaking();
-            }, 900);
           }
 
-          // ✅ لما الكلام يخلص (final)
+          bufferedUserTextRef.current = `${bufferedUserTextRef.current} ${dt.text}`.trim();
+
+          if (speechResetTimerRef.current) clearTimeout(speechResetTimerRef.current);
+          speechResetTimerRef.current = setTimeout(() => {
+            if (Date.now() - lastSpeechAtRef.current > 850) resetUserSpeaking();
+          }, 900);
+
+          // Update transcript list
+          setTranscript((prev) => {
+            const next = [...prev];
+            let found = false;
+            for (let i = next.length - 1; i >= 0; i--) {
+              if (next[i].role === 'user' && !next[i].finished) {
+                next[i] = { ...next[i], text: bufferedUserTextRef.current, finished: !!dt.finished };
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+              next.push({ role: 'user', text: bufferedUserTextRef.current, time: timeStr, finished: !!dt.finished });
+            }
+            return next.slice(-6);
+          });
+
           if (dt.finished) {
             resetUserSpeaking();
           }
+        } else if (dt.type === 'output') {
+          setIsAgentSpeaking(true);
+          isAgentSpeakingRef.current = true;
+
+          const isNewTurn = bufferedTurnTextRef.current.trim() === '';
+          bufferedTurnTextRef.current = `${bufferedTurnTextRef.current} ${dt.text}`.trim();
+
+          setTranscript((prev) => {
+            const next = [...prev];
+            if (isNewTurn) {
+              const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+              next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
+            } else {
+              let found = false;
+              for (let i = next.length - 1; i >= 0; i--) {
+                if (next[i].role === 'agent' && !next[i].finished) {
+                  next[i] = { ...next[i], text: bufferedTurnTextRef.current };
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) {
+                const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+                next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
+              }
+            }
+            return next.slice(-6);
+          });
         }
         return;
       }
@@ -1531,13 +1618,34 @@ function App() {
         sessionContextRef.current = [...sessionContextRef.current, ...textParts].slice(-5);
         setIsAgentSpeaking(true);
         isAgentSpeakingRef.current = true;
-        // Update live transcript with latest agent text
-        setTranscript(prev => [
-          ...prev,
-          { role: 'agent', text: textParts.join(' '), time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) }
-        ].slice(-4));
 
-        bufferedTurnTextRef.current = `${bufferedTurnTextRef.current} ${textParts.join(' ')}`.trim();
+        const appendedText = textParts.join(' ');
+        const isNewTurn = bufferedTurnTextRef.current.trim() === '';
+        bufferedTurnTextRef.current = `${bufferedTurnTextRef.current} ${appendedText}`.trim();
+
+        // Update live transcript with latest agent text accumulation
+        setTranscript((prev) => {
+          const next = [...prev];
+          if (isNewTurn) {
+            const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+            next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
+          } else {
+            // Update the last agent bubble
+            let found = false;
+            for (let i = next.length - 1; i >= 0; i--) {
+              if (next[i].role === 'agent' && !next[i].finished) {
+                next[i] = { ...next[i], text: bufferedTurnTextRef.current };
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+              next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
+            }
+          }
+          return next.slice(-6);
+        });
         if (currentTurnModeRef.current === 'none' && ttsFallbackEnabledRef.current) {
           if (ttsDecisionTimeoutRef.current) {
             window.clearTimeout(ttsDecisionTimeoutRef.current);
@@ -1753,6 +1861,25 @@ function App() {
               <div className="section">
                 <video ref={videoRef} autoPlay playsInline muted style={{ display: 'none' }} />
 
+                <div className="timeline-overlay">
+                  {[
+                    { key: 'Overwhelmed', en: '1. Overwhelmed', ar: '١. التشتت' },
+                    { key: 'Focus', en: '2. Focus', ar: '٢. التركيز' },
+                    { key: 'Clarity', en: '3. Clarity', ar: '٣. الوضوح' },
+                  ].map((stage, idx, arr) => {
+                    const stageKey = stage.key;
+                    const isCompleted = arr.findIndex(s => s.key === journeyStage) > idx;
+                    const isActive = stageKey === journeyStage;
+                    const nodeClass = isActive ? 'active' : isCompleted ? 'completed' : '';
+                    return (
+                      <div key={stageKey} className={`timeline-node ${nodeClass}`}>
+                        <div className="node-dot"></div>
+                        <span className="node-label">{lang === 'ar' ? stage.ar : stage.en}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
                 {isAgentSpeaking && (
                   <div className="ai-state-bar">
                     <div className="wave">
@@ -1763,7 +1890,7 @@ function App() {
                 )}
 
                 <div className="visual-feedback">
-                  <Visualizer stream={micStreamRef.current} isConnected={isConnected} />
+                  <Visualizer stream={micStreamRef.current} isConnected={isConnected} lang={lang} />
                   {capturedImage && (
                     <div className="snapshot-preview">
                       <img src={capturedImage} alt="Pulse Snapshot" />
@@ -1806,7 +1933,7 @@ function App() {
             {/* Circle Control Panel */}
             {isConnected && (
               <div className="circle-controls">
-                <div className="circle-controls-row">
+                <div className="circle-controls-row legend-only">
                   {[
                     { id: 1, label: lang === 'ar' ? 'الوعي' : 'Awareness', color: '#FFD700' },
                     { id: 2, label: lang === 'ar' ? 'العلم' : 'Knowledge', color: '#00CED1' },
@@ -1814,15 +1941,11 @@ function App() {
                   ].map(c => (
                     <div key={c.id} className="circle-control-item">
                       <span className="circle-control-label" style={{ color: c.color }}>{c.label}</span>
-                      <div className="circle-control-btns">
-                        <button aria-label={`${lang === 'ar' ? 'صغّر' : 'Shrink'} ${c.label}`} onClick={() => handleCircleAction(c.id, 'shrink')} title={lang === 'ar' ? 'صغّر' : 'Shrink'}>−</button>
-                        <button aria-label={`${lang === 'ar' ? 'كبّر' : 'Grow'} ${c.label}`} onClick={() => handleCircleAction(c.id, 'grow')} title={lang === 'ar' ? 'كبّر' : 'Grow'}>+</button>
-                      </div>
                     </div>
                   ))}
                 </div>
-                {/* Text command input */}
-                <form className="command-input-form" onSubmit={(e) => {
+                {/* Text command input (hidden for demo) */}
+                <form className="command-input-form" style={{ display: 'none' }} onSubmit={(e) => {
                   e.preventDefault();
                   handleTextCommand(commandText);
                   setCommandText('');
@@ -1842,10 +1965,6 @@ function App() {
               </div>
             )}
 
-            {isConnected && !errorMessage && (
-              <p className={`hint ${lang === 'en' ? 'ltr' : ''}`}>{t.hint}</p>
-            )}
-
             {errorMessage && <p className="error-message">&#x26A0;&#xFE0F; {errorMessage}</p>}
 
             <footer className="footer-info" style={{ display: 'none' }}>
@@ -1863,7 +1982,7 @@ function App() {
           {transcript.map((entry, idx) => (
             <div key={idx} className={`transcript-entry transcript-${entry.role}`}>
               <span className="transcript-time">{entry.time}</span>
-              <span className="transcript-text">{entry.text.substring(0, 120)}{entry.text.length > 120 ? '...' : ''}</span>
+              <span className="transcript-text">{entry.text}</span>
             </div>
           ))}
         </div>

@@ -255,6 +255,17 @@ const tools = [
                     },
                     required: ["summary", "insights"]
                 }
+            },
+            {
+                name: "update_journey",
+                description: "Update the user's progress on the visual timeline overlay.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        stage: { type: "STRING", description: "The current mental stage: 'Overwhelmed', 'Focus', or 'Clarity'" }
+                    },
+                    required: ["stage"]
+                }
             }
         ]
     }
@@ -278,19 +289,21 @@ const systemInstructionStandard = `أنت صاحب مصري. اتكلم عامي
 update_node: id(1/2/3), radius(30-100), color(hex). استخدم بس id وradius وcolor. radius لازم يبقى نص رقمي من 30 ل100، وcolor لازم يبقى hex. نادِه بناءً على حالة المستخدم النفسية من غير ما تتكلم عنه أبداً.`;
 
 const systemInstructionDemo = `أنت صاحب مصري ذكي ومحفز. اتكلم عامية مصرية راقية وطبيعية.
-هدفنا في الديمو ده هو استعراض قدرتك على الربط بين الكلام (Voice) وتغيير البيئة (Visual Canvas) في نفس اللحظة.
+هدفنا استعراض قدرتك على الربط بين الكلام (Voice) وتغيير البيئة (Visual Canvas).
 
-قواعد الديمو (Judge-Friendly):
-- اتكلم بجمل كاملة ومريحة، مش لازم تلتزم بـ 5 كلمات بس، خليك طبيعي وبشرّي جداً.
-- مسموح تستخدم أسماء الدواير (Awareness / Science / Truth) أو (الوعي / العلم / الحقيقة) عشان توضح للمحكمين إنك فاهم "دوائر".
-- لما تحس بتغيير في حالة المستخدم، نادِ الأداة المناسبة (update_node أو highlight_node) **فوراً وقبل ما تبدأ كلامك**. الترتيب مهم: (تغيير البيئة -> ثم الكلام).
-- الصور بتخليك تعرف مزاجه، علّق على الصورة بذكاء.
-- التزم بالـ Interruption (Barge-in): لو حد قاطعك، اسمعله فوراً.
-- خلي ردودك قصيرة بس معبرة (Short & Punchy).
+قواعد الديمو (Judge-Friendly) - **نقطة واحدة فقط لكل رد**:
+- ممنوع تعطي أكتر من نصيحة واحدة أو تطلب طلبين في نفس الوقت. خليك عملي وخطوة بخطوة.
+- كل دور: تختار دائرة واحدة فقط للتركيز عليها، وتطلب فعل واحد بسيط جداً (مثال: ركز على العلم دلوقتي واكتب هدف واحد).
+- نادِ الأداة المناسبة (update_node أو highlight_node) **فوراً وقبل ما تبدأ كلامك**. الترتيب مهم: (تغيير البيئة -> ثم الكلام).
+- مسموح تستخدم أسماء الدواير (الوعي / العلم / الحقيقة) عشان توضح إنك فاهم النظام.
+- استخدم أداة update_journey عشان تسجل تطور حالة المستخدم: (Overwhelmed في البداية -> Focus لما يبدأ يركز -> Clarity لما يوصل لقرار أو هدوء).
+- التزم بالـ Interruption: لو حد قاطعك، اسمعله فوراً.
+- خلي ردودك قصيرة جداً (Punchy and Execution-oriented).
 
 [Internal Tools Rules]:
 - update_node: id(1/2/3), radius(30-100), color(hex).
-- ابهرنا بذكاء الربط بين المشاعر وحجم الدواير.`;
+- update_journey: stage('Overwhelmed', 'Focus', 'Clarity').`;
+
 
 const systemInstruction = {
     parts: [{
@@ -501,8 +514,9 @@ wss.on('connection', (ws, req) => {
     };
 
     const processClientContent = (clientContent) => {
-        logDebug('Client content turn received');
+        logInfo('Client content turn received:', JSON.stringify(clientContent).substring(0, 200));
         // Detect circle commands from text input (reliable fallback)
+
         const turns = clientContent.turns || clientContent.turn || [];
         const turnsArr = Array.isArray(turns) ? turns : [turns];
         for (const turn of turnsArr) {
@@ -691,8 +705,9 @@ ${recommendations || "N/A"}
                         }
                     },
                     responseModalities: ["AUDIO"],
-                    maxOutputTokens: 200,
+                    maxOutputTokens: 1000,
                     thinkingConfig: { thinkingBudget: 0 },
+
                     tools,
                     systemInstruction,
                     inputAudioTranscription: {},
@@ -758,7 +773,7 @@ ${recommendations || "N/A"}
                         if (toolCall) {
                             const functionCalls = toolCall.functionCalls || toolCall.function_calls || [];
                             const serverTools = ['get_expert_insight', 'generate_session_report'];
-                            const visualTools = ['update_node', 'highlight_node'];
+                            const visualTools = ['update_node', 'highlight_node', 'update_journey'];
                             const clientTools = functionCalls.filter(fc => !serverTools.includes(fc.name) && !visualTools.includes(fc.name));
                             const serverOnlyTools = functionCalls.filter(fc => serverTools.includes(fc.name));
                             const visualOnlyTools = functionCalls.filter(fc => visualTools.includes(fc.name));
@@ -811,17 +826,24 @@ ${recommendations || "N/A"}
                             }
                             return;
                         }
+                        // Check for model audio to log
+                        const modelTurn = sc?.modelTurn || sc?.model_turn;
+                        const parts = modelTurn?.parts || [];
+                        const audioParts = parts.filter(p => p.inlineData || p.inline_data);
+                        if (audioParts.length > 0) {
+                            logInfo(`[Audio] Received ${audioParts.length} audio chunk(s) from Gemini`);
+                        }
 
                         sendToClient(payload);
+
                     },
                     onerror: (error) => {
                         logError('Gemini Live session error:', error);
                     },
                     onclose: (event) => {
                         logInfo(`Gemini Live session closed. code=${event?.code ?? 'n/a'} reason=${String(event?.reason ?? '')}`);
-                        if (session === liveSession) {
-                            session = null;
-                        }
+                        session = null;
+
                         if (!clientClosed) {
                             void scheduleReconnect(`onclose:${event?.code ?? 'n/a'}`);
                         }

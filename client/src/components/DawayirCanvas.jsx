@@ -61,7 +61,7 @@ const drawParticles = (ctx, particles, canvasWidth, canvasHeight) => {
 };
 
 const updateNodesPhysics = (nodes, draggingNode, canvasWidth, canvasHeight, panelWidth) => {
-    const lerpSpeed = 0.06;
+    const lerpSpeed = 0.08;
     nodes.forEach(node => {
         if (Math.abs(node.radius - node.targetRadius) > 0.5) {
             node.radius = lerp(node.radius, node.targetRadius, lerpSpeed);
@@ -146,7 +146,7 @@ const drawNodes = (ctx, nodes) => {
 
 const DawayirCanvas = memo(forwardRef((props, ref) => {
     const PANEL_WIDTH = 380;
-    const TARGET_FPS = 12;
+    const TARGET_FPS = 24;
     const DEBUG_CANVAS = false;
     const canvasRef = useRef(null);
     const nodesRef = useRef([
@@ -161,7 +161,7 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
 
     useEffect(() => {
         const particles = [];
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < 30; i++) {
             particles.push({
                 x: Math.random() * window.innerWidth,
                 y: Math.random() * window.innerHeight,
