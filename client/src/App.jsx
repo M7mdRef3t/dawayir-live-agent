@@ -1,365 +1,49 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DawayirCanvas from './components/DawayirCanvas';
+import ConnectProgressCard from './components/ConnectProgressCard';
+import OnboardingModal from './components/OnboardingModal';
+import EndSessionConfirmModal from './components/EndSessionConfirmModal';
+import SettingsModal from './components/SettingsModal';
+import DashboardView from './components/DashboardView';
+import Visualizer from './components/Visualizer';
+import StatusBadge from './components/ui/StatusBadge';
 import './App.css';
+import logoCognitiveTrinity from './assets/dawayir-logo-cognitive-trinity.svg';
+import { STRINGS, NODE_LABELS, ONBOARDING_STEPS, CONNECT_PROGRESS } from './i18n/strings';
+import { detectCircleCommandClient } from './utils/detectCircleCommandClient';
+import {
+  INPUT_SAMPLE_RATE,
+  OUTPUT_SAMPLE_RATE,
+  MIC_WORKLET_NAME,
+  MAX_RECONNECT_ATTEMPTS,
+  RECONNECT_DELAY_MS,
+  MAX_RECONNECT_DELAY_MS,
+  TTS_FALLBACK_GRACE_MS,
+  MIC_DEFER_TIMEOUT_MS,
+} from './features/session/constants';
+import {
+  arrayBufferToBase64,
+  base64ToArrayBuffer,
+  pcm16ToFloat32,
+  float32ToPcm16Buffer,
+  downsampleFloat32,
+  tryParseJson,
+  parsePcmSampleRate,
+} from './features/session/audioUtils';
+import {
+  getInlineData,
+  getParts,
+  getToolCall,
+  isSetupCompleteMessage,
+  getServerErrorMessage,
+  isInterruptedMessage,
+  isAudioMimeType,
+  getTurnDataAudioBlobs,
+} from './features/session/protocol';
+import { useSessionHotkeys } from './hooks/useSessionHotkeys';
 
-const INPUT_SAMPLE_RATE = 16000;
-const OUTPUT_SAMPLE_RATE = 24000;
-const MIC_WORKLET_NAME = 'dawayir-mic-processor';
-const MAX_RECONNECT_ATTEMPTS = 12;
-const RECONNECT_DELAY_MS = 2000;
-const MAX_RECONNECT_DELAY_MS = 20000;
-const TTS_FALLBACK_GRACE_MS = 4500;
-const MIC_DEFER_TIMEOUT_MS = 5000;
-// Client-side VAD removed — Gemini's built-in VAD handles turn detection.
-
-const STRINGS = {
-  en: {
-    brandName: 'Dawayir',
-    brandSub: 'Your Living Mental Space',
-    statusActive: 'Session Active',
-    statusDisconnected: 'Disconnected',
-    captureBtn: '📸 Visual Pulse Check',
-    capture: '🎯 Capture',
-    cancel: '✕ Cancel',
-    initialState: 'Your Initial State',
-    retake: '🔄 Retake',
-    connectedMsg: '✨ Connected to Your Mental Space',
-    connecting: 'Connecting',
-    enterSpace: 'Enter Mental Space 🧠',
-    enterSpaceVision: 'Enter Mental Space (with Vision)',
-    agentSpeaking: 'Dawayir is speaking...',
-    updateVisual: '📸 Update Visual Context',
-    lookAtMe: '👁️ Look at me',
-    endSession: 'End Session',
-    hint: 'Speak freely and explore your mental space. ✨',
-    liveChat: '💬 Live Conversation',
-    memoryBank: 'Memory Bank',
-    dashboardBtn: '💾',
-  },
-  ar: {
-    brandName: 'دوائر',
-    brandSub: 'مساحتك الذهنية الحية',
-    statusActive: 'متصل',
-    statusDisconnected: 'غير متصل',
-    captureBtn: '📸 خليني أشوفك',
-    capture: '🎯 التقاط',
-    cancel: '✕ إغلاق',
-    initialState: 'حالتك المبدئية',
-    retake: '🔄 إعادة الالتقاط',
-    connectedMsg: '✨ متصل بمساحتك الذهنية',
-    connecting: 'جاري الاتصال',
-    enterSpace: 'يلا نبدأ 🧠',
-    enterSpaceVision: 'يلا نبدأ (مع الرؤية) 🧠',
-    agentSpeaking: 'بيتكلم...',
-    updateVisual: '📸 شوفني تاني',
-    lookAtMe: '👁️ شوفني',
-    endSession: 'إنهاء الجلسة',
-    hint: 'اتكلم براحتك ✨',
-    liveChat: '💬 الدردشة',
-    memoryBank: 'بنك الذاكرة',
-    dashboardBtn: '💾',
-  }
-};
-
-const NODE_LABELS = {
-  en: { 1: 'Awareness', 2: 'Science', 3: 'Truth' },
-  ar: { 1: 'الوعي', 2: 'العلم', 3: 'الحقيقة' }
-};
-
-const arrayBufferToBase64 = (arrayBuffer) => {
-  const bytes = new Uint8Array(arrayBuffer);
-  let binary = '';
-  const chunkSize = 0x8000;
-
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-
-  return window.btoa(binary);
-};
-
-const base64ToArrayBuffer = (base64) => {
-  const binary = window.atob(base64);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  return bytes.buffer;
-};
-
-const pcm16ToFloat32 = (arrayBuffer) => {
-  const dataView = new DataView(arrayBuffer);
-  const float32 = new Float32Array(arrayBuffer.byteLength / 2);
-
-  for (let i = 0; i < float32.length; i += 1) {
-    const int16 = dataView.getInt16(i * 2, true);
-    float32[i] = int16 / 32768;
-  }
-
-  return float32;
-};
-
-const float32ToPcm16Buffer = (float32Samples) => {
-  const int16 = new Int16Array(float32Samples.length);
-  for (let i = 0; i < float32Samples.length; i += 1) {
-    const sample = Math.max(-1, Math.min(1, float32Samples[i]));
-    int16[i] = sample < 0 ? sample * 32768 : sample * 32767;
-  }
-  return int16.buffer;
-};
-
-const downsampleFloat32 = (input, inputRate, outputRate = INPUT_SAMPLE_RATE) => {
-  if (!input || input.length === 0) return new Float32Array(0);
-  if (!Number.isFinite(inputRate) || inputRate <= 0) return input;
-  if (inputRate === outputRate) return input;
-  if (inputRate < outputRate) return input;
-
-  const ratio = inputRate / outputRate;
-  const outputLength = Math.round(input.length / ratio);
-  const output = new Float32Array(outputLength);
-
-  let outputIndex = 0;
-  let inputIndex = 0;
-  while (outputIndex < outputLength) {
-    const nextInputIndex = Math.round((outputIndex + 1) * ratio);
-    let sum = 0;
-    let count = 0;
-
-    for (let i = inputIndex; i < nextInputIndex && i < input.length; i += 1) {
-      sum += input[i];
-      count += 1;
-    }
-
-    output[outputIndex] = count > 0 ? sum / count : 0;
-    outputIndex += 1;
-    inputIndex = nextInputIndex;
-  }
-
-  return output;
-};
-
-const tryParseJson = (text) => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-};
-
-// ---- Client-side circle command detection ----
-const CIRCLE_IDS_CLIENT = {
-  'وعي': 1, 'الوعي': 1, 'awareness': 1,
-  'علم': 2, 'العلم': 2, 'knowledge': 2,
-  'حقيقة': 3, 'الحقيقة': 3, 'حقيقه': 3, 'الحقيقه': 3, 'truth': 3,
-};
-const CIRCLE_ORDINALS_CLIENT = {
-  'اولى': 1, 'الاولى': 1, 'أولى': 1, 'الأولى': 1, 'اول': 1, 'أول': 1,
-  'تانية': 2, 'التانية': 2, 'تاني': 2, 'ثانية': 2, 'الثانية': 2,
-  'تالتة': 3, 'التالتة': 3, 'تالت': 3, 'ثالثة': 3, 'الثالثة': 3,
-};
-function detectCircleCommandClient(text) {
-  if (!text || typeof text !== 'string') return null;
-  const t = text.trim();
-  let action = null;
-  if (/صغ/i.test(t)) action = 'shrink';
-  else if (/كب/i.test(t)) action = 'grow';
-  else if (/غي/i.test(t) || /change/i.test(t) || /لون/i.test(t)) action = 'change';
-  if (!action) return null;
-  let circleId = null;
-  for (const [name, id] of Object.entries(CIRCLE_IDS_CLIENT)) {
-    if (t.includes(name)) { circleId = id; break; }
-  }
-  if (!circleId) {
-    for (const [ord, id] of Object.entries(CIRCLE_ORDINALS_CLIENT)) {
-      if (t.includes(ord)) { circleId = id; break; }
-    }
-  }
-  if (!circleId && (/دا[يئ]ر/i.test(t) || /circle/i.test(t))) circleId = 1;
-  if (!circleId) return null;
-  const radius = action === 'shrink' ? 35 : action === 'grow' ? 90 : 60;
-  const colors = { 1: '#FFD700', 2: '#00CED1', 3: '#4169E1' };
-  return { id: circleId, radius, color: colors[circleId] || '#FFD700', action };
-}
-
-const getInlineData = (part) => part?.inlineData ?? part?.inline_data;
-const getServerContent = (message) => message?.serverContent ?? message?.server_content;
-const getModelTurn = (message) =>
-  getServerContent(message)?.modelTurn ?? getServerContent(message)?.model_turn;
-const getParts = (message) => getModelTurn(message)?.parts ?? [];
-const getToolCall = (message) => message?.toolCall ?? message?.tool_call;
-const isSetupCompleteMessage = (message) =>
-  Boolean(message?.setupComplete || message?.setup_complete);
-const getServerErrorMessage = (message) =>
-  message?.serverError?.message ?? message?.server_error?.message;
-const isInterruptedMessage = (message) =>
-  Boolean(getServerContent(message)?.interrupted ?? getServerContent(message)?.is_interrupted);
-const isAudioMimeType = (mimeType = '') => mimeType.startsWith('audio/pcm');
-const parsePcmSampleRate = (mimeType = '') => {
-  const match = /rate=(\d+)/i.exec(mimeType);
-  if (!match) return OUTPUT_SAMPLE_RATE;
-  const parsed = Number(match[1]);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : OUTPUT_SAMPLE_RATE;
-};
-const normalizeBlob = (blob) => {
-  const data = blob?.data;
-  const mimeType = blob?.mimeType ?? blob?.mime_type;
-  if (typeof data !== 'string') return null;
-  return {
-    data,
-    mimeType: typeof mimeType === 'string' ? mimeType : 'audio/pcm',
-  };
-};
-const getTurnDataAudioBlobs = (message) => {
-  const turnData = message?.turn?.data;
-  if (!turnData) return [];
-
-  const candidates = Array.isArray(turnData) ? turnData : [turnData];
-  return candidates
-    .map((candidate) => (typeof candidate === 'string'
-      ? { data: candidate, mimeType: 'audio/pcm' }
-      : normalizeBlob(candidate)))
-    .filter((blob) => blob && isAudioMimeType(blob.mimeType));
-};
-
-const Visualizer = ({ stream, isConnected, lang }) => {
-  const canvasRef = useRef(null);
-  const [stressLevel, setStressLevel] = useState('calm');
-
-  useEffect(() => {
-    if (!stream || !isConnected) return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioContext.createMediaStreamSource(stream);
-    const analyser = audioContext.createAnalyser();
-
-    analyser.fftSize = 256;
-    source.connect(analyser);
-
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    const floatArray = new Float32Array(analyser.fftSize);
-
-    let animationFrameId;
-    let stressTimer;
-
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      analyser.getByteFrequencyData(dataArray);
-
-      // RMS calculation for bio-feedback stress map
-      analyser.getFloatTimeDomainData(floatArray);
-      let sumSquares = 0.0;
-      for (let i = 0; i < floatArray.length; i++) {
-        sumSquares += floatArray[i] * floatArray[i];
-      }
-      const rms = Math.sqrt(sumSquares / floatArray.length);
-
-      if (rms > 0.15) {
-        setStressLevel('stressed');
-        if (stressTimer) clearTimeout(stressTimer);
-        stressTimer = setTimeout(() => setStressLevel('calm'), 2000);
-      }
-
-      const barWidth = (canvas.width / bufferLength) * 2.5;
-      let barHeight;
-      let x = 0;
-
-      for (let i = 0; i < bufferLength; i++) {
-        barHeight = (dataArray[i] / 255) * canvas.height;
-        ctx.fillStyle = `rgba(0, 245, 255, ${dataArray[i] / 255})`;
-        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-        x += barWidth + 1;
-      }
-
-      animationFrameId = requestAnimationFrame(draw);
-    };
-
-    draw();
-
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-      if (stressTimer) clearTimeout(stressTimer);
-      analyser.disconnect();
-      source.disconnect();
-      audioContext.close();
-    };
-  }, [stream, isConnected]);
-
-  return (
-    <div className="visualizer-container" style={{ position: 'relative' }}>
-      <div className={`bio-badge bio-${stressLevel}`}>
-        <span className="bio-dot"></span>
-        {stressLevel === 'stressed' ? (lang === 'ar' ? 'توتر / ضغط' : 'Stress Detected') : (lang === 'ar' ? 'مسترخي' : 'Calm State')}
-      </div>
-      <canvas ref={canvasRef} className="visualizer" width="300" height="80" />
-    </div>
-  );
-}; const Dashboard = ({ onBack }) => {
-  const [reports, setReports] = useState([]);
-  const [selectedReport, setSelectedReport] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch('/api/reports')
-      .then(res => res.json())
-      .then(data => {
-        setReports(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('Error fetching reports:', err);
-        setLoading(false);
-      });
-  }, []);
-
-  const viewReport = (filename) => {
-    fetch(`/api/reports/${filename}`)
-      .then(res => res.text())
-      .then(content => {
-        setSelectedReport({ filename, content });
-      });
-  };
-
-  return (
-    <div className="dashboard-view">
-      <header className="dashboard-header">
-        <button className="back-btn" onClick={selectedReport ? () => setSelectedReport(null) : onBack}>
-          {selectedReport ? '← Back to List' : '← Back to Live'}
-        </button>
-        <h2>{selectedReport ? 'Session Insight' : 'Memory Bank'}</h2>
-      </header>
-
-      {loading ? (
-        <div className="loader">Analyzing memories...</div>
-      ) : selectedReport ? (
-        <div className="report-content">
-          <pre>{selectedReport.content}</pre>
-        </div>
-      ) : (
-        <div className="reports-list">
-          {reports.length === 0 ? (
-            <p className="no-reports">No sessions recorded yet.</p>
-          ) : (
-            reports.map(report => (
-              <div key={report.name} className="report-card" onClick={() => viewReport(report.name)}>
-                <div className="report-icon">📄</div>
-                <div className="report-info">
-                  <span className="report-name">{report.name.replace('.md', '')}</span>
-                  <span className="report-date">{new Date(report.updated).toLocaleString()}</span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
+// moved to features/session/constants
+// Client-side VAD removed â€” Gemini's built-in VAD handles turn detection.
 
 function App() {
   const [lang, setLang] = useState('ar');
@@ -368,18 +52,30 @@ function App() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [lastEvent, setLastEvent] = useState('none');
-  const [toolCallsCount, setToolCallsCount] = useState(0);
+  const [_lastEvent, setLastEvent] = useState('none');
+  const [_toolCallsCount, setToolCallsCount] = useState(0);
   const [_reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [cognitiveMetrics, setCognitiveMetrics] = useState({
+    equilibriumScore: 0.6,
+    overloadIndex: 0.0,
+    clarityDelta: 0.0,
+  });
   const [isMicActive, setIsMicActive] = useState(false);
-  const [appView, setAppView] = useState('live'); // 'live' or 'dashboard'
+  const [appView, setAppView] = useState('welcome'); // 'welcome', 'setup', 'live', 'complete', 'dashboard', 'settings'
   const [transcript, setTranscript] = useState([]); // Live transcript entries
+  const [isTranscriptVisible, setIsTranscriptVisible] = useState(true);
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => window.localStorage.getItem('dawayir-onboarding-seen') !== 'true');
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isBreathingRoom, setIsBreathingRoom] = useState(true);
+  const [connectStage, setConnectStage] = useState(0);
   const isAgentSpeakingRef = useRef(false);
   const [commandText, setCommandText] = useState('');
 
   // --- PRE-CUE SPEECH STATE ---
-  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  const [_isUserSpeaking, setIsUserSpeaking] = useState(false);
   const userSpeechActiveRef = useRef(false);
   const lastSpeechAtRef = useRef(0);
   const speechResetTimerRef = useRef(null);
@@ -396,7 +92,7 @@ function App() {
   const preCue = useCallback((partialText) => {
     // Pulse all nodes to indicate the system is listening/reacting
     canvasRef.current?.pulseAll?.();
-    console.log("%c🟣 PRE-CUE fired:", "color: #ff00ff; font-weight: bold", partialText);
+    console.log("%cðŸŸ£ PRE-CUE fired:", "color: #ff00ff; font-weight: bold", partialText);
   }, []);
 
   // Update canvas node labels when language changes
@@ -409,10 +105,26 @@ function App() {
     }
   }, [lang]);
 
+  useEffect(() => {
+    document.documentElement.lang = lang === 'ar' ? 'ar' : 'en';
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  }, [lang]);
+
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [journeyStage, setJourneyStage] = useState('Overwhelmed');
+  const onboardingSteps = ONBOARDING_STEPS[lang];
+  const connectSteps = CONNECT_PROGRESS[lang];
 
+  useEffect(() => {
+    if (isConnected && appView === 'setup') {
+      setAppView('live');
+      setIsBreathingRoom(true);
+    } else if (!isConnected && !isStarting && appView === 'live') {
+      // Transition to session complete when disconnected from a live session
+      setAppView('complete');
+    }
+  }, [isConnected, isStarting, appView]);
 
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
@@ -450,7 +162,7 @@ function App() {
     isMicActiveRef.current = isMicActive;
   }, [isMicActive]);
 
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
     console.log("[Camera] Starting camera...");
     try {
       // Check if getUserMedia is supported
@@ -490,13 +202,13 @@ function App() {
         }
 
         setIsCameraActive(true);
-        console.log("[Camera] ✅ Camera activated successfully");
+        console.log("[Camera] âœ… Camera activated successfully");
       } else {
         console.error("[Camera] videoRef.current is null!");
         setErrorMessage("Video element not ready. Please try again.");
       }
     } catch (err) {
-      console.error("[Camera] ❌ Error:", err);
+      console.error("[Camera] âŒ Error:", err);
       console.error("[Camera] Error name:", err.name);
       console.error("[Camera] Error message:", err.message);
 
@@ -510,18 +222,18 @@ function App() {
         setErrorMessage(`Camera error: ${err.message}`);
       }
     }
-  };
+  }, []);
 
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
     if (videoRef.current && videoRef.current.srcObject) {
       const tracks = videoRef.current.srcObject.getTracks();
       tracks.forEach(track => track.stop());
       videoRef.current.srcObject = null;
     }
     setIsCameraActive(false);
-  };
+  }, []);
 
-  const captureSnapshot = () => {
+  const captureSnapshot = useCallback(() => {
     if (!videoRef.current) {
       console.error("[Camera] Video ref not available");
       return null;
@@ -566,7 +278,7 @@ function App() {
     stopCamera();
     console.log("[Camera] Snapshot captured successfully");
     return dataUrl.split(',')[1]; // Base64
-  };
+  }, [stopCamera]);
 
   const speakerContextRef = useRef(null);
   const activeSourcesRef = useRef(new Set());
@@ -604,6 +316,24 @@ function App() {
     if (normalized.includes('error')) return 'error';
     return 'disconnected';
   }, [status]);
+
+  const dismissOnboarding = useCallback(() => {
+    window.localStorage.setItem('dawayir-onboarding-seen', 'true');
+    setShowOnboarding(false);
+    setOnboardingStep(0);
+  }, []);
+
+  const advanceOnboarding = useCallback(() => {
+    setOnboardingStep((current) => {
+      if (current >= onboardingSteps.length - 1) {
+        window.localStorage.setItem('dawayir-onboarding-seen', 'true');
+        setShowOnboarding(false);
+        return current;
+      }
+
+      return current + 1;
+    });
+  }, [onboardingSteps.length]);
 
   const getAudioContextCtor = () => window.AudioContext || window.webkitAudioContext;
 
@@ -768,7 +498,7 @@ function App() {
   }, []);
 
   // AudioWorklet-based streaming PCM player.
-  // The worklet runs on the audio thread — completely immune to main thread jank.
+  // The worklet runs on the audio thread â€” completely immune to main thread jank.
   const ensurePcmWorklet = useCallback(async () => {
     if (pcmWorkletRef.current && workletReadyRef.current) return pcmWorkletRef.current;
     const audioContext = await ensureSpeakerContext();
@@ -924,7 +654,7 @@ function App() {
       return;
     }
 
-    // Send all audio continuously to Gemini — let Gemini's built-in VAD
+    // Send all audio continuously to Gemini â€” let Gemini's built-in VAD
     // handle turn detection. No client-side gating or audioStreamEnd.
     socket.send(
       JSON.stringify({
@@ -1045,10 +775,10 @@ function App() {
 
       try {
         if (call.name === 'update_node') {
-          // Smart ID resolution — handle strings like "circle", "awareness", etc.
+          // Smart ID resolution â€” handle strings like "circle", "awareness", etc.
           const NAME_TO_ID = {
             awareness: 1, science: 2, truth: 3, knowledge: 2, circle: 1,
-            'وعي': 1, 'علم': 2, 'حقيقة': 3, 'الوعي': 1, 'العلم': 2, 'الحقيقة': 3,
+            'ÙˆØ¹ÙŠ': 1, 'Ø¹Ù„Ù…': 2, 'Ø­Ù‚ÙŠÙ‚Ø©': 3, 'Ø§Ù„ÙˆØ¹ÙŠ': 1, 'Ø§Ù„Ø¹Ù„Ù…': 2, 'Ø§Ù„Ø­Ù‚ÙŠÙ‚Ø©': 3,
             '1': 1, '2': 2, '3': 3,
           };
           const rawId = args.id ?? args.node_id ?? args.nodeId ?? 1;
@@ -1210,7 +940,7 @@ function App() {
             role: "user",
             parts: [{
               text: lang === "ar"
-                ? "شوفني كده. اقرأ حالتي النفسية من الصورة وغيّر بهدوء في صمت. لو هتستخدم update_node استخدم id وradius وcolor بس."
+                ? "Ø´ÙˆÙÙ†ÙŠ ÙƒØ¯Ù‡. Ø§Ù‚Ø±Ø£ Ø­Ø§Ù„ØªÙŠ Ø§Ù„Ù†ÙØ³ÙŠØ© Ù…Ù† Ø§Ù„ØµÙˆØ±Ø© ÙˆØºÙŠÙ‘Ø± Ø¨Ù‡Ø¯ÙˆØ¡ ÙÙŠ ØµÙ…Øª. Ù„Ùˆ Ù‡ØªØ³ØªØ®Ø¯Ù… update_node Ø§Ø³ØªØ®Ø¯Ù… id Ùˆradius Ùˆcolor Ø¨Ø³."
                 : "Look at me. Read my emotional state from the photo and update the circles silently. If you use update_node, use only id, radius, and color."
             }]
           }],
@@ -1224,9 +954,9 @@ function App() {
     }
   }, [captureSnapshot, lang, startCamera, stopCamera]);
 
-  const handleCircleAction = useCallback((circleId, action) => {
+  const _handleCircleAction = useCallback((circleId, action) => {
     const radius = action === 'shrink' ? 35 : action === 'grow' ? 90 : 60;
-    const colors = { 1: '#FFD700', 2: '#00CED1', 3: '#4169E1' };
+    const colors = { 1: '#00F5FF', 2: '#00FF41', 3: '#FF00E5' };
     console.log(`[App] Circle button: ${action} circle ${circleId}`);
     canvasRef.current?.updateNode(circleId, { radius, color: colors[circleId] });
     canvasRef.current?.pulseNode(circleId);
@@ -1257,6 +987,7 @@ function App() {
     resetAgentTurnState();
     setIsStarting(false);
     setIsConnected(false);
+    setConnectStage(0);
 
     await stopMicrophone();
     stopPlayback();
@@ -1289,6 +1020,7 @@ function App() {
     setErrorMessage('');
     setIsStarting(true);
     setStatus('Connecting...');
+    setConnectStage(0);
     setLastEvent('connecting');
 
     try {
@@ -1321,6 +1053,7 @@ function App() {
       reconnectAttemptRef.current = 0;
       setReconnectAttempt(0);
       setIsConnected(true);
+      setConnectStage(1);
       setIsStarting(false);
       setStatus('Connected (waiting setupComplete)');
       setLastEvent('ws_open');
@@ -1332,6 +1065,10 @@ function App() {
 
       if (typeof event.data === 'string') {
         message = tryParseJson(event.data);
+      }
+
+      if (message?.cognitiveMetrics) {
+        setCognitiveMetrics(message.cognitiveMetrics);
       }
 
       if (event.data instanceof ArrayBuffer) {
@@ -1357,11 +1094,14 @@ function App() {
 
       // Diagnostic: log every parsed server message type
       const msgKeys = Object.keys(message).join(',');
-      console.log(`[WS] Message received — keys: [${msgKeys}]`);
+      console.log(`[WS] Message received â€” keys: [${msgKeys}]`);
 
       // Debug: log transcription data forwarded from server
       if (message.debugTranscription) {
         const dt = message.debugTranscription;
+        if (dt.metrics) {
+          setCognitiveMetrics(dt.metrics);
+        }
         console.log(`%c[Transcription:${dt.type}] "${dt.text}" (finished=${dt.finished})`, 'color: #00ff00; font-weight: bold');
 
         if (dt.type === 'input') {
@@ -1442,7 +1182,7 @@ function App() {
           restoreAfterGeminiReconnectRef.current = true;
         }
         lastModelAudioAtRef.current = Date.now();
-        // DON'T stop playback or reset state — let buffered audio finish naturally.
+        // DON'T stop playback or reset state â€” let buffered audio finish naturally.
         // Cutting audio mid-speech causes jarring stuttering.
         const attempt = Number(serverStatus.attempt || 0);
         const maxAttempts = Number(serverStatus.maxAttempts || MAX_RECONNECT_ATTEMPTS);
@@ -1452,7 +1192,7 @@ function App() {
         return;
       }
       if (serverStatus?.state === 'gemini_recovered') {
-        // Don't reset — audio may still be playing from before reconnect
+        // Don't reset â€” audio may still be playing from before reconnect
         setStatus('Gemini reconnected. Restoring session...');
         setLastEvent('gemini_recovered');
         return;
@@ -1472,6 +1212,7 @@ function App() {
       if (isSetupCompleteMessage(message)) {
         setupCompleteRef.current = true;
         setStatus('Connected to Gemini Live');
+        setConnectStage(2);
         setLastEvent('setup_complete');
         lastModelAudioAtRef.current = Date.now();
         const isGeminiReconnect = restoreAfterGeminiReconnectRef.current;
@@ -1510,8 +1251,8 @@ function App() {
 
               const bootstrapText = lang === 'ar'
                 ? (capturedImage
-                  ? 'دي صورتي دلوقتي. اقرأ حالتي النفسية من الصورة ونادي update_node عشان تغيّر radius وcolor لكل دايرة على حسب قرايتك. استخدم id وradius وcolor بس.'
-                  : 'يا صاحبي، ازيك؟')
+                  ? 'Ø¯ÙŠ ØµÙˆØ±ØªÙŠ Ø¯Ù„ÙˆÙ‚ØªÙŠ. Ø§Ù‚Ø±Ø£ Ø­Ø§Ù„ØªÙŠ Ø§Ù„Ù†ÙØ³ÙŠØ© Ù…Ù† Ø§Ù„ØµÙˆØ±Ø© ÙˆÙ†Ø§Ø¯ÙŠ update_node Ø¹Ø´Ø§Ù† ØªØºÙŠÙ‘Ø± radius Ùˆcolor Ù„ÙƒÙ„ Ø¯Ø§ÙŠØ±Ø© Ø¹Ù„Ù‰ Ø­Ø³Ø¨ Ù‚Ø±Ø§ÙŠØªÙƒ. Ø§Ø³ØªØ®Ø¯Ù… id Ùˆradius Ùˆcolor Ø¨Ø³.'
+                  : 'ÙŠØ§ ØµØ§Ø­Ø¨ÙŠØŒ Ø§Ø²ÙŠÙƒØŸ')
                 : (capturedImage
                   ? 'This is my photo. Read my emotional state from the image and call update_node to change radius and color for each circle based on your reading. Use only id, radius, and color.'
                   : 'Hey, how are you?');
@@ -1527,14 +1268,14 @@ function App() {
                 return;
               }
               lastRestorePromptAtRef.current = now;
-              // Send a minimal, invisible context restore — no "reconnection" language.
+              // Send a minimal, invisible context restore â€” no "reconnection" language.
               // The model should just continue naturally without acknowledging the gap.
               const lastConv = sessionContextRef.current.length > 0
                 ? sessionContextRef.current.slice(-3).join(' ... ')
                 : '';
               const promptText = lastConv
-                ? `(كمّل من هنا بالظبط: "${lastConv}")`
-                : '(كمّل الحوار.)';
+                ? `(ÙƒÙ…Ù‘Ù„ Ù…Ù† Ù‡Ù†Ø§ Ø¨Ø§Ù„Ø¸Ø¨Ø·: "${lastConv}")`
+                : '(ÙƒÙ…Ù‘Ù„ Ø§Ù„Ø­ÙˆØ§Ø±.)';
               wsRef.current.send(JSON.stringify({
                 clientContent: { turns: [{ role: 'user', parts: [{ text: promptText }] }], turnComplete: true }
               }));
@@ -1554,6 +1295,7 @@ function App() {
             deferMicStartUntilFirstAgentReplyRef.current = false;
             try {
               await startMicrophone();
+              setConnectStage(3);
               setLastEvent('mic_autostart_timeout');
             } catch (error) {
               setStatus('Error');
@@ -1591,7 +1333,7 @@ function App() {
         lastAgentContentAtRef.current = now;
       }
       // Mic start is handled by the MIC_DEFER_TIMEOUT_MS timeout set in setupComplete.
-      // Do NOT start mic here during first response — getUserMedia blocks the main thread
+      // Do NOT start mic here during first response â€” getUserMedia blocks the main thread
       // for 100-500ms which causes audio stuttering on the first few words.
 
       const audioParts = Array.isArray(parts)
@@ -1658,7 +1400,7 @@ function App() {
             ttsDecisionTimeoutRef.current = null;
           }, 900);
         } else if (currentTurnModeRef.current === 'none' && !ttsFallbackEnabledRef.current) {
-          // TTS disabled and no audio yet — release mic after a short wait
+          // TTS disabled and no audio yet â€” release mic after a short wait
           // so conversation doesn't get stuck on text-only responses.
           if (ttsDecisionTimeoutRef.current) {
             window.clearTimeout(ttsDecisionTimeoutRef.current);
@@ -1762,240 +1504,414 @@ function App() {
     startMicrophone,
     stopMicrophone,
     stopPlayback,
+    preCue,
+    resetUserSpeaking,
   ]);
 
-  useEffect(() => {
-    return () => {
-      disconnect();
-    };
-  }, [disconnect]);
+  useSessionHotkeys({
+    appView,
+    isConnected,
+    showEndSessionConfirm,
+    showSettings,
+    showOnboarding,
+    setShowEndSessionConfirm,
+    setShowSettings,
+    dismissOnboarding,
+    setIsTranscriptVisible,
+    disconnect,
+  });
 
   return (
-    <div className="App">
-      <div className="overlay">
-        {appView === 'dashboard' ? (
-          <Dashboard onBack={() => setAppView('live')} />
-        ) : (
-          <>
-            {/* Brand Header */}
-            <div className="brand-header">
-              <div className="brand-logo-row">
-                <div>
-                  <div className="brand-name">{t.brandName}</div>
-                  <div className="brand-arabic">{t.brandSub}</div>
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button aria-label={lang === 'en' ? 'Switch to Arabic' : 'Switch to English'} className="icon-btn lang-toggle" onClick={() => setLang(l => l === 'en' ? 'ar' : 'en')} title="Toggle Language">
-                    {lang === 'en' ? 'AR' : 'EN'}
-                  </button>
-                  {!isConnected && !isStarting && (
-                    <button aria-label={t.memoryBank} className="icon-btn" onClick={() => setAppView('dashboard')} title={t.memoryBank}>
-                      {t.dashboardBtn}
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className={`status-badge ${statusClass}`}>
-                <span className="dot"></span>
-                {isConnected ? t.statusActive : status === 'Disconnected' ? t.statusDisconnected : status}
-              </div>
-            </div>
+    <div className="App" role="application" aria-label="Dawayir live session application">
+      <a className="skip-link" href="#main-canvas-content">
+        {lang === 'ar' ? 'ØªØ®Ø·ÙŠ Ø¥Ù„Ù‰ Ø§Ù„Ù…Ø­ØªÙˆÙ‰ Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ' : 'Skip to main content'}
+      </a>
 
-            {/* Main Controls */}
-            <div className="section">
-              {!isConnected && !isStarting && toolCallsCount > 0 && (
-                <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-                  <button className="primary-btn" onClick={() => setAppView('dashboard')} style={{ background: 'linear-gradient(135deg, #00F5FF, #4169E1)', boxShadow: '0 4px 15px rgba(0, 245, 255, 0.3)' }}>
-                    {t.dashboardBtn}
-                  </button>
-                </div>
-              )}
-              {!isConnected && !isStarting && (
-                <div className="camera-setup">
-                  <video ref={videoRef} autoPlay playsInline muted style={{ display: 'none' }} />
-
-                  {!isCameraActive && !capturedImage ? (
-                    <button className="primary-btn" onClick={startCamera}>
-                      {t.captureBtn}
-                    </button>
-                  ) : isCameraActive ? (
-                    <div className="video-capture-flow">
-                      <div className="video-container">
-                        <video autoPlay playsInline muted
-                          ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
-                          style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      </div>
-                      <div className="camera-actions-row">
-                        <button className="capture-btn" onClick={captureSnapshot}>{t.capture}</button>
-                        <button className="cancel-btn" onClick={stopCamera}>{t.cancel}</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="captured-preview-container">
-                      <div className="preview-heading">{t.initialState}</div>
-                      <img src={capturedImage} className="pulse-preview-large" alt="Captured" />
-                      <button className="retake-btn" onClick={() => { setCapturedImage(null); setTimeout(() => setIsCameraActive(true), 50); setTimeout(startCamera, 100); }}>
-                        {t.retake}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <button
-                className={`primary-btn ${isConnected ? 'secure-link' : ''}`}
-                onClick={connect}
-                disabled={isConnected || isStarting}
-              >
-                {isConnected ? (
-                  t.connectedMsg
-                ) : isStarting ? (
-                  <div className="loading-container">
-                    <span className="loading-text">{t.connecting}</span>
-                    <div className="spinner"><div className="spinner-ring"></div></div>
-                  </div>
-                ) : (
-                  capturedImage
-                    ? t.enterSpaceVision
-                    : t.enterSpace
-                )}
-              </button>
-            </div>
-
-            {/* Connected Activity */}
-            {isConnected && (
-              <div className="section">
-                <video ref={videoRef} autoPlay playsInline muted style={{ display: 'none' }} />
-
-                <div className="timeline-overlay">
-                  {[
-                    { key: 'Overwhelmed', en: '1. Overwhelmed', ar: '١. التشتت' },
-                    { key: 'Focus', en: '2. Focus', ar: '٢. التركيز' },
-                    { key: 'Clarity', en: '3. Clarity', ar: '٣. الوضوح' },
-                  ].map((stage, idx, arr) => {
-                    const stageKey = stage.key;
-                    const isCompleted = arr.findIndex(s => s.key === journeyStage) > idx;
-                    const isActive = stageKey === journeyStage;
-                    const nodeClass = isActive ? 'active' : isCompleted ? 'completed' : '';
-                    return (
-                      <div key={stageKey} className={`timeline-node ${nodeClass}`}>
-                        <div className="node-dot"></div>
-                        <span className="node-label">{lang === 'ar' ? stage.ar : stage.en}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {isAgentSpeaking && (
-                  <div className="ai-state-bar">
-                    <div className="wave">
-                      <span></span><span></span><span></span><span></span><span></span>
-                    </div>
-                    {t.agentSpeaking}
-                  </div>
-                )}
-
-                <div className="visual-feedback">
-                  <Visualizer stream={micStreamRef.current} isConnected={isConnected} lang={lang} />
-                  {capturedImage && (
-                    <div className="snapshot-preview">
-                      <img src={capturedImage} alt="Pulse Snapshot" />
-                      <span>{t.initialState}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="connected-actions">
-                  {!isCameraActive ? (
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <button className="retake-live-btn" onClick={startCamera} style={{ flex: 1 }}>
-                        {t.updateVisual}
-                      </button>
-                      <button className="retake-live-btn" onClick={handleLookAtMe} style={{ flex: 1, background: "rgba(255, 209, 102, 0.15)", color: "#FFD700", borderColor: "rgba(255, 209, 102, 0.4)" }}>
-                        {t.lookAtMe}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="live-camera-mini">
-                      <div className="video-container-mini">
-                        <video autoPlay playsInline muted
-                          ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        />
-                      </div>
-                      <div className="mini-camera-actions">
-                        <button className="mini-capture-btn" onClick={captureSnapshot}>{t.capture}</button>
-                        <button className="mini-cancel-btn" onClick={stopCamera}>{t.cancel}</button>
-                      </div>
-                    </div>
-                  )}
-                  <button className="secondary disconnect-btn" onClick={disconnect}>
-                    {t.endSession}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Circle Control Panel */}
-            {isConnected && (
-              <div className="circle-controls">
-                <div className="circle-controls-row legend-only">
-                  {[
-                    { id: 1, label: lang === 'ar' ? 'الوعي' : 'Awareness', color: '#FFD700' },
-                    { id: 2, label: lang === 'ar' ? 'العلم' : 'Knowledge', color: '#00CED1' },
-                    { id: 3, label: lang === 'ar' ? 'الحقيقة' : 'Truth', color: '#4169E1' },
-                  ].map(c => (
-                    <div key={c.id} className="circle-control-item">
-                      <span className="circle-control-label" style={{ color: c.color }}>{c.label}</span>
-                    </div>
-                  ))}
-                </div>
-                {/* Text command input (hidden for demo) */}
-                <form className="command-input-form" style={{ display: 'none' }} onSubmit={(e) => {
-                  e.preventDefault();
-                  handleTextCommand(commandText);
-                  setCommandText('');
-                }}>
-                  <input
-                    type="text"
-                    className="command-input"
-                    value={commandText}
-                    onChange={(e) => setCommandText(e.target.value)}
-                    placeholder={lang === 'ar' ? 'اكتب أمر... مثال: صغّر دايرة الوعي' : 'Type command... e.g. shrink awareness circle'}
-                    dir={lang === 'ar' ? 'rtl' : 'ltr'}
-                  />
-                  <button type="submit" className="command-send-btn" disabled={!commandText.trim()}>
-                    {lang === 'ar' ? 'نفّذ' : 'Send'}
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {errorMessage && <p className="error-message">&#x26A0;&#xFE0F; {errorMessage}</p>}
-
-            <footer className="footer-info" style={{ display: 'none' }}>
-              <span>Backend: {backendUrl}</span>
-              <span>Mic: {isMicActive ? 'on' : 'off'} | Tools: {toolCallsCount} | Event: {lastEvent}</span>
-            </footer>
-          </>
-        )}
-      </div>
-
-      {/* Live Transcript Overlay */}
-      {isConnected && transcript.length > 0 && (
-        <div className="transcript-overlay">
-          <div className="transcript-header">{t.liveChat}</div>
-          {transcript.map((entry, idx) => (
-            <div key={idx} className={`transcript-entry transcript-${entry.role}`}>
-              <span className="transcript-time">{entry.time}</span>
-              <span className="transcript-text">{entry.text}</span>
-            </div>
-          ))}
+      {appView === 'welcome' && (
+        <div className="welcome-screen">
+          <img src={logoCognitiveTrinity} alt="Dawayir" className="welcome-logo ds-slide-up-fade" />
+          <div className="brand-name-large ds-slide-up-fade">{t.brandName}</div>
+          <div className="brand-subtitle ds-slide-up-fade-delay">{t.brandSub}</div>
+          <button className="primary-btn ds-slide-up-fade-delay-more welcome-cta" onClick={() => setAppView('setup')}>
+            {t.enterSpace}
+          </button>
+          <div className="lang-toggle-container ds-slide-up-fade-delay-more">
+            <button className={`icon-btn lang-toggle ${lang === 'ar' ? 'active' : ''}`} onClick={() => setLang('ar')}>{lang === 'ar' ? 'Ø¹Ø±Ø¨Ù‰' : 'AR'}</button>
+            <button className={`icon-btn lang-toggle ${lang === 'en' ? 'active' : ''}`} onClick={() => setLang('en')}>{lang === 'en' ? 'English' : 'EN'}</button>
+          </div>
         </div>
       )}
 
-      <DawayirCanvas ref={canvasRef} />
+      {(appView === 'dashboard' || appView === 'setup' || appView === 'live') && (
+        <aside
+          className={`overlay ${appView === 'dashboard' ? 'overlay-dashboard' : ''} ${appView === 'live' && isBreathingRoom ? 'overlay-collapsed' : ''}`}
+          role="complementary"
+          aria-label={lang === 'ar' ? 'Ù„ÙˆØ­Ø© Ø§Ù„ØªØ­ÙƒÙ…' : 'Control panel'}
+        >
+          {appView === 'dashboard' ? (
+            <DashboardView
+              lang={lang}
+              emptyLogoSrc={logoCognitiveTrinity}
+              onBack={() => setAppView('welcome')}
+            />
+          ) : (
+            <>
+              {/* Brand Header */}
+              <div className="brand-header">
+                <div className="brand-logo-row">
+                  <div>
+                    <img src={logoCognitiveTrinity} alt="Dawayir" className="brand-mark" />
+                    <div className="brand-name">{t.brandName}</div>
+                    <div className="brand-arabic">{t.brandSub}</div>
+                  </div>
+                  <div className="header-actions">
+                    <button aria-label={lang === 'en' ? 'Switch to Arabic' : 'Switch to English'} className="icon-btn lang-toggle" onClick={() => setLang(l => l === 'en' ? 'ar' : 'en')} title="Toggle Language">
+                      {lang === 'en' ? 'AR' : 'EN'}
+                    </button>
+                    {!isConnected && !isStarting && (
+                      <>
+                        <button aria-label={lang === 'ar' ? 'Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' : 'Settings'} className="icon-btn" onClick={() => setShowSettings((current) => !current)} title={lang === 'ar' ? 'Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' : 'Settings'}>
+                          âš™
+                        </button>
+                        <button aria-label={t.memoryBank} className="icon-btn" onClick={() => setAppView('dashboard')} title={t.memoryBank}>
+                          {t.dashboardBtn}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <StatusBadge
+                  className={statusClass}
+                  text={isConnected ? t.statusActive : status === 'Disconnected' ? t.statusDisconnected : status}
+                />
+                {isStarting && (
+                  <ConnectProgressCard steps={connectSteps} stage={connectStage} />
+                )}
+              </div>
+
+              {/* Main Controls - SETUP SCREEN ONLY */}
+              {(appView === 'setup') && (
+                <div className="section">
+                  <div className="camera-setup">
+                    <div className="setup-hint-card">
+                      <img src={logoCognitiveTrinity} alt="" className="inline-logo" />
+                      <div>
+                        <strong>{lang === 'ar' ? 'Ø¬Ù„Ø³Ø© ØµÙˆØªÙŠØ© Ù…Ø¹ Ø®Ø±ÙŠØ·Ø© Ø­ÙŠØ©' : 'A voice session with a live mental map'}</strong>
+                        <p>{lang === 'ar' ? 'Ø§Ù„ØªÙ‚Ø§Ø· Ø§Ù„ØµÙˆØ±Ø© Ø§Ø®ØªÙŠØ§Ø±ÙŠ. Ø§Ø¨Ø¯Ø£ Ø§Ù„Ø¬Ù„Ø³Ø©ØŒ ÙˆØ§ØªÙƒÙ„Ù… Ø¨Ø±Ø§Ø­ØªÙƒØŒ ÙˆØ§Ù„Ø¯ÙˆØ§Ø¦Ø± Ù‡ØªÙˆØ¶Ø­ Ø±Ø­Ù„ØªÙƒ.' : 'The image capture is optional. Start the session, speak freely, and let the circles map the journey.'}</p>
+                      </div>
+                    </div>
+                    <video ref={videoRef} autoPlay playsInline muted className="visually-hidden" />
+
+                    {!isCameraActive && !capturedImage ? (
+                      <div className="setup-actions-row">
+                        <button className="primary-btn outline-btn flex-center setup-action-btn" onClick={startCamera}>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                          {t.captureBtn}
+                        </button>
+                        <button className="primary-btn flex-center setup-action-btn" onClick={connect} disabled={isConnected || isStarting}>
+                          {isStarting ? (
+                            <div className="loading-container">
+                              <span className="loading-text">{t.connecting}</span>
+                              <div className="spinner"><div className="spinner-ring"></div></div>
+                            </div>
+                          ) : (
+                            <>
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"></path><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"></path></svg>
+                              {t.enterSpace}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : isCameraActive ? (
+                      <div className="video-capture-flow">
+                        <div className="video-container">
+                          <video autoPlay playsInline muted
+                            ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
+                            style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        </div>
+                        <div className="camera-actions-row">
+                          <button className="capture-btn" onClick={captureSnapshot}>{t.capture}</button>
+                          <button className="cancel-btn" onClick={stopCamera}>{t.cancel}</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="captured-preview-container">
+                        <div className="preview-heading">{t.initialState}</div>
+                        <img src={capturedImage} className="pulse-preview-large" alt="Captured" />
+                        <button className="retake-btn" onClick={() => { setCapturedImage(null); setTimeout(() => setIsCameraActive(true), 50); setTimeout(startCamera, 100); }}>
+                          {t.retake}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {(isCameraActive || capturedImage) && (
+                    <button
+                      className={`primary-btn flex-center setup-connect-btn ${isConnected ? 'secure-link' : ''}`}
+                      onClick={connect}
+                      disabled={isConnected || isStarting}
+                    >
+                      {isStarting ? (
+                        <div className="loading-container">
+                          <span className="loading-text">{t.connecting}</span>
+                          <div className="spinner"><div className="spinner-ring"></div></div>
+                        </div>
+                      ) : (
+                        <>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"></path><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"></path></svg>
+                          {capturedImage ? t.enterSpaceVision : t.enterSpace}
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Connected Activity - LIVE SCREEN ONLY */}
+              {appView === 'live' && isConnected && (
+                <div className="section">
+                  <video ref={videoRef} autoPlay playsInline muted className="visually-hidden" />
+
+                  <div className="timeline-overlay">
+                    {[
+                      { key: 'Overwhelmed', en: '1. Overwhelmed', ar: 'Ù¡. Ø§Ù„ØªØ´ØªØª' },
+                      { key: 'Focus', en: '2. Focus', ar: 'Ù¢. Ø§Ù„ØªØ±ÙƒÙŠØ²' },
+                      { key: 'Clarity', en: '3. Clarity', ar: 'Ù£. Ø§Ù„ÙˆØ¶ÙˆØ­' },
+                    ].map((stage, idx, arr) => {
+                      const stageKey = stage.key;
+                      const isCompleted = arr.findIndex(s => s.key === journeyStage) > idx;
+                      const isActive = stageKey === journeyStage;
+                      const nodeClass = isActive ? 'active' : isCompleted ? 'completed' : '';
+                      return (
+                        <div key={stageKey} className={`timeline-node ${nodeClass}`}>
+                          <div className="node-dot"></div>
+                          <span className="node-label">{lang === 'ar' ? stage.ar : stage.en}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {isAgentSpeaking && (
+                    <div className="ai-state-bar">
+                      <div className="wave">
+                        <span></span><span></span><span></span><span></span><span></span>
+                      </div>
+                      {t.agentSpeaking}
+                    </div>
+                  )}
+
+                  <div className="visual-feedback">
+                    <Visualizer stream={micStreamRef.current} isConnected={isConnected} lang={lang} />
+
+                    {/* Cognitive OS Metrics Overlay */}
+                    <div className="cognitive-metrics-overlay">
+                      <div className="metric-item">
+                        <span className="metric-label">{lang === 'ar' ? 'Ø§Ù„ØªÙˆØ§Ø²Ù†' : 'Equilibrium'}</span>
+                        <span className="metric-value">{(cognitiveMetrics.equilibriumScore * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="metric-item">
+                        <span className="metric-label">{lang === 'ar' ? 'Ø§Ù„Ø¶ØºØ·' : 'Overload'}</span>
+                        <span className="metric-value">{(cognitiveMetrics.overloadIndex * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="metric-item">
+                        <span className="metric-label">{lang === 'ar' ? 'Ø§Ù„ÙˆØ¶ÙˆØ­ Î”' : 'Clarity Î”'}</span>
+                        <span className={`metric-value ${cognitiveMetrics.clarityDelta >= 0 ? 'positive' : 'negative'}`}>
+                          {cognitiveMetrics.clarityDelta >= 0 ? '+' : ''}{(cognitiveMetrics.clarityDelta * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {capturedImage && (
+                      <div className="snapshot-preview">
+                        <img src={capturedImage} alt="Pulse Snapshot" />
+                        <span>{t.initialState}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="connected-actions">
+                    {!isCameraActive ? (
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button className="retake-live-btn flex-center" onClick={startCamera} style={{ flex: 1, gap: '6px' }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                          {t.updateVisual}
+                        </button>
+                        <button className="retake-live-btn flex-center" onClick={handleLookAtMe} style={{ flex: 1, gap: '6px', background: "rgba(255, 209, 102, 0.15)", color: "#FFD700", borderColor: "rgba(255, 209, 102, 0.4)" }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                          {t.lookAtMe}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="live-camera-mini">
+                        <div className="video-container-mini">
+                          <video autoPlay playsInline muted
+                            ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        </div>
+                        <div className="mini-camera-actions">
+                          <button className="mini-capture-btn" onClick={captureSnapshot}>{t.capture}</button>
+                          <button className="mini-cancel-btn" onClick={stopCamera}>{t.cancel}</button>
+                        </div>
+                      </div>
+                    )}
+                    <button className="secondary disconnect-btn flex-center" onClick={() => setShowEndSessionConfirm(true)}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
+                      {t.endSession}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Circle Control Panel */}
+              {appView === 'live' && isConnected && (
+                <div className="circle-controls">
+                  <div className="circle-controls-row legend-only">
+                    {[
+                      { id: 1, label: lang === 'ar' ? 'Ø§Ù„ÙˆØ¹ÙŠ' : 'Awareness', color: '#00F5FF' },
+                      { id: 2, label: lang === 'ar' ? 'Ø§Ù„Ø¹Ù„Ù…' : 'Knowledge', color: '#00FF41' },
+                      { id: 3, label: lang === 'ar' ? 'Ø§Ù„Ø­Ù‚ÙŠÙ‚Ø©' : 'Truth', color: '#FF00E5' },
+                    ].map(c => (
+                      <div key={c.id} className="circle-control-item">
+                        <span className="circle-control-label" style={{ color: c.color }}>{c.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Text command input (hidden for demo) */}
+                  <form className="command-input-form command-input-hidden" onSubmit={(e) => {
+                    e.preventDefault();
+                    handleTextCommand(commandText);
+                    setCommandText('');
+                  }}>
+                    <input
+                      type="text"
+                      className="command-input"
+                      value={commandText}
+                      onChange={(e) => setCommandText(e.target.value)}
+                      placeholder={lang === 'ar' ? 'Ø§ÙƒØªØ¨ Ø£Ù…Ø±... Ù…Ø«Ø§Ù„: ØµØºÙ‘Ø± Ø¯Ø§ÙŠØ±Ø© Ø§Ù„ÙˆØ¹ÙŠ' : 'Type command... e.g. shrink awareness circle'}
+                      dir={lang === 'ar' ? 'rtl' : 'ltr'}
+                    />
+                    <button type="submit" className="command-send-btn" disabled={!commandText.trim()}>
+                      {lang === 'ar' ? 'Ù†ÙÙ‘Ø°' : 'Send'}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {errorMessage && <p className="error-message">&#x26A0;&#xFE0F; {errorMessage}</p>}
+            </>
+          )}
+        </aside>
+      )}
+
+      {/* Session Complete Screen */}
+      {appView === 'complete' && (
+        <div className="complete-screen complete-overlay">
+          <div className="complete-content glass-panel complete-card">
+            <h2 className="complete-title">
+              {lang === 'ar' ? '??? ??????????. ??????????.' : '??? Session Complete.'}
+            </h2>
+            <div className="stats-table complete-stats-table">
+              <div className="stat-row complete-stat-row complete-stat-row-divider">
+                <span className="stat-label complete-stat-label">{lang === 'ar' ? '?????????????? ??????????????' : 'Final Equilibrium'}</span>
+                <span className="stat-value complete-stat-value complete-stat-success">{(cognitiveMetrics.equilibriumScore * 100).toFixed(0)}%</span>
+              </div>
+              <div className="stat-row complete-stat-row complete-stat-row-divider">
+                <span className="stat-label complete-stat-label">{lang === 'ar' ? '??????????' : 'Overload'}</span>
+                <span className="stat-value complete-stat-value complete-stat-info">{(cognitiveMetrics.overloadIndex * 100).toFixed(0)}%</span>
+              </div>
+              <div className="stat-row complete-stat-row">
+                <span className="stat-label complete-stat-label">{lang === 'ar' ? '?????????? ????????????' : 'Clarity Change'}</span>
+                <span className={`stat-value complete-stat-value ${cognitiveMetrics.clarityDelta >= 0 ? 'complete-stat-success' : 'complete-stat-magenta'}`}>
+                  {cognitiveMetrics.clarityDelta >= 0 ? '+' : ''}{(cognitiveMetrics.clarityDelta * 100).toFixed(0)}%
+                </span>
+              </div>
+            </div>
+            <div className="complete-actions complete-actions-row">
+              <button className="primary-btn flex-center complete-action-btn" onClick={() => setAppView('setup')}>
+                {lang === 'ar' ? '???? ???????? ??????????' : '???? New Session'}
+              </button>
+              <button className="primary-btn flex-center complete-action-btn complete-action-secondary" onClick={() => setAppView('dashboard')}>
+                {lang === 'ar' ? '???? ???????? ????????????' : '???? Dashboard'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSettings && !isConnected && (
+        <SettingsModal
+          lang={lang}
+          onClose={() => setShowSettings(false)}
+          onLanguageChange={setLang}
+        />
+      )}
+
+      {showOnboarding && (appView === 'setup' || appView === 'live') && (
+        <OnboardingModal
+          lang={lang}
+          step={onboardingStep}
+          steps={onboardingSteps}
+          logoSrc={logoCognitiveTrinity}
+          onSkip={dismissOnboarding}
+          onNext={advanceOnboarding}
+        />
+      )}
+
+      {showEndSessionConfirm && (
+        <EndSessionConfirmModal
+          lang={lang}
+          onCancel={() => setShowEndSessionConfirm(false)}
+          onConfirm={() => {
+            setShowEndSessionConfirm(false);
+            disconnect();
+          }}
+        />
+      )}
+
+      {/* Live Transcript Overlay */}
+      {appView === 'live' && isConnected && transcript.length > 0 && (
+        <section className={`transcript-container ${isTranscriptVisible ? 'open' : 'closed'}`} aria-label={lang === 'ar' ? 'Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø© Ø§Ù„Ù…Ø¨Ø§Ø´Ø±Ø©' : 'Live transcript'}>
+          <button
+            className="transcript-toggle-btn"
+            onClick={() => setIsTranscriptVisible(!isTranscriptVisible)}
+            title={isTranscriptVisible ? 'Hide Transcript' : 'Show Transcript'}
+          >
+            {isTranscriptVisible ? 'â–¼ ' + t.liveChat : 'ðŸ’¬ ' + t.liveChat}
+          </button>
+
+          <div className="transcript-overlay" style={{ display: isTranscriptVisible ? 'flex' : 'none' }}>
+            <div className="transcript-messages">
+              {transcript.map((entry, idx) => (
+                <div key={idx} className={`transcript-entry transcript-${entry.role}`}>
+                  <span className="transcript-time">{entry.time}</span>
+                  <span className="transcript-text">{entry.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {appView === 'live' && isConnected && (
+        <div className="breathing-hud" role="toolbar" aria-label={lang === 'ar' ? 'Ø£Ø¯ÙˆØ§Øª Ø§Ù„Ø¬Ù„Ø³Ø©' : 'Session tools'}>
+          <button className="secondary" onClick={() => setIsBreathingRoom((current) => !current)}>
+            {isBreathingRoom ? (lang === 'ar' ? 'Ø¥Ø¸Ù‡Ø§Ø± Ø§Ù„Ù„ÙˆØ­Ø©' : 'Show Panel') : (lang === 'ar' ? 'Ø¥Ø®ÙØ§Ø¡ Ø§Ù„Ù„ÙˆØ­Ø©' : 'Hide Panel')}
+          </button>
+          <button className="secondary" onClick={() => setIsTranscriptVisible((current) => !current)}>
+            {lang === 'ar' ? 'Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©' : 'Transcript'}
+          </button>
+          <button className="secondary disconnect-btn" onClick={() => setShowEndSessionConfirm(true)}>
+            {t.endSession}
+          </button>
+        </div>
+      )}
+
+      <main id="main-canvas-content" className="app-canvas-main" role="main" aria-label={lang === 'ar' ? 'Ù…Ø³Ø§Ø­Ø© Ø§Ù„Ø¯ÙˆØ§Ø¦Ø±' : 'Circle canvas'}>
+        <h1 className="visually-hidden">{lang === 'ar' ? 'ØªØ·Ø¨ÙŠÙ‚ Ø¯ÙˆØ§ÙŠØ± Ù„Ù„Ø¬Ù„Ø³Ø§Øª Ø§Ù„ØµÙˆØªÙŠØ©' : 'Dawayir live voice session app'}</h1>
+        <DawayirCanvas ref={canvasRef} lang={lang} />
+      </main>
     </div>
   );
 }

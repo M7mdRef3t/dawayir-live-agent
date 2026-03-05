@@ -1,0 +1,68 @@
+{
+    "contract": {
+        "version": "1.0.0-kernel",
+        "principles": [
+            "State Supremacy: UI is a derivative of Cognitive State.",
+            "Deterministic Transformation: Inputs must pass through the Kernel logic.",
+            "Stability Constraint: No state jump > 0.3 delta per interaction.",
+            "Goal-Oriented Scheduling: Every process must have a defined cognitive priority."
+        ]
+    },
+    "metrics": {
+        "equilibrium_score": "Ratio of Awareness/Truth/Knowledge balance (0.0 - 1.0)",
+        "overload_index": "Calculated based on speed of input vs stability of Awareness",
+        "clarity_delta": "The difference in Truth alignment from session start to current moment"
+    },
+    "kernel": {
+        "layers": {
+            "cognitive_schema": {
+                "nodes": {
+                    "1": {
+                        "label_ar": "الوعي",
+                        "label_en": "Awareness",
+                        "definition": "Processing Capacity",
+                        "default_weight": 0.6,
+                        "math_property": "bandwidth"
+                    },
+                    "2": {
+                        "label_ar": "العلم",
+                        "label_en": "Knowledge",
+                        "definition": "Structural Logic",
+                        "default_weight": 0.5,
+                        "math_property": "entropy_reduction"
+                    },
+                    "3": {
+                        "label_ar": "الحقيقة",
+                        "label_en": "Truth",
+                        "definition": "Objective Alignment",
+                        "default_weight": 0.4,
+                        "math_property": "vector_alignment"
+                    }
+                }
+            },
+            "scheduler": {
+                "priorities": [
+                    {
+                        "condition": "OverloadIndex > 0.7",
+                        "action": "PRIORITIZE_GROUNDING",
+                        "target": "Awareness"
+                    },
+                    {
+                        "condition": "EquilibriumScore < 0.4",
+                        "action": "PRIORITIZE_STRUCTURE",
+                        "target": "Knowledge"
+                    },
+                    {
+                        "condition": "ClarityDelta < 0.1",
+                        "action": "PRIORITIZE_ALIGNMENT",
+                        "target": "Truth"
+                    }
+                ]
+            }
+        },
+        "stability_constraints": {
+            "max_delta_per_turn": 0.25,
+            "inertia": 0.15
+        }
+    }
+}

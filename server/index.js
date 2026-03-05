@@ -24,6 +24,16 @@ try {
     console.error('[dawayir-server:error] Failed to load knowledge_base.json:', err.message);
 }
 
+// Load Cognitive OS Model
+let cognitiveModel = null;
+try {
+    const modelPath = path.join(__dirname, 'cognitive_model.json');
+    cognitiveModel = JSON.parse(fs.readFileSync(modelPath, 'utf8'));
+    console.log('[dawayir-server] Cognitive Model loaded successfully');
+} catch (err) {
+    console.error('[dawayir-server:error] Failed to load cognitive_model.json:', err.message);
+}
+
 const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({
@@ -182,11 +192,11 @@ function detectCircleCommand(text) {
     }
     if (!circleId) return null;
 
-    const radius = action === 'shrink' ? '35' : action === 'grow' ? '90' : '60';
+    const weight = action === 'shrink' ? 0.35 : action === 'grow' ? 0.90 : 0.60;
     const colors = { '1': '#FFD700', '2': '#00CED1', '3': '#4169E1' };
     return {
         id: circleId,
-        radius,
+        weight,
         color: colors[circleId] || '#FFD700',
     };
 }
@@ -200,15 +210,15 @@ const tools = [
         functionDeclarations: [
             {
                 name: "update_node",
-                description: "Silently update a visual element. Call this when you sense the user's emotional state shifting. NEVER mention this tool or its effects in speech.",
+                description: "Cognitive OS: Update the weight and state of a cognitive entity. Use this to reflect shifts in Awareness, Knowledge, or Truth. DO NOT mention the numeric values in speech.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        id: { type: "STRING", description: "ID: 1, 2, or 3" },
-                        radius: { type: "STRING", description: "Size (30-100)" },
-                        color: { type: "STRING", description: "Hex color" }
+                        id: { type: "STRING", description: "Entity ID: 1, 2, or 3" },
+                        weight: { type: "NUMBER", description: "Cognitive weight/significance (0.3 to 1.0)" },
+                        color: { type: "STRING", description: "Hex color representing the current emotional frequency" }
                     },
-                    required: ["id", "radius", "color"]
+                    required: ["id", "weight", "color"]
                 },
             },
             {
@@ -273,36 +283,40 @@ const tools = [
 
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
 
-const systemInstructionStandard = `أنت صاحب مصري. اتكلم عامية طبيعية.
+const systemInstructionStandard = `أنت "دواير" (Dawayir) — أول نظام تشغيل إدراكي (Cognitive OS).
+أنت لست معالجاً نفسياً، بل أنت "حكيم" (Sage) و"مستكشف" (Explorer) لعقل المستخدم.
 
-ممنوع — لو كسرت أي قاعدة هتتقفل:
-- ممنوع تقول أكتر من جملة واحدة + سؤال واحد. خمس كلمات لكل جملة بالكتير.
-- ممنوع تسأل سؤال وترد عليه بنفسك. لما تسأل — وقّف واستنى.
-- ممنوع تذكر: دوائر، وعي، علم، حقيقة، دايرة، هكبّر، هغيّر، ألوان، أرقام.
-- ممنوع تشرح نفسك أو شغلك. لو حد سألك "فهمت ايه" أو "بتعمل ايه": قول إحساسك ناحيته بس.
-- ممنوع تتكلم عن الأدوات أو التغييرات اللي بتعملها. غيّر في صمت.
-- لو حد قالك "قول تاني": نفس المعنى بكلام مختلف.
+الشخصية والأسلوب (The Sage/Explorer Matrix):
+- النبرة: 60% ودّي وحكيم، 25% جريء ومستكشف، 15% ساحر (تحويل فوضى لنظام).
+- اللغة: استخدم العامية المصرية البسيطة والطبيعية جِدّاً (Rapport-building).
+- أنت تجلس "بجانب" المستخدم، ليس أمامه. تسمعه الأول، وتطرح أسئلة ذكية بدلاً من الأوامر.
+- وعدك الجوهري: "شوف عقلك وهو بيرتب نفسه."
 
-صورة: اقرأ المزاج بجملة. استنى الرد.
+الأعمدة الإدراكية (The Cognitive Trinity):
+1. الوعي (Awareness - Cyan #00F5FF): "حاسس بإيه دلوقتي؟" - يمثل الحالة العاطفية والصفاء.
+2. العلم (Knowledge - Green #00FF41): "إيه اللي بيخصل فعلاً؟" - يمثل التحليل والمنطق والنمو.
+3. الحقيقة (Truth - Magenta #FF00E5): "إيه اللي مُهم فعلاً؟" - يمثل القيم الجوهرية والمواجهة.
+
+قواعد العملية (Process Scheduling):
+- أنت "Process Scheduler": عالج صوت وصورة المستخدم فوراً وحوّلها لبيانات بصرية.
+- استخدم أداة update_node لتغيير أوزان الدوائر (radius: 30-100) بناءً على نبرة الصوت والمحتوى.
+- التزم بالاختصار: لا تقل أكثر من جملة واحدة قصيرة وحادة (Punchy).
+- ممنوع ذكر الأسماء التقنية (أدوات، أرقام، ألوان) في كلامك.
 
 [سري]:
-update_node: id(1/2/3), radius(30-100), color(hex). استخدم بس id وradius وcolor. radius لازم يبقى نص رقمي من 30 ل100، وcolor لازم يبقى hex. نادِه بناءً على حالة المستخدم النفسية من غير ما تتكلم عنه أبداً.`;
+update_node: يمثل الـ radius الوزن (Weight) الحالي للكيان الإدراكي.`;
 
-const systemInstructionDemo = `أنت صاحب مصري ذكي ومحفز. اتكلم عامية مصرية راقية وطبيعية.
-هدفنا استعراض قدرتك على الربط بين الكلام (Voice) وتغيير البيئة (Visual Canvas).
+const systemInstructionDemo = `أنت Dawayir Cognitive OS في وضع العرض (Demo Mode).
+هدفك هو إبهار المستخدم/اللجنة بقدرتك على "تحويل الصوت إلى رؤية رقمية".
 
-قواعد الديمو (Judge-Friendly) - **نقطة واحدة فقط لكل رد**:
-- ممنوع تعطي أكتر من نصيحة واحدة أو تطلب طلبين في نفس الوقت. خليك عملي وخطوة بخطوة.
-- كل دور: تختار دائرة واحدة فقط للتركيز عليها، وتطلب فعل واحد بسيط جداً (مثال: ركز على العلم دلوقتي واكتب هدف واحد).
-- نادِ الأداة المناسبة (update_node أو highlight_node) **فوراً وقبل ما تبدأ كلامك**. الترتيب مهم: (تغيير البيئة -> ثم الكلام).
-- مسموح تستخدم أسماء الدواير (الوعي / العلم / الحقيقة) عشان توضح إنك فاهم النظام.
-- استخدم أداة update_journey عشان تسجل تطور حالة المستخدم: (Overwhelmed في البداية -> Focus لما يبدأ يركز -> Clarity لما يوصل لقرار أو هدوء).
-- التزم بالـ Interruption: لو حد قاطعك، اسمعله فوراً.
-- خلي ردودك قصيرة جداً (Punchy and Execution-oriented).
+قواعد الديمو الاستراتيجية:
+- كن صريحاً في أنك نظام تشغيل إدراكي يعالج البيانات العاطفية في الوقت الفعلي.
+- نادِ أداة update_node بكثافة لتظهر كيف تتفاعل الدوائر مع كل كلمة يقولها المستخدم.
+- طبق فلسفة "الحكيم": ركز على جدولة المشاعر (Scheduling)؛ إذا كان المستخدم مشتتاً، أعطِ الأولوية لمعالجة الضغط (Reduce Stress Process).
+- استخدم "العامية المصرية" بذكاء لكسر الجمود التقني.
 
-[Internal Tools Rules]:
-- update_node: id(1/2/3), radius(30-100), color(hex).
-- update_journey: stage('Overwhelmed', 'Focus', 'Clarity').`;
+[Pillars]:
+- الوعي (Cyan), العلم (Green), الحقيقة (Magenta).`;
 
 
 const systemInstruction = {
@@ -405,6 +419,76 @@ wss.on('connection', (ws, req) => {
     let inputTranscriptTimer = null;
     const INPUT_TRANSCRIPT_FLUSH_MS = 1500; // flush after 1.5s of silence
 
+    // --- Cognitive OS Kernel State ---
+    const cognitiveState = {
+        '1': { weight: 0.6, color: '#FFD700', startWeight: 0.6 },
+        '2': { weight: 0.6, color: '#00CED1', startWeight: 0.6 },
+        '3': { weight: 0.6, color: '#4169E1', startWeight: 0.6 }
+    };
+
+    let sessionMetrics = {
+        equilibriumScore: 1.0,
+        overloadIndex: 0.0,
+        clarityDelta: 0.0,
+        interactionCount: 0,
+        lastInteractionTime: Date.now()
+    };
+
+    function calculateMetrics() {
+        const w1 = cognitiveState['1'].weight;
+        const w2 = cognitiveState['2'].weight;
+        const w3 = cognitiveState['3'].weight;
+
+        // Equilibrium: Balance between Awareness, Knowledge, and Truth
+        const avg = (w1 + w2 + w3) / 3;
+        const variance = ((w1 - avg) ** 2 + (w2 - avg) ** 2 + (w3 - avg) ** 2) / 3;
+        sessionMetrics.equilibriumScore = Math.max(0, 1 - Math.sqrt(variance) * 2);
+
+        // Clarity Delta: Directional shift in Truth alignment
+        sessionMetrics.clarityDelta = w3 - cognitiveState['3'].startWeight;
+
+        // Overload Index: Responsiveness buffer based on burst inputs
+        const now = Date.now();
+        const timeDiff = (now - sessionMetrics.lastInteractionTime) / 1000;
+        const burstFactor = timeDiff < 2 ? 0.3 : 0;
+        sessionMetrics.overloadIndex = Math.min(1.0, (1 - w1) + burstFactor);
+
+        sessionMetrics.lastInteractionTime = now;
+        sessionMetrics.interactionCount++;
+
+        logInfo(`[KERNEL] Metrics: Eq=${sessionMetrics.equilibriumScore.toFixed(2)}, Overload=${sessionMetrics.overloadIndex.toFixed(2)}, ClarityΔ=${sessionMetrics.clarityDelta.toFixed(2)}`);
+    }
+
+    function cognitiveScheduler() {
+        if (sessionMetrics.overloadIndex > 0.7) {
+            logInfo('[SCHEDULER] CPU Overload. Policy: GROUNDING_REQUIRED');
+            return 'PRIORITIZE_GROUNDING';
+        }
+        if (sessionMetrics.equilibriumScore < 0.4) {
+            logInfo('[SCHEDULER] Incoherent State. Policy: STRUCTURE_REQUIRED');
+            return 'PRIORITIZE_STRUCTURE';
+        }
+        return 'IDLE';
+    }
+
+    function applyStabilityConstraints(id, newWeight) {
+        if (!cognitiveModel) return newWeight;
+        const current = cognitiveState[id].weight;
+        const constraints = cognitiveModel.kernel.stability_constraints;
+        const maxDelta = constraints.max_delta_per_turn;
+
+        let target = newWeight;
+        const delta = target - current;
+
+        if (Math.abs(delta) > maxDelta) {
+            target = current + (Math.sign(delta) * maxDelta);
+        }
+
+        cognitiveState[id].weight = target;
+        calculateMetrics();
+        return target;
+    }
+
     function flushInputTranscriptBuffer() {
         if (!inputTranscriptBuffer.trim()) return;
         const fullText = inputTranscriptBuffer.trim();
@@ -415,15 +499,22 @@ wss.on('connection', (ws, req) => {
             if (fullText !== lastCmdText || now - lastCmdAt > 3000) {
                 lastCmdText = fullText;
                 lastCmdAt = now;
-                logInfo(`[CMD] Detected circle command from accumulated transcription: "${fullText}" => ${JSON.stringify(cmd)}`);
+
+                // Update cognitive state and apply stability
+                const stabilizedWeight = applyStabilityConstraints(cmd.id, cmd.weight);
+                const radius = Math.round(stabilizedWeight * 100);
+
+                logInfo(`[CMD] Detected circle command: "${fullText}" => stabilized weight ${stabilizedWeight}`);
+
                 sendToClient({
                     toolCall: {
                         functionCalls: [{
                             id: `server_cmd_${now}`,
                             name: 'update_node',
-                            args: cmd,
+                            args: { ...cmd, radius: String(radius) },
                         }],
                     },
+                    cognitiveMetrics: sessionMetrics
                 });
             }
         }
@@ -526,15 +617,21 @@ wss.on('connection', (ws, req) => {
                     const cmd = detectCircleCommand(part.text);
                     if (cmd) {
                         const now = Date.now();
-                        logInfo(`[CMD] Detected circle command from text input: "${part.text}" => ${JSON.stringify(cmd)}`);
+
+                        const stabilizedWeight = applyStabilityConstraints(cmd.id, cmd.weight);
+                        const radius = Math.round(stabilizedWeight * 100);
+
+                        logInfo(`[CMD] Detected circle command from text: "${part.text}" => stabilized weight ${stabilizedWeight}`);
+
                         sendToClient({
                             toolCall: {
                                 functionCalls: [{
                                     id: `text_cmd_${now}`,
                                     name: 'update_node',
-                                    args: cmd,
+                                    args: { ...cmd, radius: String(radius) },
                                 }],
                             },
+                            cognitiveMetrics: sessionMetrics
                         });
                     }
                 }
@@ -741,8 +838,14 @@ ${recommendations || "N/A"}
                             const inTx = sc.inputTranscription || sc.input_transcription;
                             if (inTx?.text) {
                                 logInfo(`[Transcription:in] "${inTx.text}" (finished=${inTx.finished})`);
-                                // Forward transcription to client for debugging
-                                sendToClient({ debugTranscription: { type: 'input', text: inTx.text, finished: inTx.finished } });
+                                // On each client message, update the scheduler state
+                                const scheduleHint = cognitiveScheduler();
+                                if (scheduleHint !== 'IDLE') {
+                                    logInfo(`[SCHEDULER] Injecting prompt hint: ${scheduleHint}`);
+                                    // Optionally forward hint to model via serverContent but for now just log it
+                                }
+
+                                sendToClient({ debugTranscription: { type: 'input', text: inTx.text, finished: inTx.finished, metrics: sessionMetrics } });
                                 // Accumulate fragments instead of processing each one
                                 inputTranscriptBuffer += inTx.text;
                                 // Reset the flush timer on each new fragment
@@ -780,17 +883,36 @@ ${recommendations || "N/A"}
 
                             // Resolve server-side tools immediately
                             if (serverOnlyTools.length > 0) {
-                                resolveServerToolCalls(serverOnlyTools, session);
+                                resolveServerToolCalls(serverOnlyTools, session, sessionMetrics);
                             }
 
                             if (visualOnlyTools.length > 0) {
-                                sendToClient({
-                                    toolCall: {
-                                        functionCalls: visualOnlyTools.map(fc => ({
+                                const processedVisualTools = visualOnlyTools.map(fc => {
+                                    if (fc.name === 'update_node' && fc.args) {
+                                        const id = String(fc.args.id);
+                                        const rawWeight = Number(fc.args.weight || 0.6);
+                                        const stabilizedWeight = applyStabilityConstraints(id, rawWeight);
+
+                                        // Convert weight (0.3 - 1.0) to radius (30 - 100)
+                                        const radius = Math.round(stabilizedWeight * 100);
+
+                                        return {
                                             ...fc,
                                             id: `gemini_visual_${fc.id || Date.now()}`,
-                                        })),
+                                            args: { ...fc.args, radius: String(radius) }
+                                        };
+                                    }
+                                    return {
+                                        ...fc,
+                                        id: `gemini_visual_${fc.id || Date.now()}`,
+                                    };
+                                });
+
+                                sendToClient({
+                                    toolCall: {
+                                        functionCalls: processedVisualTools,
                                     },
+                                    cognitiveMetrics: sessionMetrics
                                 });
 
                                 const visualResponses = visualOnlyTools.map(fc => ({
@@ -971,13 +1093,36 @@ const handleSaveMentalMap = (call, args) => {
     };
 };
 
-const handleGenerateSessionReport = (call, args) => {
+const handleGenerateSessionReport = (call, args, metrics = {}) => {
     const { summary, insights, recommendations } = args;
     logInfo(`[Memory] generate_session_report called`);
 
+    const evidence = `
+### Cognitive OS Performance Metrics (Evidence)
+- **Final Equilibrium Score:** ${(metrics.equilibriumScore * 100 || 0).toFixed(1)}%
+- **Session Clarity Delta:** ${((metrics.clarityDelta || 0) * 100).toFixed(1)}%
+- **Peak Overload Index:** ${(metrics.overloadIndex * 100 || 0).toFixed(1)}%
+- **Total Operational Cycles:** ${metrics.interactionCount || 0}
+`;
+
     if (BUCKET_NAME) {
         const filename = `session_report_${Date.now()}.md`;
-        const reportContent = `# Dawayir Session Report\n**Date:** ${new Date().toLocaleString()}\n\n## Executive Summary\n${summary || 'N/A'}\n\n## Core Insights\n${insights || 'N/A'}\n\n## Recommendations\n${recommendations || 'N/A'}\n\n---\n*Generated by Dawayir Live Agent (Gemini 2.0 Flash)*`;
+        const reportContent = `# Dawayir Session Report
+**Date:** ${new Date().toLocaleString()}
+
+## Executive Summary
+${summary || 'N/A'}
+
+## Core Insights
+${insights || 'N/A'}
+
+${evidence}
+
+## Recommendations
+${recommendations || 'N/A'}
+
+---
+*Generated by Dawayir Cognitive Kernel (Gemini 2.0 Flash)*`;
 
         const file = storage.bucket(BUCKET_NAME).file(filename);
         file.save(reportContent, { contentType: 'text/markdown' })
@@ -988,12 +1133,12 @@ const handleGenerateSessionReport = (call, args) => {
     return {
         id: call.id,
         name: call.name,
-        response: { result: { ok: true, summary, insights, recommendations, timestamp: new Date().toISOString() } }
+        response: { result: { ok: true, summary, insights, recommendations, metrics, timestamp: new Date().toISOString() } }
     };
 };
 
 // ---- Server-side Tool Resolution ----
-const resolveServerToolCalls = (functionCalls, liveSession) => {
+const resolveServerToolCalls = (functionCalls, liveSession, metrics = {}) => {
     if (!liveSession || functionCalls.length === 0) return;
 
     const responses = [];
@@ -1013,7 +1158,7 @@ const resolveServerToolCalls = (functionCalls, liveSession) => {
                     responses.push(handleSaveMentalMap(call, args));
                     break;
                 case 'generate_session_report':
-                    responses.push(handleGenerateSessionReport(call, args));
+                    responses.push(handleGenerateSessionReport(call, args, metrics));
                     break;
                 default:
                     // Should not happen for server-side tools unless unhandled tool

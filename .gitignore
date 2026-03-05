@@ -4,3 +4,10 @@ node_modules/
 dist/
 .DS_Store
 *.log
+client/test-results/
+git_status.txt
+last_commit.txt
+log_diff.txt
+output.txt
+pull_out.txt
+status_utf8.txt

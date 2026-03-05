@@ -166,6 +166,8 @@ gcloud builds submit --config=server/cloudbuild.yaml
 
 | Feature | Implementation |
 |---|---|
+| **Cognitive Kernel** | Deterministic state machine enforcing stability constraints and psychological "Process Scheduling" |
+| **Metrics Overlay** | Real-time tracking of Equilibrium, Overload, and Clarity Δ for empirical progress evidence |
 | **Ultra-Low Latency (<200ms)** | Full-duplex WebSocket streaming with PCM16 audio — zero REST overhead |
 | **Live Tool Calling** | `update_node`, `highlight_node`, `save_mental_map`, `generate_session_report`, `get_expert_insight` |
 | **Multimodal Vision** | Camera snapshot analysis via Visual Pulse Check for facial/emotional context |
@@ -176,6 +178,32 @@ gcloud builds submit --config=server/cloudbuild.yaml
 | **Infrastructure as Code** | Full Terraform + Cloud Build pipeline for automated deployment |
 | **Interruption Handling** | Barge-in support for natural conversation flow |
 | **Egyptian Arabic Persona** | Warm, empathetic, culturally-aware mental clarity coaching |
+
+---
+
+## 🥇 Differentiated Value & Related Work
+
+Dawayir is not just a multimodal interface; it is a **Cognitive Operating System**. 
+
+While other projects focus on conversational therapy or generic sentiment analysis, Dawayir introduces a **Cognitive Kernel**—a deterministic state machine that mediates all AI decisions through stability metrics before they affect the user interface.
+
+### 🧩 The Cognitive Kernel
+- **Separation of Concerns:** The LLM (Gemini) acts as the reasoning engine, but the Kernel (our server-side state engine) enforces physical and psychological stability constraints.
+- **Deterministic UI Mutation:** Every change to the visual canvas is calculated via stability policies (e.g., *Max Delta Per Turn*), preventing erratic or jarring transitions that could cause user distress.
+- **Process Scheduling:** The system acts as a scheduler for mental tasks, prioritizing "Grounding" (Awareness expansion) when high stress is detected and "Structuring" (Knowledge focus) when confusion is observed.
+
+### 📊 Real-Time Cognitive Metrics (The Evidence)
+During the live demo, a glassmorphism overlay displays real-time system metrics:
+- **Equilibrium Score:** Measures the balance between Awareness, Knowledge, and Truth.
+- **Overload Index:** Quantifies cognitive load based on input intensity and state stability.
+- **Clarity Delta:** Provides empirical evidence of user progress by tracking Truth alignment improvement from session start to finish.
+
+### 📚 Competitive Landscape & Market Fit
+| Competitor / Project | Dawayir Difference |
+|---|---|
+| **Xaia (Cedars-Sinai)** | Focuses on 3D VR avatars for therapy; Dawayir uses an abstract, dynamic "Cognitive Grammar" to visualize the mind's structure in real-time. |
+| **Cognitive Canvas (Devpost)** | Focuses on static journaling to map thoughts; Dawayir is a **live, multimodal kernel** responding to sub-second audio cues. |
+| **Emotion-Aware Research** | Often theoretical or diagnostic; Dawayir implements a **Production-Ready Kernel** that acts as an OS layer for mental health. |
 
 ---
 

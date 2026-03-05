@@ -1,0 +1,722 @@
+/* ============================================================
+   DAWAYIR DESIGN SYSTEM v1.0.0
+   Comprehensive CSS Custom Properties (Design Tokens)
+   ============================================================ */
+
+/* ─── IMPORTS ─── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;600;700;800;900&family=Noto+Kufi+Arabic:wght@400;600;700&display=swap');
+
+/* ============================================================
+   1. COLOR PRIMITIVES
+   ============================================================ */
+:root {
+  /* ── Cyan Scale ── */
+  --ds-cyan-50: #e0fcff;
+  --ds-cyan-100: #b3f6ff;
+  --ds-cyan-200: #80efff;
+  --ds-cyan-300: #4de8ff;
+  --ds-cyan-400: #1ae1ff;
+  --ds-cyan-500: #00f5ff;
+  --ds-cyan-600: #00CED1;
+  --ds-cyan-700: #00A3A6;
+  --ds-cyan-800: #00787A;
+  --ds-cyan-900: #004D4F;
+
+  /* ── Green Scale ── */
+  --ds-green-50: #e0fff0;
+  --ds-green-100: #b3ffdb;
+  --ds-green-200: #80ffc3;
+  --ds-green-300: #4dffab;
+  --ds-green-400: #1aff94;
+  --ds-green-500: #00ff94;
+  --ds-green-600: #20d866;
+  --ds-green-700: #00b368;
+  --ds-green-800: #00804a;
+  --ds-green-900: #004d2d;
+
+  /* ── Magenta Scale ── */
+  --ds-magenta-50: #ffe0fb;
+  --ds-magenta-100: #ffb3f5;
+  --ds-magenta-200: #ff80ee;
+  --ds-magenta-300: #ff4de7;
+  --ds-magenta-400: #FF00E5;
+  --ds-magenta-500: #b600ff;
+  --ds-magenta-600: #9200cc;
+  --ds-magenta-700: #6e0099;
+  --ds-magenta-800: #4a0066;
+  --ds-magenta-900: #260033;
+
+  /* ── Gold Scale ── */
+  --ds-gold-50: #fff8e0;
+  --ds-gold-100: #ffeeb3;
+  --ds-gold-200: #ffe480;
+  --ds-gold-300: #ffda4d;
+  --ds-gold-400: #ffd166;
+  --ds-gold-500: #ffc233;
+  --ds-gold-600: #cc9b29;
+  --ds-gold-700: #99741f;
+  --ds-gold-800: #664d14;
+  --ds-gold-900: #33270a;
+
+  /* ── Red Scale ── */
+  --ds-red-50: #ffe8ea;
+  --ds-red-100: #ffc5c9;
+  --ds-red-200: #ff9da4;
+  --ds-red-300: #ff8787;
+  --ds-red-400: #ff6b6b;
+  --ds-red-500: #ff5f6d;
+  --ds-red-600: #ff4d4d;
+  --ds-red-700: #cc3d3d;
+  --ds-red-800: #992e2e;
+  --ds-red-900: #661f1f;
+
+  /* ── Neutral Scale ── */
+  --ds-neutral-0: #ffffff;
+  --ds-neutral-50: #f0f4ff;
+  --ds-neutral-100: #c8d2f0;
+  --ds-neutral-200: #a0aad0;
+  --ds-neutral-300: #7882b0;
+  --ds-neutral-400: #505a90;
+  --ds-neutral-500: #383f6e;
+  --ds-neutral-600: #282e52;
+  --ds-neutral-700: #1a1e3a;
+  --ds-neutral-800: #080820;
+  --ds-neutral-900: #04040f;
+  --ds-neutral-950: #020208;
+  --ds-neutral-1000: #000000;
+
+  /* ============================================================
+     2. SEMANTIC COLORS
+     ============================================================ */
+
+  /* ── Brand ── */
+  --ds-brand-primary: var(--ds-cyan-500);
+  --ds-brand-secondary: var(--ds-magenta-500);
+  --ds-brand-accent: var(--ds-gold-400);
+
+  /* ── Backgrounds ── */
+  --ds-bg-deep: var(--ds-neutral-900);
+  --ds-bg-mid: var(--ds-neutral-800);
+  --ds-bg-surface: rgba(8, 8, 28, 0.82);
+  --ds-bg-elevated: rgba(255, 255, 255, 0.04);
+  --ds-bg-hover: rgba(0, 245, 255, 0.08);
+  --ds-bg-active: rgba(0, 245, 255, 0.15);
+  --ds-bg-overlay: rgba(0, 0, 0, 0.5);
+
+  /* ── Text ── */
+  --ds-text-primary: var(--ds-neutral-50);
+  --ds-text-secondary: rgba(200, 210, 240, 0.55);
+  --ds-text-disabled: rgba(200, 210, 240, 0.3);
+  --ds-text-inverse: #030814;
+  --ds-text-link: var(--ds-cyan-500);
+
+  /* ── Borders ── */
+  --ds-border-default: rgba(0, 245, 255, 0.12);
+  --ds-border-hover: rgba(0, 245, 255, 0.3);
+  --ds-border-focus: var(--ds-cyan-500);
+  --ds-border-subtle: rgba(255, 255, 255, 0.06);
+  --ds-border-strong: rgba(255, 255, 255, 0.15);
+
+  /* ── Status ── */
+  --ds-status-success: var(--ds-green-500);
+  --ds-status-warning: var(--ds-gold-400);
+  --ds-status-error: var(--ds-red-500);
+  --ds-status-info: var(--ds-cyan-500);
+  --ds-status-success-bg: rgba(0, 255, 148, 0.07);
+  --ds-status-warning-bg: rgba(255, 209, 102, 0.07);
+  --ds-status-error-bg: rgba(255, 95, 109, 0.07);
+  --ds-status-info-bg: rgba(0, 245, 255, 0.07);
+  --ds-status-success-border: rgba(0, 255, 148, 0.25);
+  --ds-status-warning-border: rgba(255, 209, 102, 0.25);
+  --ds-status-error-border: rgba(255, 95, 109, 0.25);
+  --ds-status-info-border: rgba(0, 245, 255, 0.25);
+
+  /* ── Circle Domain Colors ── */
+  --ds-circle-awareness: #00F5FF;
+  --ds-circle-awareness-glow: rgba(0, 245, 255, 0.15);
+  --ds-circle-knowledge: #00FF41;
+  --ds-circle-knowledge-glow: rgba(0, 255, 65, 0.15);
+  --ds-circle-truth: #FF00E5;
+  --ds-circle-truth-glow: rgba(255, 0, 229, 0.15);
+
+  /* ── Emotion Colors ── */
+  --ds-emotion-calm: #00CED1;
+  --ds-emotion-anxious: #FF6B35;
+  --ds-emotion-joyful: #FFD700;
+  --ds-emotion-sad: #4169E1;
+  --ds-emotion-stressed: #ff5e5e;
+
+  /* ── Gradients ── */
+  --ds-gradient-brand: linear-gradient(135deg, #ffffff 0%, #00f5ff 60%, #a0f0ff 100%);
+  --ds-gradient-cta: linear-gradient(90deg, #abfc55 0%, #20d866 100%);
+  --ds-gradient-cta-hover: linear-gradient(90deg, #bfff70 0%, #28e674 100%);
+  --ds-gradient-surface: radial-gradient(ellipse at 30% 20%, rgba(0, 245, 255, 0.03) 0%, transparent 60%);
+
+  /* ============================================================
+     3. TYPOGRAPHY
+     ============================================================ */
+
+  /* ── Font Families ── */
+  --ds-font-display: 'Outfit', sans-serif;
+  --ds-font-body: 'Inter', sans-serif;
+  --ds-font-arabic: 'Noto Kufi Arabic', 'Inter', sans-serif;
+  --ds-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* ── Font Weights ── */
+  --ds-weight-light: 300;
+  --ds-weight-regular: 400;
+  --ds-weight-medium: 500;
+  --ds-weight-semibold: 600;
+  --ds-weight-bold: 700;
+  --ds-weight-extrabold: 800;
+  --ds-weight-black: 900;
+
+  /* ── Type Scale ── */
+  /* Level 1: Nano */
+  --ds-text-nano: 11px;
+  --ds-text-nano-lh: 16px;
+  --ds-text-nano-ls: 0.4px;
+
+  /* Level 2: Micro */
+  --ds-text-micro: 10px;
+  --ds-text-micro-lh: 14px;
+  --ds-text-micro-ls: 0.5px;
+
+  /* Level 3: Caption */
+  --ds-text-caption: 11px;
+  --ds-text-caption-lh: 16px;
+  --ds-text-caption-ls: 0.3px;
+
+  /* Level 4: Small */
+  --ds-text-small: 12px;
+  --ds-text-small-lh: 18px;
+  --ds-text-small-ls: 0.2px;
+
+  /* Level 5: Body */
+  --ds-text-body: 14px;
+  --ds-text-body-lh: 22px;
+  --ds-text-body-ls: 0px;
+
+  /* Level 6: Lead */
+  --ds-text-lead: 16px;
+  --ds-text-lead-lh: 24px;
+  --ds-text-lead-ls: -0.1px;
+
+  /* Level 7: Title */
+  --ds-text-title: 20px;
+  --ds-text-title-lh: 28px;
+  --ds-text-title-ls: -0.3px;
+
+  /* Level 8: Heading */
+  --ds-text-heading: 26px;
+  --ds-text-heading-lh: 34px;
+  --ds-text-heading-ls: -0.5px;
+
+  /* Level 9: Display */
+  --ds-text-display: 36px;
+  --ds-text-display-lh: 44px;
+  --ds-text-display-ls: -0.8px;
+
+  /* ============================================================
+     4. SPACING (8px base)
+     ============================================================ */
+  --ds-space-0: 0px;
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 20px;
+  --ds-space-6: 24px;
+  --ds-space-7: 28px;
+  --ds-space-8: 32px;
+  --ds-space-10: 40px;
+  --ds-space-12: 48px;
+  --ds-space-16: 64px;
+  --ds-space-20: 80px;
+
+  /* ============================================================
+     5. BORDER RADIUS
+     ============================================================ */
+  --ds-radius-none: 0px;
+  --ds-radius-xs: 4px;
+  --ds-radius-sm: 8px;
+  --ds-radius-md: 12px;
+  --ds-radius-lg: 16px;
+  --ds-radius-xl: 20px;
+  --ds-radius-2xl: 24px;
+  --ds-radius-3xl: 28px;
+  --ds-radius-full: 100px;
+  --ds-radius-circle: 50%;
+
+  /* ============================================================
+     6. SHADOWS & GLOWS
+     ============================================================ */
+  --ds-shadow-none: none;
+  --ds-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --ds-shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --ds-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --ds-shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.7);
+  --ds-shadow-panel: 0 0 60px rgba(0, 245, 255, 0.04), 0 24px 48px rgba(0, 0, 0, 0.7);
+  --ds-glow-cyan: 0 0 20px rgba(0, 245, 255, 0.3);
+  --ds-glow-cyan-strong: 0 4px 20px rgba(0, 245, 255, 0.4);
+  --ds-glow-green: 0 0 10px rgba(0, 255, 148, 0.3);
+  --ds-glow-red: 0 0 10px rgba(255, 95, 109, 0.3);
+  --ds-shadow-inset: inset 0 0 20px rgba(0, 0, 0, 0.5);
+
+  /* ============================================================
+     7. BLUR
+     ============================================================ */
+  --ds-blur-sm: 8px;
+  --ds-blur-md: 10px;
+  --ds-blur-lg: 16px;
+  --ds-blur-xl: 28px;
+
+  /* ============================================================
+     8. MOTION
+     ============================================================ */
+  --ds-duration-instant: 0ms;
+  --ds-duration-fast: 120ms;
+  --ds-duration-normal: 200ms;
+  --ds-duration-moderate: 300ms;
+  --ds-duration-slow: 400ms;
+  --ds-duration-slower: 600ms;
+  --ds-duration-deliberate: 800ms;
+
+  --ds-ease-default: ease;
+  --ds-ease-in: ease-in;
+  --ds-ease-out: ease-out;
+  --ds-ease-in-out: ease-in-out;
+  --ds-ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ds-ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ============================================================
+     9. GRID
+     ============================================================ */
+  --ds-grid-columns: 12;
+  --ds-grid-gutter: 16px;
+  --ds-grid-margin: 32px;
+  --ds-grid-max-width: 1440px;
+
+  /* ============================================================
+     10. Z-INDEX
+     ============================================================ */
+  --ds-z-base: 0;
+  --ds-z-raised: 1;
+  --ds-z-dropdown: 10;
+  --ds-z-sticky: 20;
+  --ds-z-overlay: 30;
+  --ds-z-modal: 40;
+  --ds-z-popover: 50;
+  --ds-z-toast: 60;
+  --ds-z-tooltip: 70;
+  --ds-z-max: 9999;
+}
+
+/* ============================================================
+   RESPONSIVE OVERRIDES
+   ============================================================ */
+@media (max-width: 768px) {
+  :root {
+    --ds-grid-margin: 24px;
+    --ds-grid-gutter: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --ds-text-heading: 22px;
+    --ds-text-heading-lh: 28px;
+    --ds-text-display: 28px;
+    --ds-text-display-lh: 36px;
+    --ds-text-lead: 14px;
+    --ds-text-lead-lh: 22px;
+    --ds-grid-margin: 16px;
+  }
+}
+
+/* ============================================================
+   HIGH CONTRAST MODE
+   ============================================================ */
+@media (prefers-contrast: high) {
+  :root {
+    --ds-text-secondary: rgba(200, 210, 240, 0.85);
+    --ds-text-disabled: rgba(200, 210, 240, 0.6);
+    --ds-border-default: rgba(0, 245, 255, 0.4);
+    --ds-border-subtle: rgba(255, 255, 255, 0.2);
+    --ds-bg-elevated: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ds-duration-fast: 0ms;
+    --ds-duration-normal: 0ms;
+    --ds-duration-moderate: 0ms;
+    --ds-duration-slow: 0ms;
+    --ds-duration-slower: 0ms;
+    --ds-duration-deliberate: 0ms;
+  }
+}
+
+/* ============================================================
+   GRID UTILITIES
+   ============================================================ */
+.ds-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--ds-grid-columns), 1fr);
+  gap: var(--ds-grid-gutter);
+  max-width: var(--ds-grid-max-width);
+  margin-inline: auto;
+  padding-inline: var(--ds-grid-margin);
+}
+
+.ds-col-1 {
+  grid-column: span 1;
+}
+
+.ds-col-2 {
+  grid-column: span 2;
+}
+
+.ds-col-3 {
+  grid-column: span 3;
+}
+
+.ds-col-4 {
+  grid-column: span 4;
+}
+
+.ds-col-5 {
+  grid-column: span 5;
+}
+
+.ds-col-6 {
+  grid-column: span 6;
+}
+
+.ds-col-7 {
+  grid-column: span 7;
+}
+
+.ds-col-8 {
+  grid-column: span 8;
+}
+
+.ds-col-9 {
+  grid-column: span 9;
+}
+
+.ds-col-10 {
+  grid-column: span 10;
+}
+
+.ds-col-11 {
+  grid-column: span 11;
+}
+
+.ds-col-12 {
+  grid-column: span 12;
+}
+
+@media (max-width: 768px) {
+  .ds-col-md-6 {
+    grid-column: span 6;
+  }
+
+  .ds-col-md-12 {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 480px) {
+  .ds-col-sm-12 {
+    grid-column: span 12;
+  }
+}
+
+/* ============================================================
+   TYPOGRAPHY UTILITIES
+   ============================================================ */
+.ds-text-nano {
+  font-size: var(--ds-text-nano);
+  line-height: var(--ds-text-nano-lh);
+  letter-spacing: var(--ds-text-nano-ls);
+}
+
+.ds-text-micro {
+  font-size: var(--ds-text-micro);
+  line-height: var(--ds-text-micro-lh);
+  letter-spacing: var(--ds-text-micro-ls);
+}
+
+.ds-text-caption {
+  font-size: var(--ds-text-caption);
+  line-height: var(--ds-text-caption-lh);
+  letter-spacing: var(--ds-text-caption-ls);
+}
+
+.ds-text-small {
+  font-size: var(--ds-text-small);
+  line-height: var(--ds-text-small-lh);
+  letter-spacing: var(--ds-text-small-ls);
+}
+
+.ds-text-body {
+  font-size: var(--ds-text-body);
+  line-height: var(--ds-text-body-lh);
+  letter-spacing: var(--ds-text-body-ls);
+}
+
+.ds-text-lead {
+  font-size: var(--ds-text-lead);
+  line-height: var(--ds-text-lead-lh);
+  letter-spacing: var(--ds-text-lead-ls);
+}
+
+.ds-text-title {
+  font-size: var(--ds-text-title);
+  line-height: var(--ds-text-title-lh);
+  letter-spacing: var(--ds-text-title-ls);
+}
+
+.ds-text-heading {
+  font-size: var(--ds-text-heading);
+  line-height: var(--ds-text-heading-lh);
+  letter-spacing: var(--ds-text-heading-ls);
+}
+
+.ds-text-display {
+  font-size: var(--ds-text-display);
+  line-height: var(--ds-text-display-lh);
+  letter-spacing: var(--ds-text-display-ls);
+}
+
+.ds-font-display {
+  font-family: var(--ds-font-display);
+}
+
+.ds-font-body {
+  font-family: var(--ds-font-body);
+}
+
+.ds-font-arabic {
+  font-family: var(--ds-font-arabic);
+  direction: rtl;
+}
+
+.ds-font-mono {
+  font-family: var(--ds-font-mono);
+}
+
+.ds-weight-light {
+  font-weight: var(--ds-weight-light);
+}
+
+.ds-weight-regular {
+  font-weight: var(--ds-weight-regular);
+}
+
+.ds-weight-medium {
+  font-weight: var(--ds-weight-medium);
+}
+
+.ds-weight-semibold {
+  font-weight: var(--ds-weight-semibold);
+}
+
+.ds-weight-bold {
+  font-weight: var(--ds-weight-bold);
+}
+
+.ds-weight-extrabold {
+  font-weight: var(--ds-weight-extrabold);
+}
+
+.ds-weight-black {
+  font-weight: var(--ds-weight-black);
+}
+
+/* ============================================================
+   SPACING UTILITIES
+   ============================================================ */
+.ds-gap-0 {
+  gap: var(--ds-space-0);
+}
+
+.ds-gap-1 {
+  gap: var(--ds-space-1);
+}
+
+.ds-gap-2 {
+  gap: var(--ds-space-2);
+}
+
+.ds-gap-3 {
+  gap: var(--ds-space-3);
+}
+
+.ds-gap-4 {
+  gap: var(--ds-space-4);
+}
+
+.ds-gap-5 {
+  gap: var(--ds-space-5);
+}
+
+.ds-gap-6 {
+  gap: var(--ds-space-6);
+}
+
+.ds-gap-8 {
+  gap: var(--ds-space-8);
+}
+
+.ds-p-0 {
+  padding: var(--ds-space-0);
+}
+
+.ds-p-1 {
+  padding: var(--ds-space-1);
+}
+
+.ds-p-2 {
+  padding: var(--ds-space-2);
+}
+
+.ds-p-3 {
+  padding: var(--ds-space-3);
+}
+
+.ds-p-4 {
+  padding: var(--ds-space-4);
+}
+
+.ds-p-5 {
+  padding: var(--ds-space-5);
+}
+
+.ds-p-6 {
+  padding: var(--ds-space-6);
+}
+
+.ds-p-8 {
+  padding: var(--ds-space-8);
+}
+
+/* ============================================================
+   ANIMATION KEYFRAMES
+   ============================================================ */
+@keyframes ds-blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes ds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ds-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes ds-wave {
+
+  0%,
+  100% {
+    transform: scaleY(0.4);
+    opacity: 0.4;
+  }
+
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes ds-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ds-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ds-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ds-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ds-pulse-stress {
+  from {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes ds-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}

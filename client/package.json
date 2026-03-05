@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:e2e": "playwright test",
+    "perf:budget": "node scripts/check_bundle_budget.cjs",
+    "preview": "vite preview",
+    "a11y:smoke": "node scripts/accessibility_smoke.cjs",
+    "ci:check": "npm run lint && npm run build && npm run perf:budget && npm run a11y:smoke && npm run test:unit"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -18,10 +24,15 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "@playwright/test": "^1.54.2",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
-    "vite": "^7.3.1"
+    "jsdom": "^26.1.0",
+    "vite": "^7.3.1",
+    "vitest": "^3.2.4"
   }
 }

@@ -38,8 +38,14 @@ const hexToRgba = (hex, alpha) => {
     return `rgba(${r},${g},${b},${alpha})`;
 };
 
-const drawBackground = (ctx, canvasWidth, canvasHeight) => {
-    ctx.fillStyle = '#080812';
+const getCssVar = (name, fallback) => {
+    if (typeof window === 'undefined') return fallback;
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+};
+
+const drawBackground = (ctx, canvasWidth, canvasHeight, color) => {
+    ctx.fillStyle = color;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 };
 
@@ -145,14 +151,20 @@ const drawNodes = (ctx, nodes) => {
 };
 
 const DawayirCanvas = memo(forwardRef((props, ref) => {
-    const PANEL_WIDTH = 380;
+    const PANEL_WIDTH = Number.parseInt(getCssVar('--ds-grid-panel-width', '380'), 10) || 380;
     const TARGET_FPS = 24;
     const DEBUG_CANVAS = false;
+    const paletteRef = useRef({
+        background: '#04040f',
+        awareness: '#00F5FF',
+        knowledge: '#00FF41',
+        truth: '#FF00E5',
+    });
     const canvasRef = useRef(null);
     const nodesRef = useRef([
-        { id: 1, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.25, y: window.innerHeight / 2, radius: 70, targetRadius: 70, color: '#00F5FF', targetColor: '#00F5FF', label: 'Awareness', pulse: 0, velocity: { x: 0.2, y: 0.1 } },
-        { id: 2, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.5, y: window.innerHeight / 2, radius: 85, targetRadius: 85, color: '#00FF41', targetColor: '#00FF41', label: 'Science', pulse: 0, velocity: { x: -0.15, y: 0.25 } },
-        { id: 3, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.75, y: window.innerHeight / 2, radius: 95, targetRadius: 95, color: '#FF00E5', targetColor: '#FF00E5', label: 'Truth', pulse: 0, velocity: { x: 0.1, y: -0.2 } },
+        { id: 1, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.25, y: window.innerHeight / 2, radius: 70, targetRadius: 70, color: '#00F5FF', targetColor: '#00F5FF', label: props.lang === 'ar' ? 'الوعي' : 'Awareness', pulse: 0, velocity: { x: 0.2, y: 0.1 } },
+        { id: 2, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.5, y: window.innerHeight / 2, radius: 85, targetRadius: 85, color: '#00FF41', targetColor: '#00FF41', label: props.lang === 'ar' ? 'العلم' : 'Knowledge', pulse: 0, velocity: { x: -0.15, y: 0.25 } },
+        { id: 3, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.75, y: window.innerHeight / 2, radius: 95, targetRadius: 95, color: '#FF00E5', targetColor: '#FF00E5', label: props.lang === 'ar' ? 'الحقيقة' : 'Truth', pulse: 0, velocity: { x: 0.1, y: -0.2 } },
     ]);
     const particlesRef = useRef([]);
     const dashOffsetRef = useRef(0);
@@ -160,6 +172,22 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
     const [draggingNode, setDraggingNode] = useState(null);
 
     useEffect(() => {
+        const awareness = getCssVar('--ds-circle-awareness', '#00F5FF');
+        const knowledge = getCssVar('--ds-circle-knowledge', '#00FF41');
+        const truth = getCssVar('--ds-circle-truth', '#FF00E5');
+        paletteRef.current = {
+            background: getCssVar('--ds-bg-deep', '#04040f'),
+            awareness,
+            knowledge,
+            truth,
+        };
+        nodesRef.current = nodesRef.current.map((node) => {
+            if (node.id === 1) return { ...node, color: awareness, targetColor: awareness };
+            if (node.id === 2) return { ...node, color: knowledge, targetColor: knowledge };
+            if (node.id === 3) return { ...node, color: truth, targetColor: truth };
+            return node;
+        });
+
         const particles = [];
         for (let i = 0; i < 30; i++) {
             particles.push({
@@ -232,7 +260,7 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
             const canvasWidth = canvas.width;
             const canvasHeight = canvas.height;
 
-            drawBackground(ctx, canvasWidth, canvasHeight);
+            drawBackground(ctx, canvasWidth, canvasHeight, paletteRef.current.background);
             drawParticles(ctx, particlesRef.current, canvasWidth, canvasHeight);
             updateNodesPhysics(currentNodes, draggingNode, canvasWidth, canvasHeight, PANEL_WIDTH);
             drawConnections(ctx, currentNodes, dashOffsetRef);
@@ -243,7 +271,7 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
 
         render();
         return () => window.cancelAnimationFrame(animationFrameId);
-    }, [draggingNode]);
+    }, [draggingNode, PANEL_WIDTH]);
 
     const handleMouseDown = (e) => {
         const rect = canvasRef.current.getBoundingClientRect();
@@ -268,15 +296,50 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
 
     const handleMouseUp = () => setDraggingNode(null);
 
+    const handleTouchStart = (e) => {
+        const touch = e.touches?.[0];
+        if (!touch) return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        const touchedNode = nodesRef.current.find(node => {
+            const distance = Math.sqrt((x - node.x) ** 2 + (y - node.y) ** 2);
+            return distance < node.radius;
+        });
+        if (touchedNode) setDraggingNode(touchedNode.id);
+    };
+
+    const handleTouchMove = (e) => {
+        if (!draggingNode) return;
+        const touch = e.touches?.[0];
+        if (!touch) return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        nodesRef.current = nodesRef.current.map(node =>
+            node.id === draggingNode ? { ...node, x, y } : node
+        );
+    };
+
+    const handleTouchEnd = () => setDraggingNode(null);
+
     return (
         <canvas
             ref={canvasRef}
             width={window.innerWidth}
             height={window.innerHeight}
+            role="img"
+            aria-label={props.lang === 'ar'
+                ? 'خريطة دواير الذهنية بثلاث دوائر: الوعي والعلم والحقيقة'
+                : 'Dawayir mental map with three circles: awareness, knowledge, and truth'}
+            tabIndex={0}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             style={{ display: 'block' }}
         />
     );

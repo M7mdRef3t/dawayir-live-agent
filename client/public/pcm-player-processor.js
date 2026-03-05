@@ -16,9 +16,9 @@ class PcmPlayerProcessor extends AudioWorkletProcessor {
     this.wasPlaying = false;
     this.emptyFrameCount = 0;
     this.totalSamplesPlayed = 0;
-    // Pre-buffer: accumulate ~120ms (2880 samples at 24kHz) before
+    // Pre-buffer: accumulate ~250ms (6000 samples at 24kHz) before
     // starting playback. Smooths the initial burst without noticeable delay.
-    this.prebufferThreshold = 2880;
+    this.prebufferThreshold = 6000;
     this.prebuffering = true;
 
     this.port.onmessage = (e) => {
@@ -89,12 +89,10 @@ class PcmPlayerProcessor extends AudioWorkletProcessor {
       this.emptyFrameCount++;
 
       // Only notify ONCE when transitioning from playing to empty.
-      // Use adaptive threshold based on how much audio has played:
-      // - Less than 2 seconds played: wait ~500ms (94 frames) before declaring drained.
-      //   This handles slow streaming at start and after tool calls.
-      // - After 2+ seconds: wait ~200ms (38 frames) — normal speech gap detection.
+      // Use a larger threshold to handle network jitter and slow chunk streaming.
+      // Wait ~800ms (150 frames) before declaring drained to prevent mid-sentence stuttering.
       // At 24kHz with 128 samples/frame: 1 frame ≈ 5.3ms
-      const threshold = this.totalSamplesPlayed < 48000 ? 94 : 38;
+      const threshold = 150;
       if (this.wasPlaying && this.emptyFrameCount === threshold) {
         this.wasPlaying = false;
         // Re-enter prebuffer mode so next response also gets smoothing
