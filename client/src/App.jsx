@@ -44,10 +44,53 @@ import { useSessionHotkeys } from './hooks/useSessionHotkeys';
 // moved to features/session/constants
 // Client-side VAD removed -- Gemini's built-in VAD handles turn detection.
 
+const AUTO_DEMO_SCRIPT = {
+  ar: [
+    { prompt: 'ابدأ معي ديمو تلقائي قصير. عرف نفسك بجملة واحدة.' },
+    { prompt: 'دلوقتي ركز على دائرة الوعي: صغرها قليلًا وخلي اللون أهدى.' },
+    { prompt: 'ممتاز. كبر دائرة العلم شوية وخليها أوضح.' },
+    { prompt: 'حوّل التركيز للحقيقة وعدّل الألوان لتحقيق توازن أفضل.' },
+    { prompt: 'لو سمحت لخص الحالة الحالية في جملة قصيرة وواضحة.' },
+    { prompt: 'قبل النهاية، احفظ الخريطة الذهنية وأنشئ تقرير جلسة مختصر.' },
+  ],
+  en: [
+    { prompt: 'Start a short auto demo. Introduce yourself in one sentence.' },
+    { prompt: 'Focus on Awareness: shrink it slightly and make the color calmer.' },
+    { prompt: 'Great. Enlarge Knowledge a bit and make it more vivid.' },
+    { prompt: 'Shift focus to Truth and rebalance the colors for better harmony.' },
+    { prompt: 'Please summarize the current state in one short clear sentence.' },
+    { prompt: 'Before ending, save the mental map and generate a short session report.' },
+  ],
+};
+
+const AUTO_DEMO_COPY = {
+  ar: {
+    start: 'تشغيل الديمو التلقائي',
+    stop: 'إيقاف الديمو',
+    booting: 'جاري تجهيز الديمو التلقائي...',
+    waitingSession: 'بانتظر اتصال Gemini Live...',
+    running: 'الديمو التلقائي شغال',
+    completed: 'الديمو التلقائي اكتمل',
+    canceled: 'تم إيقاف الديمو',
+    failed: 'تعذر بدء الديمو: تأكد من الاتصال',
+  },
+  en: {
+    start: 'Start Auto Demo',
+    stop: 'Stop Auto Demo',
+    booting: 'Preparing auto demo...',
+    waitingSession: 'Waiting for Gemini Live connection...',
+    running: 'Auto demo running',
+    completed: 'Auto demo completed',
+    canceled: 'Auto demo stopped',
+    failed: 'Auto demo failed: check connection',
+  },
+};
+
 function App() {
   const [isCinematicReady, setIsCinematicReady] = useState(false);
   const [lang, setLang] = useState('ar');
   const t = STRINGS[lang];
+  const autoDemoCopy = useMemo(() => AUTO_DEMO_COPY[lang] ?? AUTO_DEMO_COPY.en, [lang]);
   const [status, setStatus] = useState('Disconnected');
   const [errorMessage, setErrorMessage] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -66,6 +109,8 @@ function App() {
   const [transcript, setTranscript] = useState([]); // Live transcript entries
   const [isTranscriptVisible, setIsTranscriptVisible] = useState(true);
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
+  const [isAutoDemoRunning, setIsAutoDemoRunning] = useState(false);
+  const [autoDemoStatus, setAutoDemoStatus] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(() => window.localStorage.getItem('dawayir-onboarding-seen') !== 'true');
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
@@ -213,6 +258,11 @@ function App() {
   const reconnectTimeoutRef = useRef(null);
   const micStartTimeoutRef = useRef(null);
   const manualCloseRef = useRef(false);
+  const autoDemoRunIdRef = useRef(0);
+  const autoDemoTimerRef = useRef(null);
+  const autoDemoPendingStartRef = useRef(false);
+  const appViewRef = useRef(appView);
+  const isConnectedRef = useRef(isConnected);
   const sessionContextRef = useRef([]); // Stores last few text segments for context preservation
   const restoreAfterGeminiReconnectRef = useRef(false);
   const lastRestorePromptAtRef = useRef(0);
@@ -243,6 +293,14 @@ function App() {
   useEffect(() => {
     isMicActiveRef.current = isMicActive;
   }, [isMicActive]);
+
+  useEffect(() => {
+    appViewRef.current = appView;
+  }, [appView]);
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
 
   const startCamera = useCallback(async () => {
     console.log("[Camera] Starting camera...");
@@ -1095,6 +1153,77 @@ function App() {
     }
   }, [startTurnLatency]);
 
+  const clearAutoDemoTimer = useCallback(() => {
+    if (autoDemoTimerRef.current) {
+      window.clearTimeout(autoDemoTimerRef.current);
+      autoDemoTimerRef.current = null;
+    }
+  }, []);
+
+  const sleepForAutoDemo = useCallback((ms, runId) => (
+    new Promise((resolve) => {
+      if (autoDemoRunIdRef.current !== runId) {
+        resolve(false);
+        return;
+      }
+      clearAutoDemoTimer();
+      autoDemoTimerRef.current = window.setTimeout(() => {
+        autoDemoTimerRef.current = null;
+        resolve(autoDemoRunIdRef.current === runId);
+      }, ms);
+    })
+  ), [clearAutoDemoTimer]);
+
+  const waitForAutoDemoReady = useCallback(async (runId, timeoutMs = 25000) => {
+    const startedAt = Date.now();
+    while ((Date.now() - startedAt) < timeoutMs) {
+      if (autoDemoRunIdRef.current !== runId) return false;
+      if (
+        isConnectedRef.current
+        && setupCompleteRef.current
+        && appViewRef.current === 'live'
+      ) {
+        return true;
+      }
+      const keepGoing = await sleepForAutoDemo(180, runId);
+      if (!keepGoing) return false;
+    }
+    return false;
+  }, [sleepForAutoDemo]);
+
+  const waitForAgentToSettle = useCallback(async (runId, timeoutMs = 14000) => {
+    const startedAt = Date.now();
+    let quietMs = 0;
+    while ((Date.now() - startedAt) < timeoutMs) {
+      if (autoDemoRunIdRef.current !== runId) return false;
+      if (isAgentSpeakingRef.current) {
+        quietMs = 0;
+      } else {
+        quietMs += 180;
+        if (quietMs >= 720) {
+          return true;
+        }
+      }
+      const keepGoing = await sleepForAutoDemo(180, runId);
+      if (!keepGoing) return false;
+    }
+    return true;
+  }, [sleepForAutoDemo]);
+
+  const stopAutoDemo = useCallback((reason = 'auto_demo_stopped', statusText = null) => {
+    const hadActiveDemo = isAutoDemoRunning || autoDemoPendingStartRef.current;
+    autoDemoRunIdRef.current += 1;
+    clearAutoDemoTimer();
+    autoDemoPendingStartRef.current = false;
+    setIsAutoDemoRunning(false);
+    if (statusText !== null) {
+      setAutoDemoStatus(statusText);
+    }
+    if (hadActiveDemo) {
+      setLastEvent(reason);
+    }
+  }, [clearAutoDemoTimer, isAutoDemoRunning]);
+
   const handleBioStateChange = useCallback((level) => {
     if (appView !== 'live' || !isConnected) return;
     const socket = wsRef.current;
@@ -1191,6 +1320,7 @@ function App() {
   }, [isTransitioningToSetup]);
 
   const disconnect = useCallback(async () => {
+    stopAutoDemo('auto_demo_stopped_disconnect', '');
     manualCloseRef.current = true;
     if (reconnectTimeoutRef.current) {
       window.clearTimeout(reconnectTimeoutRef.current);
@@ -1230,7 +1360,7 @@ function App() {
 
     setStatus('Disconnected');
     setLastEvent('manual_disconnect');
-  }, [closeSpeakerContext, resetAgentTurnState, stopMicrophone, stopPlayback]);
+  }, [closeSpeakerContext, resetAgentTurnState, stopAutoDemo, stopMicrophone, stopPlayback]);
 
   const connect = useCallback(async () => {
     if (connectLockRef.current) {
@@ -1296,7 +1426,7 @@ function App() {
       wsUrl.searchParams.set('token', token);
       wsUrlString = wsUrl.toString();
     }
-    console.log('[Connect] Opening WebSocket to', wsUrlString);
+    // console.log('[Connect] Opening WebSocket to', wsUrlString);
     const socket = new WebSocket(wsUrlString);
     socket.binaryType = 'arraybuffer';
     wsRef.current = socket;
@@ -1352,16 +1482,6 @@ function App() {
       }
 
       if (!message) return;
-
-      // Diagnostic logging is noisy for streaming chunks; keep signal by default.
-      const msgKeys = Object.keys(message).join(',');
-      const nonNoisyKeys = Object.keys(message).filter(
-        (key) => !['serverContent', 'server_content', 'usageMetadata', 'usage_metadata'].includes(key)
-      );
-      const isOnlyDebugTranscription = nonNoisyKeys.length === 1 && nonNoisyKeys[0] === 'debugTranscription';
-      if (WS_LOG_VERBOSE || (nonNoisyKeys.length > 0 && !isOnlyDebugTranscription)) {
-        console.log(`[WS] Message received -- keys: [${msgKeys}]`);
-      }
 
       // Debug: log transcription data forwarded from server
       if (message.debugTranscription) {
@@ -1810,6 +1930,97 @@ function App() {
     resolveTurnLatency,
   ]);
 
+  const handleAutoDemoToggle = useCallback(async () => {
+    if (isAutoDemoRunning) {
+      stopAutoDemo('auto_demo_user_stop', autoDemoCopy.canceled);
+      return;
+    }
+
+    const runId = autoDemoRunIdRef.current + 1;
+    autoDemoRunIdRef.current = runId;
+    autoDemoPendingStartRef.current = true;
+    setIsAutoDemoRunning(true);
+    setAutoDemoStatus(autoDemoCopy.booting);
+    setLastEvent('auto_demo_booting');
+
+    if (!isConnectedRef.current && !isStarting) {
+      connect();
+    }
+
+    if (!isConnectedRef.current || !setupCompleteRef.current || appViewRef.current !== 'live') {
+      setAutoDemoStatus(autoDemoCopy.waitingSession);
+    }
+
+    const isReady = await waitForAutoDemoReady(runId);
+    if (!isReady) {
+      if (autoDemoRunIdRef.current === runId) {
+        autoDemoPendingStartRef.current = false;
+        clearAutoDemoTimer();
+        setIsAutoDemoRunning(false);
+        setAutoDemoStatus(autoDemoCopy.failed);
+        setLastEvent('auto_demo_not_ready');
+      }
+      return;
+    }
+
+    autoDemoPendingStartRef.current = false;
+    const steps = AUTO_DEMO_SCRIPT[lang] ?? AUTO_DEMO_SCRIPT.en;
+
+    for (let i = 0; i < steps.length; i += 1) {
+      if (autoDemoRunIdRef.current !== runId) return;
+
+      if (!isConnectedRef.current || !setupCompleteRef.current || appViewRef.current !== 'live') {
+        setAutoDemoStatus(autoDemoCopy.waitingSession);
+        const restored = await waitForAutoDemoReady(runId, 20000);
+        if (!restored) {
+          if (autoDemoRunIdRef.current === runId) {
+            clearAutoDemoTimer();
+            setIsAutoDemoRunning(false);
+            setAutoDemoStatus(autoDemoCopy.failed);
+            setLastEvent('auto_demo_lost_connection');
+          }
+          return;
+        }
+      }
+
+      const currentStep = steps[i];
+      setAutoDemoStatus(`${autoDemoCopy.running} ${i + 1}/${steps.length}`);
+      handleTextCommand(currentStep.prompt);
+
+      const keptOpen = await sleepForAutoDemo(750, runId);
+      if (!keptOpen) return;
+
+      const settled = await waitForAgentToSettle(runId, currentStep.maxWaitMs || 14000);
+      if (!settled) return;
+
+      const keepGap = await sleepForAutoDemo(500, runId);
+      if (!keepGap) return;
+    }
+
+    if (autoDemoRunIdRef.current !== runId) return;
+    clearAutoDemoTimer();
+    setIsAutoDemoRunning(false);
+    setAutoDemoStatus(autoDemoCopy.completed);
+    setLastEvent('auto_demo_completed');
+  }, [
+    autoDemoCopy.booting,
+    autoDemoCopy.canceled,
+    autoDemoCopy.completed,
+    autoDemoCopy.failed,
+    autoDemoCopy.running,
+    autoDemoCopy.waitingSession,
+    clearAutoDemoTimer,
+    connect,
+    handleTextCommand,
+    isAutoDemoRunning,
+    isStarting,
+    lang,
+    sleepForAutoDemo,
+    stopAutoDemo,
+    waitForAgentToSettle,
+    waitForAutoDemoReady,
+  ]);
+
   useSessionHotkeys({
     appView,
     isConnected,
@@ -1826,6 +2037,10 @@ function App() {
     const introTimer = setTimeout(() => setIsCinematicReady(true), 60);
     return () => clearTimeout(introTimer);
   }, []);
+
+  useEffect(() => () => {
+    clearAutoDemoTimer();
+  }, [clearAutoDemoTimer]);
 
   return (
     <div className={`App ${isCinematicReady ? 'cinematic-in' : 'cinematic-prep'}`} role="application" aria-label="Dawayir live session application">
@@ -1896,6 +2111,11 @@ function App() {
                 <div className="debug-status-line" title="setup/mic/retries/tools/last/rt">
                   {debugLineText}
                 </div>
+                {autoDemoStatus && (
+                  <div className={`auto-demo-status-line ${isAutoDemoRunning ? 'running' : ''}`}>
+                    {autoDemoStatus}
+                  </div>
+                )}
               </div>
 
               {/* Main Controls - SETUP SCREEN ONLY */}
@@ -1974,6 +2194,16 @@ function App() {
                       )}
                     </button>
                   )}
+
+                  <div className="setup-auto-demo-row">
+                    <button
+                      className={`secondary setup-auto-demo-btn ${isAutoDemoRunning ? 'is-active' : ''}`}
+                      onClick={handleAutoDemoToggle}
+                      disabled={isStarting && !isAutoDemoRunning}
+                    >
+                      {isAutoDemoRunning ? autoDemoCopy.stop : autoDemoCopy.start}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -2064,6 +2294,12 @@ function App() {
                         </div>
                       </div>
                     )}
+                    <button
+                      className={`secondary auto-demo-live-btn ${isAutoDemoRunning ? 'is-active' : ''}`}
+                      onClick={handleAutoDemoToggle}
+                    >
+                      {isAutoDemoRunning ? autoDemoCopy.stop : autoDemoCopy.start}
+                    </button>
                     <button className="secondary disconnect-btn flex-center" onClick={() => setShowEndSessionConfirm(true)}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
                       {t.endSession}
