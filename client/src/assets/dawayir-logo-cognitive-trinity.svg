@@ -1,9 +1,5 @@
 <svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="bg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(128 128) rotate(90) scale(128)">
-      <stop stop-color="#0B1030"/>
-      <stop offset="1" stop-color="#04040F"/>
-    </radialGradient>
     <filter id="glowCyan" x="18" y="28" width="140" height="140" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feGaussianBlur stdDeviation="6" result="blur"/>
       <feMerge>
@@ -26,7 +22,6 @@
       </feMerge>
     </filter>
   </defs>
-  <rect width="256" height="256" rx="52" fill="url(#bg)"/>
   <circle cx="88" cy="96" r="44" stroke="#00F5FF" stroke-width="12" filter="url(#glowCyan)"/>
   <circle cx="168" cy="96" r="44" stroke="#00FF41" stroke-width="12" filter="url(#glowGreen)"/>
   <circle cx="128" cy="160" r="44" stroke="#FF00E5" stroke-width="12" filter="url(#glowMagenta)"/>

@@ -59,11 +59,17 @@ class DawayirMicProcessor extends AudioWorkletProcessor {
       return;
     }
 
-    const chunk = this.buffer.slice(0, this.writeIndex);
-    this.port.postMessage({
-      int16arrayBuffer: chunk.buffer,
-      sampleRate: this.targetSampleRate,
-    });
+    // Create a NEW Int16Array containing just the data we wrote
+    // This ensures we get a fresh ArrayBuffer that is exactly the right size
+    const chunkData = new Int16Array(this.buffer.subarray(0, this.writeIndex));
+
+    this.port.postMessage(
+      {
+        int16arrayBuffer: chunkData.buffer,
+        sampleRate: this.targetSampleRate,
+      },
+      [chunkData.buffer] // Transfer ownership
+    );
     this.writeIndex = 0;
   }
 }

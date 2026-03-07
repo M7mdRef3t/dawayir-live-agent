@@ -9,8 +9,46 @@
     content="Dawayir - A real-time multimodal AI mental clarity companion powered by Google Gemini Live API. Explore your mental space through interactive visual circles and natural voice conversation." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@600;700&display=swap"
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800;900&family=Noto+Kufi+Arabic:wght@400;600;700&display=swap"
     rel="stylesheet">
+  <style>
+    html.fonts-loading body {
+      opacity: 0;
+    }
+
+    html.fonts-ready body {
+      opacity: 1;
+      transition: opacity 140ms ease-out;
+    }
+  </style>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      root.classList.add('fonts-loading');
+
+      function showApp() {
+        root.classList.remove('fonts-loading');
+        root.classList.add('fonts-ready');
+      }
+
+      if (!document.fonts || !document.fonts.load) {
+        showApp();
+        return;
+      }
+
+      var timeout = setTimeout(showApp, 1600);
+
+      Promise.all([
+        document.fonts.load('400 1em Inter'),
+        document.fonts.load('600 1em Inter'),
+        document.fonts.load('700 1em Outfit'),
+        document.fonts.load('700 1em Noto Kufi Arabic')
+      ]).finally(function () {
+        clearTimeout(timeout);
+        showApp();
+      });
+    })();
+  </script>
   <title>Dawayir Live Agent | Gemini Live Challenge</title>
 </head>
 

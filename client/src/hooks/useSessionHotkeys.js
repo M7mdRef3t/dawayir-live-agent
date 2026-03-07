@@ -10,7 +10,6 @@ export function useSessionHotkeys({
   setShowSettings,
   dismissOnboarding,
   setIsTranscriptVisible,
-  disconnect,
 }) {
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -61,11 +60,9 @@ export function useSessionHotkeys({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      disconnect();
     };
   }, [
     appView,
-    disconnect,
     dismissOnboarding,
     isConnected,
     setIsTranscriptVisible,

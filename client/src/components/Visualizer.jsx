@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-function Visualizer({ stream, isConnected, lang }) {
+function Visualizer({ stream, isConnected, lang, onStressLevelChange }) {
   const canvasRef = useRef(null);
   const [stressLevel, setStressLevel] = useState('calm');
+  const stressLevelRef = useRef('calm');
+  const lastFrameTimeRef = useRef(0);
 
   useEffect(() => {
     if (!stream || !isConnected) return undefined;
@@ -15,7 +17,8 @@ function Visualizer({ stream, isConnected, lang }) {
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
 
-    analyser.fftSize = 256;
+    const TARGET_FPS = 30;
+    analyser.fftSize = 128;
     source.connect(analyser);
 
     const bufferLength = analyser.frequencyBinCount;
@@ -25,7 +28,14 @@ function Visualizer({ stream, isConnected, lang }) {
     let animationFrameId;
     let stressTimer;
 
-    const draw = () => {
+    const draw = (timestamp) => {
+      const frameInterval = 1000 / TARGET_FPS;
+      if (timestamp - lastFrameTimeRef.current < frameInterval) {
+        animationFrameId = requestAnimationFrame(draw);
+        return;
+      }
+      lastFrameTimeRef.current = timestamp;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       analyser.getByteFrequencyData(dataArray);
 
@@ -37,9 +47,17 @@ function Visualizer({ stream, isConnected, lang }) {
       const rms = Math.sqrt(sumSquares / floatArray.length);
 
       if (rms > 0.15) {
-        setStressLevel('stressed');
+        if (stressLevelRef.current !== 'stressed') {
+          stressLevelRef.current = 'stressed';
+          setStressLevel('stressed');
+          onStressLevelChange?.('stressed');
+        }
         if (stressTimer) clearTimeout(stressTimer);
-        stressTimer = setTimeout(() => setStressLevel('calm'), 2000);
+        stressTimer = setTimeout(() => {
+          stressLevelRef.current = 'calm';
+          setStressLevel('calm');
+          onStressLevelChange?.('calm');
+        }, 2000);
       }
 
       const barWidth = (canvas.width / bufferLength) * 2.5;
@@ -55,7 +73,7 @@ function Visualizer({ stream, isConnected, lang }) {
       animationFrameId = requestAnimationFrame(draw);
     };
 
-    draw();
+    animationFrameId = requestAnimationFrame(draw);
 
     return () => {
       cancelAnimationFrame(animationFrameId);
@@ -64,7 +82,7 @@ function Visualizer({ stream, isConnected, lang }) {
       source.disconnect();
       audioContext.close();
     };
-  }, [stream, isConnected]);
+  }, [isConnected, onStressLevelChange, stream]);
 
   return (
     <div className="visualizer-container" style={{ position: 'relative' }}>

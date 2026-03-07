@@ -66,7 +66,7 @@ const drawParticles = (ctx, particles, canvasWidth, canvasHeight) => {
     ctx.globalAlpha = 1.0;
 };
 
-const updateNodesPhysics = (nodes, draggingNode, canvasWidth, canvasHeight, panelWidth) => {
+const updateNodesPhysics = (nodes, draggingNode, canvasWidth, canvasHeight, minX, maxX) => {
     const lerpSpeed = 0.08;
     nodes.forEach(node => {
         if (Math.abs(node.radius - node.targetRadius) > 0.5) {
@@ -85,9 +85,9 @@ const updateNodesPhysics = (nodes, draggingNode, canvasWidth, canvasHeight, pane
         if (!draggingNode || draggingNode !== node.id) {
             node.x += node.velocity.x;
             node.y += node.velocity.y;
-            if (node.x - node.radius < panelWidth || node.x + node.radius > canvasWidth) node.velocity.x *= -1;
+            if (node.x - node.radius < minX || node.x + node.radius > maxX) node.velocity.x *= -1;
             if (node.y - node.radius < 0 || node.y + node.radius > canvasHeight) node.velocity.y *= -1;
-            node.x = Math.max(panelWidth + node.radius, Math.min(canvasWidth - node.radius, node.x));
+            node.x = Math.max(minX + node.radius, Math.min(maxX - node.radius, node.x));
             node.y = Math.max(node.radius, Math.min(canvasHeight - node.radius, node.y));
         }
     });
@@ -151,8 +151,8 @@ const drawNodes = (ctx, nodes) => {
 };
 
 const DawayirCanvas = memo(forwardRef((props, ref) => {
-    const PANEL_WIDTH = Number.parseInt(getCssVar('--ds-grid-panel-width', '380'), 10) || 380;
-    const TARGET_FPS = 24;
+    const PANEL_WIDTH = 380;
+    const TARGET_FPS = 20;
     const DEBUG_CANVAS = false;
     const paletteRef = useRef({
         background: '#04040f',
@@ -161,10 +161,18 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
         truth: '#FF00E5',
     });
     const canvasRef = useRef(null);
+    const isAr = props.lang === 'ar';
+    const initPanelW = typeof window !== 'undefined' && window.innerWidth > 768 ? PANEL_WIDTH : 0;
+    const initW = typeof window !== 'undefined' ? window.innerWidth : 1024;
+    const initH = typeof window !== 'undefined' ? window.innerHeight : 768;
+    const initMinX = isAr ? 0 : initPanelW;
+    const initMaxX = isAr ? initW - initPanelW : initW;
+    const initRange = initMaxX - initMinX;
+
     const nodesRef = useRef([
-        { id: 1, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.25, y: window.innerHeight / 2, radius: 70, targetRadius: 70, color: '#00F5FF', targetColor: '#00F5FF', label: props.lang === 'ar' ? 'الوعي' : 'Awareness', pulse: 0, velocity: { x: 0.2, y: 0.1 } },
-        { id: 2, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.5, y: window.innerHeight / 2, radius: 85, targetRadius: 85, color: '#00FF41', targetColor: '#00FF41', label: props.lang === 'ar' ? 'العلم' : 'Knowledge', pulse: 0, velocity: { x: -0.15, y: 0.25 } },
-        { id: 3, x: PANEL_WIDTH + (window.innerWidth - PANEL_WIDTH) * 0.75, y: window.innerHeight / 2, radius: 95, targetRadius: 95, color: '#FF00E5', targetColor: '#FF00E5', label: props.lang === 'ar' ? 'الحقيقة' : 'Truth', pulse: 0, velocity: { x: 0.1, y: -0.2 } },
+        { id: 1, x: initMinX + initRange * 0.25, y: initH / 2, radius: 70, targetRadius: 70, color: '#00F5FF', targetColor: '#00F5FF', label: isAr ? 'الوعي' : 'Awareness', pulse: 0, velocity: { x: 0.2, y: 0.1 } },
+        { id: 2, x: initMinX + initRange * 0.5, y: initH / 2, radius: 85, targetRadius: 85, color: '#00FF41', targetColor: '#00FF41', label: isAr ? 'العلم' : 'Knowledge', pulse: 0, velocity: { x: -0.15, y: 0.25 } },
+        { id: 3, x: initMinX + initRange * 0.75, y: initH / 2, radius: 95, targetRadius: 95, color: '#FF00E5', targetColor: '#FF00E5', label: isAr ? 'الحقيقة' : 'Truth', pulse: 0, velocity: { x: 0.1, y: -0.2 } },
     ]);
     const particlesRef = useRef([]);
     const dashOffsetRef = useRef(0);
@@ -189,7 +197,7 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
         });
 
         const particles = [];
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 20; i++) {
             particles.push({
                 x: Math.random() * window.innerWidth,
                 y: Math.random() * window.innerHeight,
@@ -260,9 +268,14 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
             const canvasWidth = canvas.width;
             const canvasHeight = canvas.height;
 
+            const isAr = props.lang === 'ar';
+            const currentPanelWidth = canvasWidth > 768 ? PANEL_WIDTH : 0;
+            const minX = isAr ? 0 : currentPanelWidth;
+            const maxX = isAr ? canvasWidth - currentPanelWidth : canvasWidth;
+
             drawBackground(ctx, canvasWidth, canvasHeight, paletteRef.current.background);
             drawParticles(ctx, particlesRef.current, canvasWidth, canvasHeight);
-            updateNodesPhysics(currentNodes, draggingNode, canvasWidth, canvasHeight, PANEL_WIDTH);
+            updateNodesPhysics(currentNodes, draggingNode, canvasWidth, canvasHeight, minX, maxX);
             drawConnections(ctx, currentNodes, dashOffsetRef);
             drawNodes(ctx, currentNodes);
 
@@ -330,7 +343,7 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
             height={window.innerHeight}
             role="img"
             aria-label={props.lang === 'ar'
-                ? 'خريطة دواير الذهنية بثلاث دوائر: الوعي والعلم والحقيقة'
+                ? 'خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة'
                 : 'Dawayir mental map with three circles: awareness, knowledge, and truth'}
             tabIndex={0}
             onMouseDown={handleMouseDown}

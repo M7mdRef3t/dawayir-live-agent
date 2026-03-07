@@ -3,13 +3,15 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 
 const SETTINGS_KEY = 'dawayir-settings-v1';
+const MIC_DEVICE_KEY = 'dawayir-mic-device';
 
-function SettingsModal({ lang, onClose, onLanguageChange }) {
+function SettingsModal({ lang, onClose, onLanguageChange, selectedMicId, onMicChange }) {
   const [settings, setSettings] = useState({
     reducedMotion: false,
     highContrast: false,
     rememberOnboarding: true,
   });
+  const [audioDevices, setAudioDevices] = useState([]);
 
   useEffect(() => {
     try {
@@ -20,6 +22,12 @@ function SettingsModal({ lang, onClose, onLanguageChange }) {
     } catch {
       // Ignore invalid local settings payloads.
     }
+  }, []);
+
+  useEffect(() => {
+    navigator.mediaDevices.enumerateDevices().then((devices) => {
+      setAudioDevices(devices.filter((d) => d.kind === 'audioinput'));
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -65,6 +73,28 @@ function SettingsModal({ lang, onClose, onLanguageChange }) {
           <span>{lang === 'ar' ? 'تقليل الحركة' : 'Reduced motion'}</span>
         </label>
       </div>
+
+      {audioDevices.length > 1 && onMicChange && (
+        <div className="settings-group">
+          <span>{lang === 'ar' ? 'الميكروفون' : 'Microphone'}</span>
+          <select
+            className="command-input"
+            value={selectedMicId || ''}
+            onChange={(e) => {
+              const id = e.target.value;
+              window.localStorage.setItem(MIC_DEVICE_KEY, id);
+              onMicChange(id);
+            }}
+          >
+            <option value="">{lang === 'ar' ? 'تلقائي (الافتراضي)' : 'Auto (Default)'}</option>
+            {audioDevices.map((d) => (
+              <option key={d.deviceId} value={d.deviceId}>
+                {d.label || d.deviceId.slice(0, 16)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="settings-group">
         <span>{lang === 'ar' ? 'التجربة' : 'Experience'}</span>
