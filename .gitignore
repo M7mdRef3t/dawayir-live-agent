@@ -4,6 +4,8 @@ node_modules/
 dist/
 .DS_Store
 *.log
+coverage/
+.c8_output/
 client/test-results/
 git_status.txt
 last_commit.txt
