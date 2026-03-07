@@ -14,6 +14,30 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const LOCAL_REPORTS_DIR = path.join(__dirname, 'reports');
+if (!fs.existsSync(LOCAL_REPORTS_DIR)) {
+    fs.mkdirSync(LOCAL_REPORTS_DIR, { recursive: true });
+}
+
+const getLocalReports = () => {
+    try {
+        if (!fs.existsSync(LOCAL_REPORTS_DIR)) return [];
+        const files = fs.readdirSync(LOCAL_REPORTS_DIR);
+        return files.filter(f => f.startsWith('session_report_')).map(f => {
+            const stats = fs.statSync(path.join(LOCAL_REPORTS_DIR, f));
+            return {
+                name: f,
+                updated: stats.mtime.toISOString(),
+                size: stats.size,
+                source: 'local'
+            };
+        });
+    } catch (err) {
+        console.error('Error reading local reports:', err);
+        return [];
+    }
+};
+
 // Load Knowledge Base at startup for grounding
 let knowledgeBase = null;
 try {
@@ -44,17 +68,31 @@ const wss = new WebSocketServer({
 // Middleware for JSON and CORS (if needed)
 app.use(express.json());
 
-// API: List session reports
+// API: List session reports (Combined Local + GCS)
 app.get('/api/reports', async (req, res) => {
     try {
-        if (!BUCKET_NAME) throw new Error('Bucket not configured');
-        const [files] = await storage.bucket(BUCKET_NAME).getFiles({ prefix: 'session_report_' });
-        const reports = files.map(file => ({
-            name: file.name,
-            updated: file.metadata.updated,
-            size: file.metadata.size
-        })).sort((a, b) => new Date(b.updated) - new Date(a.updated));
-        res.json(reports);
+        const localReports = getLocalReports();
+        let gcsReports = [];
+
+        if (BUCKET_NAME) {
+            try {
+                const [files] = await storage.bucket(BUCKET_NAME).getFiles({ prefix: 'session_report_' });
+                gcsReports = files.map(file => ({
+                    name: file.name,
+                    updated: file.metadata.updated,
+                    size: file.metadata.size,
+                    source: 'cloud'
+                }));
+            } catch (gcsErr) {
+                console.warn('GCS reports fetch failed, using local only');
+            }
+        }
+
+        const allReports = [...localReports, ...gcsReports]
+            .filter((v, i, a) => a.findIndex(t => t.name === v.name) === i)
+            .sort((a, b) => new Date(b.updated) - new Date(a.updated));
+
+        res.json(allReports);
     } catch (error) {
         console.error('Error listing reports:', error);
         res.status(500).json({ error: error.message });
@@ -68,8 +106,18 @@ app.get('/api/reports/:filename', async (req, res) => {
         return res.status(400).json({ error: 'Invalid filename format' });
     }
 
+    const localPath = path.join(LOCAL_REPORTS_DIR, filename);
+    if (fs.existsSync(localPath)) {
+        try {
+            const content = fs.readFileSync(localPath, 'utf8');
+            return res.send(content);
+        } catch (err) {
+            console.error('Error reading local file:', err);
+        }
+    }
+
     try {
-        if (!BUCKET_NAME) throw new Error('Bucket not configured');
+        if (!BUCKET_NAME) throw new Error('Local file not found and GCS not configured');
         const file = storage.bucket(BUCKET_NAME).file(filename);
         const [content] = await file.download();
         res.send(content.toString());
@@ -427,10 +475,10 @@ wss.on('connection', (ws, req) => {
     let lastSentimentEmitAt = 0;
     const SENTIMENT_COOLDOWN_MS = 8000; // min 8s between sentiment-driven updates
     const SENTIMENT_KEYWORDS = {
-        joy:     { words: ['فرح','مبسوط','سعيد','حلو','جميل','ممتاز','عظيم','happy','joy','great','wonderful','beautiful','amazing'], color: '#FFD700', weight: 0.85 },
-        calm:    { words: ['هدوء','مرتاح','سلام','هادي','طمأنينة','calm','peace','relax','serene','tranquil'], color: '#00CED1', weight: 0.7 },
-        sadness: { words: ['حزن','حزين','زعل','متضايق','وحش','sad','grief','upset','down','depressed'], color: '#4169E1', weight: 0.45 },
-        anxiety: { words: ['قلق','خوف','توتر','ضغط','مش مرتاح','خايف','anxious','worried','stress','fear','nervous','overwhelm'], color: '#FF6B35', weight: 0.55 },
+        joy: { words: ['فرح', 'مبسوط', 'سعيد', 'حلو', 'جميل', 'ممتاز', 'عظيم', 'happy', 'joy', 'great', 'wonderful', 'beautiful', 'amazing'], color: '#FFD700', weight: 0.85 },
+        calm: { words: ['هدوء', 'مرتاح', 'سلام', 'هادي', 'طمأنينة', 'calm', 'peace', 'relax', 'serene', 'tranquil'], color: '#00CED1', weight: 0.7 },
+        sadness: { words: ['حزن', 'حزين', 'زعل', 'متضايق', 'وحش', 'sad', 'grief', 'upset', 'down', 'depressed'], color: '#4169E1', weight: 0.45 },
+        anxiety: { words: ['قلق', 'خوف', 'توتر', 'ضغط', 'مش مرتاح', 'خايف', 'anxious', 'worried', 'stress', 'fear', 'nervous', 'overwhelm'], color: '#FF6B35', weight: 0.55 },
     };
 
     function detectSentimentFromOutput(text) {
@@ -754,12 +802,14 @@ wss.on('connection', (ws, req) => {
             }
 
             if (resp.name === 'generate_session_report' && resp.response?.result?.ok) {
-                const { summary, insights, recommendations, timestamp } = resp.response.result;
-                if (BUCKET_NAME) {
-                    const filename = `session_report_${Date.now()}.md`;
-                    const content = `
+                const { summary, insights, recommendations } = resp.response.result;
+                const timestampVal = Date.now();
+                const filename = `session_report_${timestampVal}.md`;
+
+                const content = `
 # Dawayir Session Report
 **Date:** ${new Date().toLocaleString()}
+**ID:** ${timestampVal}
 
 ## Executive Summary
 ${summary}
@@ -772,16 +822,27 @@ ${recommendations || "N/A"}
 
 ---
 *Generated by Dawayir Live Agent (Gemini 2.0)*
-                    `;
+                `;
 
-                    logInfo(`Uploading session report to GCS: ${filename}`);
+                // 1. Save Locally
+                try {
+                    const localPath = path.join(LOCAL_REPORTS_DIR, filename);
+                    fs.writeFileSync(localPath, content);
+                    logInfo(`[STORAGE] Report saved locally: ${filename}`);
+                } catch (err) {
+                    logError('[STORAGE] Local write failed:', err);
+                }
+
+                // 2. Save to GCS
+                if (BUCKET_NAME) {
+                    logInfo(`[STORAGE] Uploading session report to GCS: ${filename}`);
                     const file = storage.bucket(BUCKET_NAME).file(filename);
                     file.save(content, {
                         contentType: 'text/markdown',
                     }).then(() => {
-                        logInfo('GCS Report Upload Successful');
+                        logInfo('[STORAGE] GCS Report Upload Successful');
                     }).catch(err => {
-                        logError('GCS Report Upload Failed:', err);
+                        logError('[STORAGE] GCS Report Upload Failed:', err);
                     });
                 }
             }
