@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DawayirCanvas from './components/DawayirCanvas';
 import ConnectProgressCard from './components/ConnectProgressCard';
 import OnboardingModal from './components/OnboardingModal';
@@ -7,10 +7,9 @@ import SettingsModal from './components/SettingsModal';
 import DashboardView from './components/DashboardView';
 import Visualizer from './components/Visualizer';
 import StatusBadge from './components/ui/StatusBadge';
-import './App.css';
+import AchievementBar from './components/AchievementBar';
 import logoCognitiveTrinity from './assets/dawayir-logo-cognitive-trinity.svg';
 import { STRINGS, NODE_LABELS, ONBOARDING_STEPS, CONNECT_PROGRESS } from './i18n/strings';
-import { detectCircleCommandClient } from './utils/detectCircleCommandClient';
 import {
   INPUT_SAMPLE_RATE,
   OUTPUT_SAMPLE_RATE,
@@ -43,15 +42,17 @@ import {
 import { useSessionHotkeys } from './hooks/useSessionHotkeys';
 
 // moved to features/session/constants
-// Client-side VAD removed â€” Gemini's built-in VAD handles turn detection.
+// Client-side VAD removed -- Gemini's built-in VAD handles turn detection.
 
 function App() {
+  const [isCinematicReady, setIsCinematicReady] = useState(false);
   const [lang, setLang] = useState('ar');
   const t = STRINGS[lang];
   const [status, setStatus] = useState('Disconnected');
   const [errorMessage, setErrorMessage] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [hasSessionStarted, setHasSessionStarted] = useState(false);
   const [_lastEvent, setLastEvent] = useState('none');
   const [_toolCallsCount, setToolCallsCount] = useState(0);
   const [_reconnectAttempt, setReconnectAttempt] = useState(0);
@@ -69,10 +70,65 @@ function App() {
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedMicId, setSelectedMicId] = useState(() => window.localStorage.getItem('dawayir-mic-device') || '');
   const [isBreathingRoom, setIsBreathingRoom] = useState(true);
+  const [achievements, setAchievements] = useState({
+    firstWord: false,
+    firstReply: false,
+    awarenessShift: false,
+    knowledgeShift: false,
+    truthShift: false,
+    deepConvo: false,
+    sentimentShift: false,
+    bargeIn: false,
+    visionUsed: false,
+    voiceCommand: false,
+    reconnected: false,
+  });
+  const unlockAchievement = useCallback((key) => {
+    setAchievements((prev) => prev[key] ? prev : { ...prev, [key]: true });
+  }, []);
   const [connectStage, setConnectStage] = useState(0);
+  const [isTransitioningToSetup, setIsTransitioningToSetup] = useState(false);
+  const [isSetupIntro, setIsSetupIntro] = useState(false);
   const isAgentSpeakingRef = useRef(false);
   const [commandText, setCommandText] = useState('');
+  const [measuredLatencyMs, setMeasuredLatencyMs] = useState(null);
+  const turnLatencyStartAtRef = useRef(0);
+  const turnLatencyCapturedRef = useRef(false);
+  const lastBioSignalAtRef = useRef(0);
+  const lastBioLevelRef = useRef('');
+  const audioDiag = useMemo(() => {
+    if (_lastEvent.includes('gemini_reconnecting') || _lastEvent.includes('ws_closed') || _lastEvent.includes('ws_error')) {
+      return {
+        className: 'net',
+        text: lang === 'ar' ? 'سبب التقطيع: غالبًا شبكة/خادم (إعادة اتصال).' : 'Stutter cause: likely network/server reconnect.',
+      };
+    }
+    if (_lastEvent.includes('barge_in')) {
+      return {
+        className: 'local',
+        text: lang === 'ar' ? 'سبب التقطيع: مقاطعة محلية (صوتك/الميكروفون أوقف الوكيل).' : 'Stutter cause: local interruption (mic/barge-in).',
+      };
+    }
+    if (_lastEvent === 'audio_chunk') {
+      return {
+        className: 'ok',
+        text: lang === 'ar' ? 'الصوت مستقر حاليًا.' : 'Audio is currently stable.',
+      };
+    }
+    return {
+      className: '',
+      text: lang === 'ar' ? 'جاري مراقبة سبب أي تقطيع...' : 'Monitoring stutter cause...',
+    };
+  }, [_lastEvent, lang]);
+
+  const debugLineText = useMemo(() => {
+    const setupFlag = isConnected ? 1 : 0;
+    const micFlag = isMicActive ? 1 : 0;
+    const rt = Number.isFinite(measuredLatencyMs) ? `${Math.round(measuredLatencyMs)}ms` : '--';
+    return `setup:${setupFlag} mic:${micFlag} retries:${_reconnectAttempt} tools:${_toolCallsCount} last:${_lastEvent} rt:${rt}`;
+  }, [_lastEvent, _reconnectAttempt, _toolCallsCount, isConnected, isMicActive, measuredLatencyMs]);
 
   // --- PRE-CUE SPEECH STATE ---
   const [_isUserSpeaking, setIsUserSpeaking] = useState(false);
@@ -92,10 +148,29 @@ function App() {
   const preCue = useCallback((partialText) => {
     // Pulse all nodes to indicate the system is listening/reacting
     canvasRef.current?.pulseAll?.();
-    console.log("%cðŸŸ£ PRE-CUE fired:", "color: #ff00ff; font-weight: bold", partialText);
+    console.log("%c🟣 PRE-CUE fired:", "color: #ff00ff; font-weight: bold", partialText);
+  }, []);
+
+  const startTurnLatency = useCallback(() => {
+    turnLatencyStartAtRef.current = Date.now();
+    turnLatencyCapturedRef.current = false;
+  }, []);
+
+  const resolveTurnLatency = useCallback(() => {
+    if (turnLatencyCapturedRef.current) return;
+    if (!turnLatencyStartAtRef.current) return;
+    const elapsed = Date.now() - turnLatencyStartAtRef.current;
+    if (elapsed <= 0 || elapsed > 30000) return;
+    turnLatencyCapturedRef.current = true;
+    setMeasuredLatencyMs(elapsed);
   }, []);
 
   // Update canvas node labels when language changes
+  useEffect(() => {
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.documentElement.lang = lang;
+  }, [lang]);
+
   useEffect(() => {
     const labels = NODE_LABELS[lang];
     if (canvasRef.current) {
@@ -117,14 +192,11 @@ function App() {
   const connectSteps = CONNECT_PROGRESS[lang];
 
   useEffect(() => {
-    if (isConnected && appView === 'setup') {
-      setAppView('live');
-      setIsBreathingRoom(true);
-    } else if (!isConnected && !isStarting && appView === 'live') {
-      // Transition to session complete when disconnected from a live session
-      setAppView('complete');
+    if (!isConnected && !isStarting && appView === 'live') {
+      // Only show "complete" after a real started session.
+      setAppView(hasSessionStarted ? 'complete' : 'setup');
     }
-  }, [isConnected, isStarting, appView]);
+  }, [isConnected, isStarting, appView, hasSessionStarted]);
 
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
@@ -144,6 +216,9 @@ function App() {
   const sessionContextRef = useRef([]); // Stores last few text segments for context preservation
   const restoreAfterGeminiReconnectRef = useRef(false);
   const lastRestorePromptAtRef = useRef(0);
+  const connectLockRef = useRef(false);
+  const transcriptThrottleRef = useRef({ user: 0, agent: 0 });
+  const WS_LOG_VERBOSE = import.meta.env.VITE_VERBOSE_WS_LOG === '1';
   const deferMicStartUntilFirstAgentReplyRef = useRef(false);
   const isMicActiveRef = useRef(false);
   const ttsDecisionTimeoutRef = useRef(null);
@@ -157,6 +232,13 @@ function App() {
     silenceMs: 0,
     noiseFloor: 90,
   });
+  const micTurnRef = useRef({
+    speaking: false,
+    lastVoiceAt: 0,
+    audioEndSent: true,
+  });
+  const bargeInStrongFramesRef = useRef(0);
+  const lastBargeInAtRef = useRef(0);
 
   useEffect(() => {
     isMicActiveRef.current = isMicActive;
@@ -202,13 +284,13 @@ function App() {
         }
 
         setIsCameraActive(true);
-        console.log("[Camera] âœ… Camera activated successfully");
+        console.log("[Camera] [OK] Camera activated successfully");
       } else {
         console.error("[Camera] videoRef.current is null!");
         setErrorMessage("Video element not ready. Please try again.");
       }
     } catch (err) {
-      console.error("[Camera] âŒ Error:", err);
+      console.error("[Camera] [ERROR] Error:", err);
       console.error("[Camera] Error name:", err.name);
       console.error("[Camera] Error message:", err.message);
 
@@ -498,7 +580,7 @@ function App() {
   }, []);
 
   // AudioWorklet-based streaming PCM player.
-  // The worklet runs on the audio thread â€” completely immune to main thread jank.
+  // The worklet runs on the audio thread -- completely immune to main thread jank.
   const ensurePcmWorklet = useCallback(async () => {
     if (pcmWorkletRef.current && workletReadyRef.current) return pcmWorkletRef.current;
     const audioContext = await ensureSpeakerContext();
@@ -636,16 +718,16 @@ function App() {
       micContextRef.current = null;
     }
 
+    micTurnRef.current = {
+      speaking: false,
+      lastVoiceAt: 0,
+      audioEndSent: true,
+    };
     setIsMicActive(false);
   }, []);
 
   const sendRealtimeAudioChunk = useCallback((arrayBuffer, sampleRate) => {
     if (!arrayBuffer || !setupCompleteRef.current) {
-      return;
-    }
-    // Block mic while agent is speaking to prevent echo feedback
-    // which causes Gemini's VAD to think user is interrupting.
-    if (isAgentSpeakingRef.current) {
       return;
     }
 
@@ -654,8 +736,58 @@ function App() {
       return;
     }
 
-    // Send all audio continuously to Gemini â€” let Gemini's built-in VAD
-    // handle turn detection. No client-side gating or audioStreamEnd.
+    // Analyze volume for local VAD (barge-in and fast turn-end)
+    const samples = new Int16Array(arrayBuffer);
+    if (samples.length === 0) return;
+    let sumAbs = 0;
+    for (let i = 0; i < samples.length; i += 1) {
+      sumAbs += Math.abs(samples[i]);
+    }
+    const avgAbs = sumAbs / samples.length;
+
+    // Normal speech threshold (lowered to catch quiet voices)
+    const speechDetected = avgAbs > 100;
+    const now = Date.now();
+
+    if (isAgentSpeakingRef.current) {
+      // Require sustained, strong user speech before interrupting agent playback.
+      // This avoids false barge-in from speaker bleed / room echo.
+      // Tuned for demo reliability:
+      // 1) Fast user interruption (priority)
+      // 2) Still avoid random cuts from mild echo
+      const BARGE_IN_IMMEDIATE_RMS = 900;
+      const BARGE_IN_STRONG_RMS = 560;
+      const BARGE_IN_REQUIRED_FRAMES = 2;
+      const BARGE_IN_COOLDOWN_MS = 700;
+
+      const sinceLastBargeIn = now - lastBargeInAtRef.current;
+      const canBargeIn = sinceLastBargeIn > BARGE_IN_COOLDOWN_MS;
+
+      // Immediate cut for very strong/intentional interruption.
+      if (canBargeIn && avgAbs >= BARGE_IN_IMMEDIATE_RMS) {
+        stopPlayback();
+        setLastEvent('barge_in_rms_immediate');
+        lastBargeInAtRef.current = now;
+        bargeInStrongFramesRef.current = 0;
+      } else if (avgAbs >= BARGE_IN_STRONG_RMS) {
+        bargeInStrongFramesRef.current += 1;
+      } else {
+        bargeInStrongFramesRef.current = Math.max(0, bargeInStrongFramesRef.current - 1);
+      }
+
+      if (canBargeIn && bargeInStrongFramesRef.current >= BARGE_IN_REQUIRED_FRAMES) {
+        stopPlayback();
+        setLastEvent('barge_in_rms');
+        lastBargeInAtRef.current = now;
+        bargeInStrongFramesRef.current = 0;
+      }
+    } else {
+      bargeInStrongFramesRef.current = 0;
+    }
+    // Always forward mic audio to Gemini — browser echoCancellation handles echo,
+    // and Gemini's built-in VAD needs continuous audio to detect user speech.
+
+    // Forward the chunk to Gemini
     socket.send(
       JSON.stringify({
         realtimeInput: {
@@ -668,7 +800,27 @@ function App() {
         },
       })
     );
-  }, []);
+
+    // Update VAD state for explicit turn end
+    if (speechDetected) {
+      micTurnRef.current.speaking = true;
+      micTurnRef.current.lastVoiceAt = now;
+      micTurnRef.current.audioEndSent = false;
+    }
+
+    // Explicitly close user turn after sustained silence for faster response.
+    if (
+      micTurnRef.current.speaking
+      && !micTurnRef.current.audioEndSent
+      && (now - micTurnRef.current.lastVoiceAt) > 1000
+    ) {
+      startTurnLatency();
+      socket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
+      micTurnRef.current.speaking = false;
+      micTurnRef.current.audioEndSent = true;
+      setLastEvent('audio_stream_end_vad');
+    }
+  }, [startTurnLatency, stopPlayback]);
 
   const startMicrophone = useCallback(async () => {
     await stopMicrophone();
@@ -677,6 +829,11 @@ function App() {
       speechMs: 0,
       silenceMs: 0,
       noiseFloor: 90,
+    };
+    micTurnRef.current = {
+      speaking: false,
+      lastVoiceAt: 0,
+      audioEndSent: true,
     };
 
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -688,18 +845,35 @@ function App() {
       throw new Error('Web Audio API is not supported in this browser.');
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        sampleRate: INPUT_SAMPLE_RATE,
-        sampleSize: 16,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-    });
+    // Log available audio input devices to help diagnose mic issues
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter((d) => d.kind === 'audioinput');
+      console.log('[Mic] Available audio input devices:', audioInputs.map((d) => ({ label: d.label, id: d.deviceId })));
+    } catch { /* ignore */ }
 
-    const micContext = new AudioContextCtor({ sampleRate: INPUT_SAMPLE_RATE });
+    const audioConstraints = {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    };
+    if (selectedMicId) {
+      audioConstraints.deviceId = { exact: selectedMicId };
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+
+    // Log which device was actually selected
+    const audioTrack = stream.getAudioTracks()[0];
+    if (audioTrack) {
+      const settings = audioTrack.getSettings();
+      console.log('[Mic] Selected device:', { label: audioTrack.label, deviceId: settings.deviceId, sampleRate: settings.sampleRate, channelCount: settings.channelCount });
+    }
+
+    // Use the system's default sample rate (typically 48kHz) — forcing 16kHz
+    // causes silent buffers on many Windows systems. The AudioWorklet handles
+    // resampling from the native rate down to 16kHz.
+    const micContext = new AudioContextCtor();
     if (micContext.state === 'suspended') {
       await micContext.resume();
     }
@@ -711,7 +885,7 @@ function App() {
 
     if (micContext.audioWorklet && typeof AudioWorkletNode !== 'undefined') {
       try {
-        await micContext.audioWorklet.addModule(new URL('./audio/mic-processor.js', import.meta.url));
+        await micContext.audioWorklet.addModule(new URL(`./audio/mic-processor.js?v=${Date.now()}`, import.meta.url));
         const worklet = new AudioWorkletNode(micContext, MIC_WORKLET_NAME);
         worklet.port.onmessage = (event) => {
           const int16arrayBuffer = event.data?.int16arrayBuffer;
@@ -751,7 +925,8 @@ function App() {
     micSourceRef.current = source;
     micSilentGainRef.current = silentGain;
     setIsMicActive(true);
-  }, [sendRealtimeAudioChunk, stopMicrophone]);
+    console.log('[Mic] Microphone started successfully', { workletReady, sampleRate: micContext.sampleRate });
+  }, [sendRealtimeAudioChunk, stopMicrophone, selectedMicId]);
 
   const handleToolCall = useCallback((toolCall) => {
     const functionCalls = Array.isArray(toolCall?.functionCalls)
@@ -775,10 +950,10 @@ function App() {
 
       try {
         if (call.name === 'update_node') {
-          // Smart ID resolution â€” handle strings like "circle", "awareness", etc.
+          // Smart ID resolution -- handle strings like "circle", "awareness", etc.
           const NAME_TO_ID = {
             awareness: 1, science: 2, truth: 3, knowledge: 2, circle: 1,
-            'ÙˆØ¹ÙŠ': 1, 'Ø¹Ù„Ù…': 2, 'Ø­Ù‚ÙŠÙ‚Ø©': 3, 'Ø§Ù„ÙˆØ¹ÙŠ': 1, 'Ø§Ù„Ø¹Ù„Ù…': 2, 'Ø§Ù„Ø­Ù‚ÙŠÙ‚Ø©': 3,
+            'وعي': 1, 'علم': 2, 'حقيقة': 3, 'الوعي': 1, 'العلم': 2, 'الحقيقة': 3,
             '1': 1, '2': 2, '3': 3,
           };
           const rawId = args.id ?? args.node_id ?? args.nodeId ?? 1;
@@ -789,10 +964,35 @@ function App() {
 
           const updates = { ...args };
           delete updates.id; delete updates.node_id; delete updates.nodeId;
+
+          // Backward compatibility for legacy tool args.
+          if (updates.radius === undefined) {
+            const numericWeight = Number(updates.weight);
+            const numericDelta = Number(updates.expansion ?? updates.size);
+            if (Number.isFinite(numericWeight)) {
+              const clampedWeight = Math.max(0.3, Math.min(1.0, numericWeight));
+              updates.radius = String(Math.round(clampedWeight * 100));
+            } else if (Number.isFinite(numericDelta)) {
+              const currentRadius = Number(currentNodes.find(n => n.id === safeId)?.radius ?? 60);
+              const nextRadius = Math.max(30, Math.min(100, Math.round(currentRadius + (numericDelta * 5))));
+              updates.radius = String(nextRadius);
+            }
+          }
+          if (updates.color === undefined && typeof updates.colour === 'string') {
+            updates.color = updates.colour;
+          }
+          delete updates.weight; delete updates.size; delete updates.expansion; delete updates.colour;
+
           console.log(`[App] Updating node ${safeId} (raw: ${rawId}):`, updates);
           canvasRef.current?.updateNode(safeId, updates);
           // Auto-pulse so the change is visually obvious
           canvasRef.current?.pulseNode(safeId);
+          if (safeId === 1) unlockAchievement('awarenessShift');
+          else if (safeId === 2) unlockAchievement('knowledgeShift');
+          else if (safeId === 3) unlockAchievement('truthShift');
+          if (updates.color) unlockAchievement('sentimentShift');
+          const callId = String(call.id || '');
+          if (callId.startsWith('server_cmd_')) unlockAchievement('voiceCommand');
         } else if (call.name === 'highlight_node') {
           const id = Number(args.id);
           const currentNodes = canvasRef.current?.getNodes() || [];
@@ -877,30 +1077,53 @@ function App() {
     }
     setToolCallsCount((prev) => prev + functionCalls.length);
     setLastEvent(`tool_call:${functionCalls.length}`);
-  }, []);
+  }, [unlockAchievement]);
 
-  // Handle text command submission - detect circles locally + send to Gemini
+  // Handle text command submission - agent-controlled only (no local circle mutation)
   const handleTextCommand = useCallback((text) => {
     if (!text?.trim()) return;
-    const cmd = detectCircleCommandClient(text);
-    if (cmd) {
-      console.log(`[App] Local circle command detected: "${text}" =>`, cmd);
-      canvasRef.current?.updateNode(cmd.id, { radius: cmd.radius, color: cmd.color });
-      canvasRef.current?.pulseNode(cmd.id);
-      setToolCallsCount((prev) => prev + 1);
-      setLastEvent(`local_cmd:${cmd.action}`);
-    }
-    // Also send to server/Gemini so the agent can respond conversationally
     const socket = wsRef.current;
     if (socket && socket.readyState === WebSocket.OPEN) {
+      startTurnLatency();
       socket.send(JSON.stringify({
         clientContent: {
           turns: [{ role: 'user', parts: [{ text }] }],
           turnComplete: true,
         },
       }));
+      setLastEvent('user_cmd_sent');
     }
-  }, []);
+  }, [startTurnLatency]);
+
+  const handleBioStateChange = useCallback((level) => {
+    if (appView !== 'live' || !isConnected) return;
+    const socket = wsRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+    const now = Date.now();
+    const unchanged = level === lastBioLevelRef.current;
+    if (unchanged && (now - lastBioSignalAtRef.current) < 12000) return;
+    if (!unchanged && (now - lastBioSignalAtRef.current) < 7000) return;
+
+    lastBioLevelRef.current = level;
+    lastBioSignalAtRef.current = now;
+
+    const hintText = level === 'stressed'
+      ? (lang === 'ar'
+        ? '(إشارة حسية: يوجد ضغط صوتي/توتر ملحوظ. لو مناسب، عدّل الدوائر بصمت باستخدام update_node بدون شرح تقني.)'
+        : '(Bio signal: stress detected. If appropriate, adjust circles silently via update_node.)')
+      : (lang === 'ar'
+        ? '(إشارة حسية: النبرة هادئة. حافظ على الاستقرار أو عدّل الدوائر بخفة عند الحاجة.)'
+        : '(Bio signal: calm tone. Keep circles stable or adjust gently if needed.)');
+
+    socket.send(JSON.stringify({
+      clientContent: {
+        turns: [{ role: 'user', parts: [{ text: hintText }] }],
+        turnComplete: false,
+      },
+    }));
+    setLastEvent(`bio_signal:${level}`);
+  }, [appView, isConnected, lang]);
 
   // Quick circle action (from UI buttons)
   const handleLookAtMe = useCallback(async () => {
@@ -924,6 +1147,8 @@ function App() {
 
       // 3. Send to Gemini
       console.log("[App] Sending Look at me snapshot...");
+      unlockAchievement('visionUsed');
+      startTurnLatency();
       wsRef.current.send(JSON.stringify({
         realtimeInput: {
           mediaChunks: [{
@@ -940,7 +1165,7 @@ function App() {
             role: "user",
             parts: [{
               text: lang === "ar"
-                ? "Ø´ÙˆÙÙ†ÙŠ ÙƒØ¯Ù‡. Ø§Ù‚Ø±Ø£ Ø­Ø§Ù„ØªÙŠ Ø§Ù„Ù†ÙØ³ÙŠØ© Ù…Ù† Ø§Ù„ØµÙˆØ±Ø© ÙˆØºÙŠÙ‘Ø± Ø¨Ù‡Ø¯ÙˆØ¡ ÙÙŠ ØµÙ…Øª. Ù„Ùˆ Ù‡ØªØ³ØªØ®Ø¯Ù… update_node Ø§Ø³ØªØ®Ø¯Ù… id Ùˆradius Ùˆcolor Ø¨Ø³."
+                ? "شوفني كده. اقرأ حالتي النفسية من الصورة وغيّر بهدوء في صمت. لو هتستخدم update_node استخدم id وradius وcolor بس."
                 : "Look at me. Read my emotional state from the photo and update the circles silently. If you use update_node, use only id, radius, and color."
             }]
           }],
@@ -952,17 +1177,18 @@ function App() {
       console.error("Look at me failed:", e);
       stopCamera();
     }
-  }, [captureSnapshot, lang, startCamera, stopCamera]);
+  }, [captureSnapshot, lang, startCamera, startTurnLatency, stopCamera]);
 
-  const _handleCircleAction = useCallback((circleId, action) => {
-    const radius = action === 'shrink' ? 35 : action === 'grow' ? 90 : 60;
-    const colors = { 1: '#00F5FF', 2: '#00FF41', 3: '#FF00E5' };
-    console.log(`[App] Circle button: ${action} circle ${circleId}`);
-    canvasRef.current?.updateNode(circleId, { radius, color: colors[circleId] });
-    canvasRef.current?.pulseNode(circleId);
-    setToolCallsCount((prev) => prev + 1);
-    setLastEvent(`btn_cmd:${action}_${circleId}`);
-  }, []);
+  const handleEnterSetup = useCallback(() => {
+    if (isTransitioningToSetup) return;
+    setIsTransitioningToSetup(true);
+    window.setTimeout(() => {
+      setAppView('setup');
+      setIsSetupIntro(true);
+      setIsTransitioningToSetup(false);
+      window.setTimeout(() => setIsSetupIntro(false), 520);
+    }, 280);
+  }, [isTransitioningToSetup]);
 
   const disconnect = useCallback(async () => {
     manualCloseRef.current = true;
@@ -1007,18 +1233,46 @@ function App() {
   }, [closeSpeakerContext, resetAgentTurnState, stopMicrophone, stopPlayback]);
 
   const connect = useCallback(async () => {
-    if (isStarting || isConnected) return;
+    if (connectLockRef.current) {
+      console.warn('[Connect] Ignored: connect already in-flight');
+      return;
+    }
+    connectLockRef.current = true;
+    console.log('[Connect] Attempting to start session...', { isStarting, isConnected, appView, hasCapturedImage: !!capturedImage });
+    if (isStarting) {
+      console.warn('[Connect] Ignored: already starting');
+      connectLockRef.current = false;
+      return;
+    }
+    if (isConnected) {
+      const currentSocket = wsRef.current;
+      const hasLiveSocket = !!currentSocket && (
+        currentSocket.readyState === WebSocket.OPEN
+        || currentSocket.readyState === WebSocket.CONNECTING
+      );
+      if (hasLiveSocket) {
+        console.warn('[Connect] Ignored: already connected with live socket');
+        connectLockRef.current = false;
+        return;
+      }
+      // Recover from stale UI state if socket is gone/closed but flag is still true.
+      console.warn('[Connect] Recovering stale isConnected state');
+      setIsConnected(false);
+    }
     const existingSocket = wsRef.current;
     if (
       existingSocket
       && (existingSocket.readyState === WebSocket.OPEN || existingSocket.readyState === WebSocket.CONNECTING)
     ) {
+      console.warn('[Connect] Ignored: socket already open/connecting');
+      connectLockRef.current = false;
       return;
     }
     manualCloseRef.current = false;
 
     setErrorMessage('');
     setIsStarting(true);
+    setHasSessionStarted(false);
     setStatus('Connecting...');
     setConnectStage(0);
     setLastEvent('connecting');
@@ -1026,10 +1280,12 @@ function App() {
     try {
       await ensureSpeakerContext();
     } catch (error) {
+      console.error('[Connect] ensureSpeakerContext failed', error);
       setStatus('Error');
       setErrorMessage(error.message);
       setIsStarting(false);
       setLastEvent('speaker_context_error');
+      connectLockRef.current = false;
       return;
     }
 
@@ -1040,12 +1296,17 @@ function App() {
       wsUrl.searchParams.set('token', token);
       wsUrlString = wsUrl.toString();
     }
+    console.log('[Connect] Opening WebSocket to', wsUrlString);
     const socket = new WebSocket(wsUrlString);
     socket.binaryType = 'arraybuffer';
     wsRef.current = socket;
+    // We only lock the critical pre-socket window. After socket creation,
+    // duplicate attempts are blocked by wsRef/current readyState guards.
+    connectLockRef.current = false;
 
     socket.onopen = () => {
       if (wsRef.current !== socket) return;
+      console.log('[Connect] WebSocket opened');
       if (reconnectTimeoutRef.current) {
         window.clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
@@ -1092,9 +1353,15 @@ function App() {
 
       if (!message) return;
 
-      // Diagnostic: log every parsed server message type
+      // Diagnostic logging is noisy for streaming chunks; keep signal by default.
       const msgKeys = Object.keys(message).join(',');
-      console.log(`[WS] Message received â€” keys: [${msgKeys}]`);
+      const nonNoisyKeys = Object.keys(message).filter(
+        (key) => !['serverContent', 'server_content', 'usageMetadata', 'usage_metadata'].includes(key)
+      );
+      const isOnlyDebugTranscription = nonNoisyKeys.length === 1 && nonNoisyKeys[0] === 'debugTranscription';
+      if (WS_LOG_VERBOSE || (nonNoisyKeys.length > 0 && !isOnlyDebugTranscription)) {
+        console.log(`[WS] Message received -- keys: [${msgKeys}]`);
+      }
 
       // Debug: log transcription data forwarded from server
       if (message.debugTranscription) {
@@ -1102,7 +1369,9 @@ function App() {
         if (dt.metrics) {
           setCognitiveMetrics(dt.metrics);
         }
-        console.log(`%c[Transcription:${dt.type}] "${dt.text}" (finished=${dt.finished})`, 'color: #00ff00; font-weight: bold');
+        if (WS_LOG_VERBOSE || dt.finished) {
+          console.log(`%c[Transcription:${dt.type}] "${dt.text}" (finished=${dt.finished})`, 'color: #00ff00; font-weight: bold');
+        }
 
         if (dt.type === 'input') {
           const now = Date.now();
@@ -1110,10 +1379,18 @@ function App() {
 
           // Start of user speaking
           if (!dt.finished && !userSpeechActiveRef.current) {
+            // Barge-in: if user starts speaking while agent audio is active,
+            // stop local playback so user voice can take priority.
+            if (isAgentSpeakingRef.current) {
+              stopPlayback();
+              setLastEvent('barge_in_interrupt');
+              unlockAchievement('bargeIn');
+            }
             userSpeechActiveRef.current = true;
             setIsUserSpeaking(true);
             bufferedUserTextRef.current = ''; // Reset on new speech
             preCue(dt.text);
+            unlockAchievement('firstWord');
           }
 
           bufferedUserTextRef.current = `${bufferedUserTextRef.current} ${dt.text}`.trim();
@@ -1123,55 +1400,67 @@ function App() {
             if (Date.now() - lastSpeechAtRef.current > 850) resetUserSpeaking();
           }, 900);
 
-          // Update transcript list
-          setTranscript((prev) => {
-            const next = [...prev];
-            let found = false;
-            for (let i = next.length - 1; i >= 0; i--) {
-              if (next[i].role === 'user' && !next[i].finished) {
-                next[i] = { ...next[i], text: bufferedUserTextRef.current, finished: !!dt.finished };
-                found = true;
-                break;
-              }
-            }
-            if (!found) {
-              const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-              next.push({ role: 'user', text: bufferedUserTextRef.current, time: timeStr, finished: !!dt.finished });
-            }
-            return next.slice(-6);
-          });
-
-          if (dt.finished) {
-            resetUserSpeaking();
-          }
-        } else if (dt.type === 'output') {
-          setIsAgentSpeaking(true);
-          isAgentSpeakingRef.current = true;
-
-          const isNewTurn = bufferedTurnTextRef.current.trim() === '';
-          bufferedTurnTextRef.current = `${bufferedTurnTextRef.current} ${dt.text}`.trim();
-
-          setTranscript((prev) => {
-            const next = [...prev];
-            if (isNewTurn) {
-              const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-              next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
-            } else {
+          const shouldUpdateUserTranscript = Boolean(dt.finished) || (now - transcriptThrottleRef.current.user) > 120;
+          if (shouldUpdateUserTranscript) {
+            transcriptThrottleRef.current.user = now;
+            setTranscript((prev) => {
+              const next = [...prev];
               let found = false;
               for (let i = next.length - 1; i >= 0; i--) {
-                if (next[i].role === 'agent' && !next[i].finished) {
-                  next[i] = { ...next[i], text: bufferedTurnTextRef.current };
+                if (next[i].role === 'user' && !next[i].finished) {
+                  next[i] = { ...next[i], text: bufferedUserTextRef.current, finished: !!dt.finished };
                   found = true;
                   break;
                 }
               }
               if (!found) {
                 const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-                next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
+                next.push({ role: 'user', text: bufferedUserTextRef.current, time: timeStr, finished: !!dt.finished });
               }
-            }
-            return next.slice(-6);
-          });
+              if (next.length >= 5) unlockAchievement('deepConvo');
+              return next.slice(-6);
+            });
+          }
+
+          if (dt.finished) {
+            resetUserSpeaking();
+          }
+        } else if (dt.type === 'output') {
+          resolveTurnLatency();
+          // Keep output transcript visible, but throttled to avoid UI jank.
+          setIsAgentSpeaking(true);
+          isAgentSpeakingRef.current = true;
+
+          const isNewTurn = bufferedTurnTextRef.current.trim() === '';
+          bufferedTurnTextRef.current = `${bufferedTurnTextRef.current} ${dt.text}`.trim();
+          if (isNewTurn) unlockAchievement('firstReply');
+
+          const now = Date.now();
+          const shouldUpdateAgentTranscript = Boolean(dt.finished) || (now - transcriptThrottleRef.current.agent) > 120;
+          if (shouldUpdateAgentTranscript) {
+            transcriptThrottleRef.current.agent = now;
+            setTranscript((prev) => {
+              const next = [...prev];
+              if (isNewTurn) {
+                const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+                next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
+              } else {
+                let found = false;
+                for (let i = next.length - 1; i >= 0; i--) {
+                  if (next[i].role === 'agent' && !next[i].finished) {
+                    next[i] = { ...next[i], text: bufferedTurnTextRef.current };
+                    found = true;
+                    break;
+                  }
+                }
+                if (!found) {
+                  const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+                  next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
+                }
+              }
+              return next.slice(-6);
+            });
+          }
         }
         return;
       }
@@ -1182,7 +1471,7 @@ function App() {
           restoreAfterGeminiReconnectRef.current = true;
         }
         lastModelAudioAtRef.current = Date.now();
-        // DON'T stop playback or reset state â€” let buffered audio finish naturally.
+        // DON'T stop playback or reset state -- let buffered audio finish naturally.
         // Cutting audio mid-speech causes jarring stuttering.
         const attempt = Number(serverStatus.attempt || 0);
         const maxAttempts = Number(serverStatus.maxAttempts || MAX_RECONNECT_ATTEMPTS);
@@ -1192,7 +1481,7 @@ function App() {
         return;
       }
       if (serverStatus?.state === 'gemini_recovered') {
-        // Don't reset â€” audio may still be playing from before reconnect
+        // Don't reset -- audio may still be playing from before reconnect
         setStatus('Gemini reconnected. Restoring session...');
         setLastEvent('gemini_recovered');
         return;
@@ -1211,6 +1500,11 @@ function App() {
 
       if (isSetupCompleteMessage(message)) {
         setupCompleteRef.current = true;
+        setHasSessionStarted(true);
+        if (appView === 'setup') {
+          setAppView('live');
+          setIsBreathingRoom(true);
+        }
         setStatus('Connected to Gemini Live');
         setConnectStage(2);
         setLastEvent('setup_complete');
@@ -1251,8 +1545,8 @@ function App() {
 
               const bootstrapText = lang === 'ar'
                 ? (capturedImage
-                  ? 'Ø¯ÙŠ ØµÙˆØ±ØªÙŠ Ø¯Ù„ÙˆÙ‚ØªÙŠ. Ø§Ù‚Ø±Ø£ Ø­Ø§Ù„ØªÙŠ Ø§Ù„Ù†ÙØ³ÙŠØ© Ù…Ù† Ø§Ù„ØµÙˆØ±Ø© ÙˆÙ†Ø§Ø¯ÙŠ update_node Ø¹Ø´Ø§Ù† ØªØºÙŠÙ‘Ø± radius Ùˆcolor Ù„ÙƒÙ„ Ø¯Ø§ÙŠØ±Ø© Ø¹Ù„Ù‰ Ø­Ø³Ø¨ Ù‚Ø±Ø§ÙŠØªÙƒ. Ø§Ø³ØªØ®Ø¯Ù… id Ùˆradius Ùˆcolor Ø¨Ø³.'
-                  : 'ÙŠØ§ ØµØ§Ø­Ø¨ÙŠØŒ Ø§Ø²ÙŠÙƒØŸ')
+                  ? 'دي صورتي دلوقتي. اقرأ حالتي النفسية من الصورة ونادي update_node عشان تغيّر radius وcolor لكل دايرة على حسب قرايتك. استخدم id وradius وcolor بس.'
+                  : 'يا صاحبي، ازيك؟')
                 : (capturedImage
                   ? 'This is my photo. Read my emotional state from the image and call update_node to change radius and color for each circle based on your reading. Use only id, radius, and color.'
                   : 'Hey, how are you?');
@@ -1262,20 +1556,21 @@ function App() {
                 clientContent: { turns: [{ role: 'user', parts }], turnComplete: true }
               }));
             } else if (isReconnect || isGeminiReconnect) {
+              unlockAchievement('reconnected');
               const now = Date.now();
               if (now - lastRestorePromptAtRef.current < 6000) {
                 restoreAfterGeminiReconnectRef.current = false;
                 return;
               }
               lastRestorePromptAtRef.current = now;
-              // Send a minimal, invisible context restore â€” no "reconnection" language.
+              // Send a minimal, invisible context restore -- no "reconnection" language.
               // The model should just continue naturally without acknowledging the gap.
               const lastConv = sessionContextRef.current.length > 0
                 ? sessionContextRef.current.slice(-3).join(' ... ')
                 : '';
               const promptText = lastConv
-                ? `(ÙƒÙ…Ù‘Ù„ Ù…Ù† Ù‡Ù†Ø§ Ø¨Ø§Ù„Ø¸Ø¨Ø·: "${lastConv}")`
-                : '(ÙƒÙ…Ù‘Ù„ Ø§Ù„Ø­ÙˆØ§Ø±.)';
+                ? `(كمّل من هنا بالظبط: "${lastConv}")`
+                : '(كمّل الحوار.)';
               wsRef.current.send(JSON.stringify({
                 clientContent: { turns: [{ role: 'user', parts: [{ text: promptText }] }], turnComplete: true }
               }));
@@ -1298,6 +1593,7 @@ function App() {
               setConnectStage(3);
               setLastEvent('mic_autostart_timeout');
             } catch (error) {
+              console.error('[Mic] Failed to start microphone:', error);
               setStatus('Error');
               setErrorMessage(error.message);
               setLastEvent('mic_start_error');
@@ -1333,7 +1629,7 @@ function App() {
         lastAgentContentAtRef.current = now;
       }
       // Mic start is handled by the MIC_DEFER_TIMEOUT_MS timeout set in setupComplete.
-      // Do NOT start mic here during first response â€” getUserMedia blocks the main thread
+      // Do NOT start mic here during first response -- getUserMedia blocks the main thread
       // for 100-500ms which causes audio stuttering on the first few words.
 
       const audioParts = Array.isArray(parts)
@@ -1400,7 +1696,7 @@ function App() {
             ttsDecisionTimeoutRef.current = null;
           }, 900);
         } else if (currentTurnModeRef.current === 'none' && !ttsFallbackEnabledRef.current) {
-          // TTS disabled and no audio yet â€” release mic after a short wait
+          // TTS disabled and no audio yet -- release mic after a short wait
           // so conversation doesn't get stuck on text-only responses.
           if (ttsDecisionTimeoutRef.current) {
             window.clearTimeout(ttsDecisionTimeoutRef.current);
@@ -1418,6 +1714,7 @@ function App() {
       const turnAudioBlobs = getTurnDataAudioBlobs(message);
       const selectedAudioBlobs = directAudioBlobs.length > 0 ? directAudioBlobs : turnAudioBlobs;
       if (selectedAudioBlobs.length > 0) {
+        resolveTurnLatency();
         setIsAgentSpeaking(true);
         isAgentSpeakingRef.current = true;
         // If TTS already started for this turn, ignore late model audio to avoid overlap.
@@ -1437,14 +1734,16 @@ function App() {
 
     socket.onerror = () => {
       if (wsRef.current !== socket) return;
+      console.error('[Connect] WebSocket error');
       setStatus('Error');
       setErrorMessage('WebSocket error. Retrying if possible.');
       setIsStarting(false);
       setLastEvent('ws_error');
     };
 
-    socket.onclose = async () => {
+    socket.onclose = async (event) => {
       if (wsRef.current !== socket) return;
+      console.warn('[Connect] WebSocket closed', { code: event?.code, reason: event?.reason });
       if (micStartTimeoutRef.current) {
         window.clearTimeout(micStartTimeoutRef.current);
         micStartTimeoutRef.current = null;
@@ -1461,6 +1760,7 @@ function App() {
 
       if (manualCloseRef.current) {
         setStatus((prev) => (prev === 'Error' ? prev : 'Disconnected'));
+        setAppView('complete'); // Transition to complete screen when manually closing
         setLastEvent('ws_closed_manual');
         return;
       }
@@ -1489,6 +1789,7 @@ function App() {
       setLastEvent('ws_closed_giveup');
     };
   }, [
+    appView,
     backendUrl,
     capturedImage,
     clearPendingTts,
@@ -1506,6 +1807,7 @@ function App() {
     stopPlayback,
     preCue,
     resetUserSpeaking,
+    resolveTurnLatency,
   ]);
 
   useSessionHotkeys({
@@ -1518,25 +1820,29 @@ function App() {
     setShowSettings,
     dismissOnboarding,
     setIsTranscriptVisible,
-    disconnect,
   });
 
+  useEffect(() => {
+    const introTimer = setTimeout(() => setIsCinematicReady(true), 60);
+    return () => clearTimeout(introTimer);
+  }, []);
+
   return (
-    <div className="App" role="application" aria-label="Dawayir live session application">
+    <div className={`App ${isCinematicReady ? 'cinematic-in' : 'cinematic-prep'}`} role="application" aria-label="Dawayir live session application">
       <a className="skip-link" href="#main-canvas-content">
-        {lang === 'ar' ? 'ØªØ®Ø·ÙŠ Ø¥Ù„Ù‰ Ø§Ù„Ù…Ø­ØªÙˆÙ‰ Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ' : 'Skip to main content'}
+        {lang === 'ar' ? 'تخطي إلى المحتوى الرئيسي' : 'Skip to main content'}
       </a>
 
       {appView === 'welcome' && (
-        <div className="welcome-screen">
+        <div className={`welcome-screen ${isTransitioningToSetup ? 'exiting' : ''}`}>
           <img src={logoCognitiveTrinity} alt="Dawayir" className="welcome-logo ds-slide-up-fade" />
           <div className="brand-name-large ds-slide-up-fade">{t.brandName}</div>
           <div className="brand-subtitle ds-slide-up-fade-delay">{t.brandSub}</div>
-          <button className="primary-btn ds-slide-up-fade-delay-more welcome-cta" onClick={() => setAppView('setup')}>
+          <button className="primary-btn ds-slide-up-fade-delay-more welcome-cta" onClick={handleEnterSetup}>
             {t.enterSpace}
           </button>
           <div className="lang-toggle-container ds-slide-up-fade-delay-more">
-            <button className={`icon-btn lang-toggle ${lang === 'ar' ? 'active' : ''}`} onClick={() => setLang('ar')}>{lang === 'ar' ? 'Ø¹Ø±Ø¨Ù‰' : 'AR'}</button>
+            <button className={`icon-btn lang-toggle ${lang === 'ar' ? 'active' : ''}`} onClick={() => setLang('ar')}>{lang === 'ar' ? 'عربى' : 'AR'}</button>
             <button className={`icon-btn lang-toggle ${lang === 'en' ? 'active' : ''}`} onClick={() => setLang('en')}>{lang === 'en' ? 'English' : 'EN'}</button>
           </div>
         </div>
@@ -1544,9 +1850,9 @@ function App() {
 
       {(appView === 'dashboard' || appView === 'setup' || appView === 'live') && (
         <aside
-          className={`overlay ${appView === 'dashboard' ? 'overlay-dashboard' : ''} ${appView === 'live' && isBreathingRoom ? 'overlay-collapsed' : ''}`}
+          className={`overlay ${isSetupIntro ? 'overlay-enter' : ''} ${appView === 'dashboard' ? 'overlay-dashboard' : ''} ${appView === 'live' && isBreathingRoom ? 'overlay-collapsed' : ''}`}
           role="complementary"
-          aria-label={lang === 'ar' ? 'Ù„ÙˆØ­Ø© Ø§Ù„ØªØ­ÙƒÙ…' : 'Control panel'}
+          aria-label={lang === 'ar' ? 'لوحة التحكم' : 'Control panel'}
         >
           {appView === 'dashboard' ? (
             <DashboardView
@@ -1570,8 +1876,8 @@ function App() {
                     </button>
                     {!isConnected && !isStarting && (
                       <>
-                        <button aria-label={lang === 'ar' ? 'Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' : 'Settings'} className="icon-btn" onClick={() => setShowSettings((current) => !current)} title={lang === 'ar' ? 'Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª' : 'Settings'}>
-                          âš™
+                        <button aria-label={lang === 'ar' ? 'الإعدادات' : 'Settings'} className="icon-btn" onClick={() => setShowSettings((current) => !current)} title={lang === 'ar' ? 'الإعدادات' : 'Settings'}>
+                          {'\u2699'}
                         </button>
                         <button aria-label={t.memoryBank} className="icon-btn" onClick={() => setAppView('dashboard')} title={t.memoryBank}>
                           {t.dashboardBtn}
@@ -1587,6 +1893,9 @@ function App() {
                 {isStarting && (
                   <ConnectProgressCard steps={connectSteps} stage={connectStage} />
                 )}
+                <div className="debug-status-line" title="setup/mic/retries/tools/last/rt">
+                  {debugLineText}
+                </div>
               </div>
 
               {/* Main Controls - SETUP SCREEN ONLY */}
@@ -1596,8 +1905,8 @@ function App() {
                     <div className="setup-hint-card">
                       <img src={logoCognitiveTrinity} alt="" className="inline-logo" />
                       <div>
-                        <strong>{lang === 'ar' ? 'Ø¬Ù„Ø³Ø© ØµÙˆØªÙŠØ© Ù…Ø¹ Ø®Ø±ÙŠØ·Ø© Ø­ÙŠØ©' : 'A voice session with a live mental map'}</strong>
-                        <p>{lang === 'ar' ? 'Ø§Ù„ØªÙ‚Ø§Ø· Ø§Ù„ØµÙˆØ±Ø© Ø§Ø®ØªÙŠØ§Ø±ÙŠ. Ø§Ø¨Ø¯Ø£ Ø§Ù„Ø¬Ù„Ø³Ø©ØŒ ÙˆØ§ØªÙƒÙ„Ù… Ø¨Ø±Ø§Ø­ØªÙƒØŒ ÙˆØ§Ù„Ø¯ÙˆØ§Ø¦Ø± Ù‡ØªÙˆØ¶Ø­ Ø±Ø­Ù„ØªÙƒ.' : 'The image capture is optional. Start the session, speak freely, and let the circles map the journey.'}</p>
+                        <strong>{lang === 'ar' ? 'جلسة صوتية مع خريطة حية' : 'A voice session with a live mental map'}</strong>
+                        <p>{lang === 'ar' ? 'التقاط الصورة اختياري. ابدأ الجلسة، واتكلم براحتك، والدوائر هتوضح رحلتك.' : 'The image capture is optional. Start the session, speak freely, and let the circles map the journey.'}</p>
                       </div>
                     </div>
                     <video ref={videoRef} autoPlay playsInline muted className="visually-hidden" />
@@ -1675,9 +1984,9 @@ function App() {
 
                   <div className="timeline-overlay">
                     {[
-                      { key: 'Overwhelmed', en: '1. Overwhelmed', ar: 'Ù¡. Ø§Ù„ØªØ´ØªØª' },
-                      { key: 'Focus', en: '2. Focus', ar: 'Ù¢. Ø§Ù„ØªØ±ÙƒÙŠØ²' },
-                      { key: 'Clarity', en: '3. Clarity', ar: 'Ù£. Ø§Ù„ÙˆØ¶ÙˆØ­' },
+                      { key: 'Overwhelmed', en: '1. Overwhelmed', ar: '١. التشتت' },
+                      { key: 'Focus', en: '2. Focus', ar: '٢. التركيز' },
+                      { key: 'Clarity', en: '3. Clarity', ar: '٣. الوضوح' },
                     ].map((stage, idx, arr) => {
                       const stageKey = stage.key;
                       const isCompleted = arr.findIndex(s => s.key === journeyStage) > idx;
@@ -1692,30 +2001,33 @@ function App() {
                     })}
                   </div>
 
-                  {isAgentSpeaking && (
-                    <div className="ai-state-bar">
-                      <div className="wave">
-                        <span></span><span></span><span></span><span></span><span></span>
-                      </div>
-                      {t.agentSpeaking}
+                  <div className={`ai-state-bar ${isAgentSpeaking ? 'speaking' : 'idle'}`}>
+                    <div className="wave">
+                      <span></span><span></span><span></span><span></span><span></span>
                     </div>
-                  )}
+                    {isAgentSpeaking ? t.agentSpeaking : t.agentIdle}
+                  </div>
 
                   <div className="visual-feedback">
-                    <Visualizer stream={micStreamRef.current} isConnected={isConnected} lang={lang} />
+                    <Visualizer
+                      stream={micStreamRef.current}
+                      isConnected={isConnected}
+                      lang={lang}
+                      onStressLevelChange={handleBioStateChange}
+                    />
 
                     {/* Cognitive OS Metrics Overlay */}
                     <div className="cognitive-metrics-overlay">
                       <div className="metric-item">
-                        <span className="metric-label">{lang === 'ar' ? 'Ø§Ù„ØªÙˆØ§Ø²Ù†' : 'Equilibrium'}</span>
+                        <span className="metric-label">{lang === 'ar' ? 'التوازن' : 'Equilibrium'}</span>
                         <span className="metric-value">{(cognitiveMetrics.equilibriumScore * 100).toFixed(0)}%</span>
                       </div>
                       <div className="metric-item">
-                        <span className="metric-label">{lang === 'ar' ? 'Ø§Ù„Ø¶ØºØ·' : 'Overload'}</span>
+                        <span className="metric-label">{lang === 'ar' ? 'الضغط' : 'Overload'}</span>
                         <span className="metric-value">{(cognitiveMetrics.overloadIndex * 100).toFixed(0)}%</span>
                       </div>
                       <div className="metric-item">
-                        <span className="metric-label">{lang === 'ar' ? 'Ø§Ù„ÙˆØ¶ÙˆØ­ Î”' : 'Clarity Î”'}</span>
+                        <span className="metric-label">{lang === 'ar' ? 'الوضوح Δ' : 'Clarity Δ'}</span>
                         <span className={`metric-value ${cognitiveMetrics.clarityDelta >= 0 ? 'positive' : 'negative'}`}>
                           {cognitiveMetrics.clarityDelta >= 0 ? '+' : ''}{(cognitiveMetrics.clarityDelta * 100).toFixed(0)}%
                         </span>
@@ -1733,13 +2045,9 @@ function App() {
                   <div className="connected-actions">
                     {!isCameraActive ? (
                       <div style={{ display: "flex", gap: "8px" }}>
-                        <button className="retake-live-btn flex-center" onClick={startCamera} style={{ flex: 1, gap: '6px' }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                          {t.updateVisual}
-                        </button>
                         <button className="retake-live-btn flex-center" onClick={handleLookAtMe} style={{ flex: 1, gap: '6px', background: "rgba(255, 209, 102, 0.15)", color: "#FFD700", borderColor: "rgba(255, 209, 102, 0.4)" }}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                          {t.lookAtMe}
+                          {capturedImage ? t.updateVisual : t.lookAtMe}
                         </button>
                       </div>
                     ) : (
@@ -1757,7 +2065,7 @@ function App() {
                       </div>
                     )}
                     <button className="secondary disconnect-btn flex-center" onClick={() => setShowEndSessionConfirm(true)}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
                       {t.endSession}
                     </button>
                   </div>
@@ -1767,17 +2075,6 @@ function App() {
               {/* Circle Control Panel */}
               {appView === 'live' && isConnected && (
                 <div className="circle-controls">
-                  <div className="circle-controls-row legend-only">
-                    {[
-                      { id: 1, label: lang === 'ar' ? 'Ø§Ù„ÙˆØ¹ÙŠ' : 'Awareness', color: '#00F5FF' },
-                      { id: 2, label: lang === 'ar' ? 'Ø§Ù„Ø¹Ù„Ù…' : 'Knowledge', color: '#00FF41' },
-                      { id: 3, label: lang === 'ar' ? 'Ø§Ù„Ø­Ù‚ÙŠÙ‚Ø©' : 'Truth', color: '#FF00E5' },
-                    ].map(c => (
-                      <div key={c.id} className="circle-control-item">
-                        <span className="circle-control-label" style={{ color: c.color }}>{c.label}</span>
-                      </div>
-                    ))}
-                  </div>
                   {/* Text command input (hidden for demo) */}
                   <form className="command-input-form command-input-hidden" onSubmit={(e) => {
                     e.preventDefault();
@@ -1789,11 +2086,11 @@ function App() {
                       className="command-input"
                       value={commandText}
                       onChange={(e) => setCommandText(e.target.value)}
-                      placeholder={lang === 'ar' ? 'Ø§ÙƒØªØ¨ Ø£Ù…Ø±... Ù…Ø«Ø§Ù„: ØµØºÙ‘Ø± Ø¯Ø§ÙŠØ±Ø© Ø§Ù„ÙˆØ¹ÙŠ' : 'Type command... e.g. shrink awareness circle'}
+                      placeholder={lang === 'ar' ? 'اكتب أمر... مثال: صغّر دايرة الوعي' : 'Type command... e.g. shrink awareness circle'}
                       dir={lang === 'ar' ? 'rtl' : 'ltr'}
                     />
                     <button type="submit" className="command-send-btn" disabled={!commandText.trim()}>
-                      {lang === 'ar' ? 'Ù†ÙÙ‘Ø°' : 'Send'}
+                      {lang === 'ar' ? 'نفّذ' : 'Send'}
                     </button>
                   </form>
                 </div>
@@ -1808,32 +2105,41 @@ function App() {
       {/* Session Complete Screen */}
       {appView === 'complete' && (
         <div className="complete-screen complete-overlay">
-          <div className="complete-content glass-panel complete-card">
+          <div className="complete-card">
+            <div className="success-icon-container">
+              <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 10px rgba(0, 255, 65, 0.4))' }}>
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
             <h2 className="complete-title">
-              {lang === 'ar' ? '??? ??????????. ??????????.' : '??? Session Complete.'}
+              {lang === 'ar' ? 'رحلة اكتملت' : 'Journey Complete'}
             </h2>
-            <div className="stats-table complete-stats-table">
-              <div className="stat-row complete-stat-row complete-stat-row-divider">
-                <span className="stat-label complete-stat-label">{lang === 'ar' ? '?????????????? ??????????????' : 'Final Equilibrium'}</span>
-                <span className="stat-value complete-stat-value complete-stat-success">{(cognitiveMetrics.equilibriumScore * 100).toFixed(0)}%</span>
+            <p className="complete-subtitle">
+              {lang === 'ar' ? 'لقد انتهت جلستك، وتم حفظ مسارك المعرفي في بنك الذاكرة.' : 'Your session has ended, and your cognitive path is saved in the Memory Bank.'}
+            </p>
+            <div className="complete-stats-table">
+              <div className="complete-stat-row complete-stat-row-divider">
+                <span className="complete-stat-label">{lang === 'ar' ? 'التوازن النهائي' : 'Equilibrium'}</span>
+                <span className="complete-stat-value complete-stat-success">{(cognitiveMetrics.equilibriumScore * 100).toFixed(0)}%</span>
               </div>
-              <div className="stat-row complete-stat-row complete-stat-row-divider">
-                <span className="stat-label complete-stat-label">{lang === 'ar' ? '??????????' : 'Overload'}</span>
-                <span className="stat-value complete-stat-value complete-stat-info">{(cognitiveMetrics.overloadIndex * 100).toFixed(0)}%</span>
+              <div className="complete-stat-row complete-stat-row-divider">
+                <span className="complete-stat-label">{lang === 'ar' ? 'مستوى الضغط' : 'Overload'}</span>
+                <span className="complete-stat-value complete-stat-info">{(cognitiveMetrics.overloadIndex * 100).toFixed(0)}%</span>
               </div>
-              <div className="stat-row complete-stat-row">
-                <span className="stat-label complete-stat-label">{lang === 'ar' ? '?????????? ????????????' : 'Clarity Change'}</span>
-                <span className={`stat-value complete-stat-value ${cognitiveMetrics.clarityDelta >= 0 ? 'complete-stat-success' : 'complete-stat-magenta'}`}>
+              <div className="complete-stat-row">
+                <span className="complete-stat-label">{lang === 'ar' ? 'نسبة الوضوح' : 'Clarity Δ'}</span>
+                <span className={`complete-stat-value ${cognitiveMetrics.clarityDelta >= 0 ? 'complete-stat-success' : 'complete-stat-magenta'}`}>
                   {cognitiveMetrics.clarityDelta >= 0 ? '+' : ''}{(cognitiveMetrics.clarityDelta * 100).toFixed(0)}%
                 </span>
               </div>
             </div>
-            <div className="complete-actions complete-actions-row">
-              <button className="primary-btn flex-center complete-action-btn" onClick={() => setAppView('setup')}>
-                {lang === 'ar' ? '???? ???????? ??????????' : '???? New Session'}
+            <div className="complete-actions-row">
+              <button className="primary-btn complete-action-btn" onClick={() => setAppView('setup')}>
+                {lang === 'ar' ? 'جلسة جديدة' : 'New Session'}
               </button>
-              <button className="primary-btn flex-center complete-action-btn complete-action-secondary" onClick={() => setAppView('dashboard')}>
-                {lang === 'ar' ? '???? ???????? ????????????' : '???? Dashboard'}
+              <button className="primary-btn complete-action-btn complete-action-secondary" onClick={() => setAppView('dashboard')}>
+                {lang === 'ar' ? 'بنك الذاكرة' : 'Memory Bank'}
               </button>
             </div>
           </div>
@@ -1845,6 +2151,8 @@ function App() {
           lang={lang}
           onClose={() => setShowSettings(false)}
           onLanguageChange={setLang}
+          selectedMicId={selectedMicId}
+          onMicChange={setSelectedMicId}
         />
       )}
 
@@ -1872,13 +2180,13 @@ function App() {
 
       {/* Live Transcript Overlay */}
       {appView === 'live' && isConnected && transcript.length > 0 && (
-        <section className={`transcript-container ${isTranscriptVisible ? 'open' : 'closed'}`} aria-label={lang === 'ar' ? 'Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø© Ø§Ù„Ù…Ø¨Ø§Ø´Ø±Ø©' : 'Live transcript'}>
+        <section className={`transcript-container ${isTranscriptVisible ? 'open' : 'closed'}`} aria-label={lang === 'ar' ? 'الدردشة' : 'Live transcript'}>
           <button
             className="transcript-toggle-btn"
             onClick={() => setIsTranscriptVisible(!isTranscriptVisible)}
             title={isTranscriptVisible ? 'Hide Transcript' : 'Show Transcript'}
           >
-            {isTranscriptVisible ? 'â–¼ ' + t.liveChat : 'ðŸ’¬ ' + t.liveChat}
+            {isTranscriptVisible ? '▼ ' + t.liveChat : '💬 ' + t.liveChat}
           </button>
 
           <div className="transcript-overlay" style={{ display: isTranscriptVisible ? 'flex' : 'none' }}>
@@ -1895,12 +2203,12 @@ function App() {
       )}
 
       {appView === 'live' && isConnected && (
-        <div className="breathing-hud" role="toolbar" aria-label={lang === 'ar' ? 'Ø£Ø¯ÙˆØ§Øª Ø§Ù„Ø¬Ù„Ø³Ø©' : 'Session tools'}>
+        <div className="breathing-hud" role="toolbar" aria-label={lang === 'ar' ? 'أدوات الجلسة' : 'Session tools'}>
           <button className="secondary" onClick={() => setIsBreathingRoom((current) => !current)}>
-            {isBreathingRoom ? (lang === 'ar' ? 'Ø¥Ø¸Ù‡Ø§Ø± Ø§Ù„Ù„ÙˆØ­Ø©' : 'Show Panel') : (lang === 'ar' ? 'Ø¥Ø®ÙØ§Ø¡ Ø§Ù„Ù„ÙˆØ­Ø©' : 'Hide Panel')}
+            {isBreathingRoom ? (lang === 'ar' ? 'إظهار اللوحة' : 'Show Panel') : (lang === 'ar' ? 'إخفاء اللوحة' : 'Hide Panel')}
           </button>
           <button className="secondary" onClick={() => setIsTranscriptVisible((current) => !current)}>
-            {lang === 'ar' ? 'Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©' : 'Transcript'}
+            {lang === 'ar' ? 'المحادثة' : 'Transcript'}
           </button>
           <button className="secondary disconnect-btn" onClick={() => setShowEndSessionConfirm(true)}>
             {t.endSession}
@@ -1908,8 +2216,18 @@ function App() {
         </div>
       )}
 
-      <main id="main-canvas-content" className="app-canvas-main" role="main" aria-label={lang === 'ar' ? 'Ù…Ø³Ø§Ø­Ø© Ø§Ù„Ø¯ÙˆØ§Ø¦Ø±' : 'Circle canvas'}>
-        <h1 className="visually-hidden">{lang === 'ar' ? 'ØªØ·Ø¨ÙŠÙ‚ Ø¯ÙˆØ§ÙŠØ± Ù„Ù„Ø¬Ù„Ø³Ø§Øª Ø§Ù„ØµÙˆØªÙŠØ©' : 'Dawayir live voice session app'}</h1>
+      {appView === 'live' && isConnected && (
+        <AchievementBar achievements={achievements} lang={lang} />
+      )}
+
+      {appView === 'live' && isConnected && (
+        <div className={`audio-diagnostic-badge ${audioDiag.className}`}>
+          {audioDiag.text}
+        </div>
+      )}
+
+      <main id="main-canvas-content" className="app-canvas-main" role="main" aria-label={lang === 'ar' ? 'مساحة الدوائر' : 'Circle canvas'}>
+        <h1 className="visually-hidden">{lang === 'ar' ? 'تطبيق دواير للجلسات الصوتية' : 'Dawayir live voice session app'}</h1>
         <DawayirCanvas ref={canvasRef} lang={lang} />
       </main>
     </div>

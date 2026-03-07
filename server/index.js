@@ -210,15 +210,15 @@ const tools = [
         functionDeclarations: [
             {
                 name: "update_node",
-                description: "Cognitive OS: Update the weight and state of a cognitive entity. Use this to reflect shifts in Awareness, Knowledge, or Truth. DO NOT mention the numeric values in speech.",
+                description: "Cognitive OS: Update a circle visual state. Use id + radius + color only. DO NOT mention numeric values in speech.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
                         id: { type: "STRING", description: "Entity ID: 1, 2, or 3" },
-                        weight: { type: "NUMBER", description: "Cognitive weight/significance (0.3 to 1.0)" },
+                        radius: { type: "NUMBER", description: "Circle radius in the range 30 to 100" },
                         color: { type: "STRING", description: "Hex color representing the current emotional frequency" }
                     },
-                    required: ["id", "weight", "color"]
+                    required: ["id", "radius", "color"]
                 },
             },
             {
@@ -300,8 +300,10 @@ const systemInstructionStandard = `أنت "دواير" (Dawayir) — أول نظ
 قواعد العملية (Process Scheduling):
 - أنت "Process Scheduler": عالج صوت وصورة المستخدم فوراً وحوّلها لبيانات بصرية.
 - استخدم أداة update_node لتغيير أوزان الدوائر (radius: 30-100) بناءً على نبرة الصوت والمحتوى.
+- عند أي طلب مباشر يخص دائرة (تكبير/تصغير/لون)، نفّذ update_node أولاً ثم رد صوتيًا.
 - التزم بالاختصار: لا تقل أكثر من جملة واحدة قصيرة وحادة (Punchy).
 - ممنوع ذكر الأسماء التقنية (أدوات، أرقام، ألوان) في كلامك.
+- STRICT TOOL ARGS: for update_node use ONLY {id, radius, color}. Never send weight, size, expansion, colour, node_id, or nodeId.
 
 [سري]:
 update_node: يمثل الـ radius الوزن (Weight) الحالي للكيان الإدراكي.`;
@@ -312,8 +314,10 @@ const systemInstructionDemo = `أنت Dawayir Cognitive OS في وضع العر�
 قواعد الديمو الاستراتيجية:
 - كن صريحاً في أنك نظام تشغيل إدراكي يعالج البيانات العاطفية في الوقت الفعلي.
 - نادِ أداة update_node بكثافة لتظهر كيف تتفاعل الدوائر مع كل كلمة يقولها المستخدم.
+- إذا المستخدم طلب تعديل دائرة بشكل صريح، لازم تستدعي update_node قبل الكلام.
 - طبق فلسفة "الحكيم": ركز على جدولة المشاعر (Scheduling)؛ إذا كان المستخدم مشتتاً، أعطِ الأولوية لمعالجة الضغط (Reduce Stress Process).
 - استخدم "العامية المصرية" بذكاء لكسر الجمود التقني.
+- STRICT TOOL ARGS: for update_node use ONLY {id, radius, color}. Never send weight, size, expansion, colour, node_id, or nodeId.
 
 [Pillars]:
 - الوعي (Cyan), العلم (Green), الحقيقة (Magenta).`;
@@ -413,11 +417,68 @@ wss.on('connection', (ws, req) => {
     let reconnectInProgress = false;
     let reconnectAttempt = 0;
     const pendingClientMessages = [];
-    let lastCmdText = '';
-    let lastCmdAt = 0;
     let inputTranscriptBuffer = '';
     let inputTranscriptTimer = null;
     const INPUT_TRANSCRIPT_FLUSH_MS = 1500; // flush after 1.5s of silence
+
+    // --- Output Sentiment Analysis ---
+    let outputSentimentBuffer = '';
+    let outputSentimentTimer = null;
+    let lastSentimentEmitAt = 0;
+    const SENTIMENT_COOLDOWN_MS = 8000; // min 8s between sentiment-driven updates
+    const SENTIMENT_KEYWORDS = {
+        joy:     { words: ['فرح','مبسوط','سعيد','حلو','جميل','ممتاز','عظيم','happy','joy','great','wonderful','beautiful','amazing'], color: '#FFD700', weight: 0.85 },
+        calm:    { words: ['هدوء','مرتاح','سلام','هادي','طمأنينة','calm','peace','relax','serene','tranquil'], color: '#00CED1', weight: 0.7 },
+        sadness: { words: ['حزن','حزين','زعل','متضايق','وحش','sad','grief','upset','down','depressed'], color: '#4169E1', weight: 0.45 },
+        anxiety: { words: ['قلق','خوف','توتر','ضغط','مش مرتاح','خايف','anxious','worried','stress','fear','nervous','overwhelm'], color: '#FF6B35', weight: 0.55 },
+    };
+
+    function detectSentimentFromOutput(text) {
+        if (!text) return null;
+        const t = text.toLowerCase();
+        let best = null;
+        let bestCount = 0;
+        for (const [mood, cfg] of Object.entries(SENTIMENT_KEYWORDS)) {
+            const count = cfg.words.filter(w => t.includes(w)).length;
+            if (count > bestCount) {
+                bestCount = count;
+                best = { mood, color: cfg.color, weight: cfg.weight };
+            }
+        }
+        return bestCount > 0 ? best : null;
+    }
+
+    function flushOutputSentimentBuffer() {
+        if (!outputSentimentBuffer.trim()) return;
+        const text = outputSentimentBuffer.trim();
+        outputSentimentBuffer = '';
+
+        const now = Date.now();
+        if (now - lastSentimentEmitAt < SENTIMENT_COOLDOWN_MS) return;
+
+        const sentiment = detectSentimentFromOutput(text);
+        if (!sentiment) return;
+
+        lastSentimentEmitAt = now;
+        logInfo(`[SENTIMENT] Detected "${sentiment.mood}" → color=${sentiment.color}, weight=${sentiment.weight}`);
+
+        // Pick circle based on mood: joy→Truth(3), calm→Awareness(1), sadness→Knowledge(2), anxiety→Awareness(1)
+        const circleMap = { joy: '3', calm: '1', sadness: '2', anxiety: '1' };
+        const circleId = circleMap[sentiment.mood] || '1';
+
+        const stabilizedWeight = applyStabilityConstraints(circleId, sentiment.weight);
+        const radius = Math.round(stabilizedWeight * 100);
+
+        sendToClient({
+            toolCall: {
+                functionCalls: [{
+                    name: 'update_node',
+                    id: `sentiment_${Date.now()}`,
+                    args: { id: circleId, radius, color: sentiment.color },
+                }],
+            },
+        });
+    }
 
     // --- Cognitive OS Kernel State ---
     const cognitiveState = {
@@ -489,34 +550,76 @@ wss.on('connection', (ws, req) => {
         return target;
     }
 
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+    function normalizeUpdateNodeArgs(rawArgs) {
+        let args = rawArgs;
+        if (typeof args === 'string') {
+            try {
+                args = JSON.parse(args);
+            } catch {
+                args = {};
+            }
+        }
+        if (!args || typeof args !== 'object') {
+            args = {};
+        }
+
+        const idCandidate = String(args.id ?? args.node_id ?? args.nodeId ?? '1');
+        const id = ['1', '2', '3'].includes(idCandidate) ? idCandidate : '1';
+
+        const currentRadius = Math.round((cognitiveState[id]?.weight ?? 0.6) * 100);
+        const numericRadius = Number(args.radius);
+        const numericWeight = Number(args.weight);
+        const numericDelta = Number(args.expansion ?? args.size);
+
+        let desiredWeight = 0.6;
+        if (Number.isFinite(numericRadius)) {
+            desiredWeight = clamp(numericRadius / 100, 0.3, 1.0);
+        } else if (Number.isFinite(numericWeight)) {
+            desiredWeight = clamp(numericWeight, 0.3, 1.0);
+        } else if (Number.isFinite(numericDelta)) {
+            // Backward compatibility with legacy alias fields.
+            desiredWeight = clamp((currentRadius + (numericDelta * 5)) / 100, 0.3, 1.0);
+        }
+
+        const stabilizedWeight = applyStabilityConstraints(id, desiredWeight);
+        const radius = String(Math.round(stabilizedWeight * 100));
+
+        const colorCandidate = typeof args.color === 'string'
+            ? args.color
+            : typeof args.colour === 'string'
+                ? args.colour
+                : cognitiveState[id].color;
+        const color = typeof colorCandidate === 'string' && /^#[0-9A-Fa-f]{6}$/.test(colorCandidate)
+            ? colorCandidate.toUpperCase()
+            : cognitiveState[id].color;
+
+        cognitiveState[id].color = color;
+        return { ...args, id, radius, color };
+    }
+
     function flushInputTranscriptBuffer() {
         if (!inputTranscriptBuffer.trim()) return;
         const fullText = inputTranscriptBuffer.trim();
         inputTranscriptBuffer = '';
+        logDebug(`[InputBuffer] ${fullText.substring(0, 160)}`);
+
+        // Voice command detection: user says "shrink awareness" etc.
         const cmd = detectCircleCommand(fullText);
         if (cmd) {
-            const now = Date.now();
-            if (fullText !== lastCmdText || now - lastCmdAt > 3000) {
-                lastCmdText = fullText;
-                lastCmdAt = now;
-
-                // Update cognitive state and apply stability
-                const stabilizedWeight = applyStabilityConstraints(cmd.id, cmd.weight);
-                const radius = Math.round(stabilizedWeight * 100);
-
-                logInfo(`[CMD] Detected circle command: "${fullText}" => stabilized weight ${stabilizedWeight}`);
-
-                sendToClient({
-                    toolCall: {
-                        functionCalls: [{
-                            id: `server_cmd_${now}`,
-                            name: 'update_node',
-                            args: { ...cmd, radius: String(radius) },
-                        }],
-                    },
-                    cognitiveMetrics: sessionMetrics
-                });
-            }
+            logInfo(`[VoiceCmd] Detected: circle=${cmd.id}, weight=${cmd.weight}, color=${cmd.color}`);
+            const stabilizedWeight = applyStabilityConstraints(cmd.id, cmd.weight);
+            const radius = Math.round(stabilizedWeight * 100);
+            sendToClient({
+                toolCall: {
+                    functionCalls: [{
+                        name: 'update_node',
+                        id: `server_cmd_${Date.now()}`,
+                        args: { id: cmd.id, radius, color: cmd.color },
+                    }],
+                },
+            });
         }
     }
 
@@ -588,7 +691,7 @@ wss.on('connection', (ws, req) => {
                 if (audioChunkCount === 1 || audioChunkCount % 100 === 0) {
                     logInfo(`Client audio chunks received: ${audioChunkCount} (mime: ${blob.mimeType})`);
                 }
-                session.sendRealtimeInput({ audio: blob });
+                session.sendRealtimeInput({ media: blob });
             } else {
                 session.sendRealtimeInput({ media: blob });
             }
@@ -606,37 +709,7 @@ wss.on('connection', (ws, req) => {
 
     const processClientContent = (clientContent) => {
         logInfo('Client content turn received:', JSON.stringify(clientContent).substring(0, 200));
-        // Detect circle commands from text input (reliable fallback)
-
-        const turns = clientContent.turns || clientContent.turn || [];
-        const turnsArr = Array.isArray(turns) ? turns : [turns];
-        for (const turn of turnsArr) {
-            const parts = turn?.parts || [];
-            for (const part of parts) {
-                if (part?.text) {
-                    const cmd = detectCircleCommand(part.text);
-                    if (cmd) {
-                        const now = Date.now();
-
-                        const stabilizedWeight = applyStabilityConstraints(cmd.id, cmd.weight);
-                        const radius = Math.round(stabilizedWeight * 100);
-
-                        logInfo(`[CMD] Detected circle command from text: "${part.text}" => stabilized weight ${stabilizedWeight}`);
-
-                        sendToClient({
-                            toolCall: {
-                                functionCalls: [{
-                                    id: `text_cmd_${now}`,
-                                    name: 'update_node',
-                                    args: { ...cmd, radius: String(radius) },
-                                }],
-                            },
-                            cognitiveMetrics: sessionMetrics
-                        });
-                    }
-                }
-            }
-        }
+        // Agent-only visual control: user text is forwarded as-is to Gemini.
         session.sendClientContent(clientContent);
     };
 
@@ -867,6 +940,15 @@ ${recommendations || "N/A"}
                             if (outTx?.text) {
                                 logInfo(`[Transcription:out] "${outTx.text}" (finished=${outTx.finished})`);
                                 sendToClient({ debugTranscription: { type: 'output', text: outTx.text, finished: outTx.finished } });
+
+                                // Accumulate for sentiment analysis
+                                outputSentimentBuffer += ' ' + outTx.text;
+                                if (outputSentimentTimer) clearTimeout(outputSentimentTimer);
+                                if (outTx.finished) {
+                                    flushOutputSentimentBuffer();
+                                } else {
+                                    outputSentimentTimer = setTimeout(flushOutputSentimentBuffer, 3000);
+                                }
                             }
                         }
 
@@ -887,24 +969,18 @@ ${recommendations || "N/A"}
                             }
 
                             if (visualOnlyTools.length > 0) {
-                                const processedVisualTools = visualOnlyTools.map(fc => {
-                                    if (fc.name === 'update_node' && fc.args) {
-                                        const id = String(fc.args.id);
-                                        const rawWeight = Number(fc.args.weight || 0.6);
-                                        const stabilizedWeight = applyStabilityConstraints(id, rawWeight);
-
-                                        // Convert weight (0.3 - 1.0) to radius (30 - 100)
-                                        const radius = Math.round(stabilizedWeight * 100);
-
+                                const processedVisualTools = visualOnlyTools.map((fc, index) => {
+                                    const visualId = `gemini_visual_${fc.id || Date.now()}_${index}`;
+                                    if (fc.name === 'update_node') {
                                         return {
                                             ...fc,
-                                            id: `gemini_visual_${fc.id || Date.now()}`,
-                                            args: { ...fc.args, radius: String(radius) }
+                                            id: visualId,
+                                            args: normalizeUpdateNodeArgs(fc.args)
                                         };
                                     }
                                     return {
                                         ...fc,
-                                        id: `gemini_visual_${fc.id || Date.now()}`,
+                                        id: visualId,
                                     };
                                 });
 
