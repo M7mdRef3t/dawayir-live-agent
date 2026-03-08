@@ -127,6 +127,47 @@ app.get('/api/reports/:filename', async (req, res) => {
     }
 });
 
+// API: Delete report content (Sand Mandala Effect)
+app.delete('/api/reports/:filename', async (req, res) => {
+    const { filename } = req.params;
+    if (!isValidReportFilename(filename)) {
+        return res.status(400).json({ error: 'Invalid filename format' });
+    }
+
+    const localPath = path.join(LOCAL_REPORTS_DIR, filename);
+    let deleted = false;
+
+    // Delete local if exists
+    if (fs.existsSync(localPath)) {
+        try {
+            fs.unlinkSync(localPath);
+            deleted = true;
+        } catch (err) {
+            console.error('Error deleting local file:', err);
+        }
+    }
+
+    // Delete GCS if configured
+    if (BUCKET_NAME) {
+        try {
+            const file = storage.bucket(BUCKET_NAME).file(filename);
+            const [exists] = await file.exists();
+            if (exists) {
+                await file.delete();
+                deleted = true;
+            }
+        } catch (error) {
+            console.error('Error deleting from GCS:', error);
+        }
+    }
+
+    if (deleted) {
+        return res.json({ success: true, message: 'Artifact scattered (sand mandala)' });
+    } else {
+        return res.status(404).json({ error: 'Report not found' });
+    }
+});
+
 const PROJECT_ID = process.env.GOOGLE_PROJECT_ID || 'alrehla-486806';
 const BUCKET_NAME = process.env.GOOGLE_CLOUD_STORAGE_BUCKET;
 const storage = new Storage({ projectId: PROJECT_ID });
@@ -264,7 +305,8 @@ const tools = [
                     properties: {
                         id: { type: "STRING", description: "Entity ID: 1, 2, or 3" },
                         radius: { type: "NUMBER", description: "Circle radius in the range 30 to 100" },
-                        color: { type: "STRING", description: "Hex color representing the current emotional frequency" }
+                        color: { type: "STRING", description: "Hex color representing the current emotional frequency" },
+                        fluidity: { type: "NUMBER", description: "0.0 for stable/structured, 1.0 for fluid/confused/wavy. 0.5 is default." }
                     },
                     required: ["id", "radius", "color"]
                 },
@@ -351,7 +393,8 @@ const systemInstructionStandard = `أنت "دواير" (Dawayir) — أول نظ
 - عند أي طلب مباشر يخص دائرة (تكبير/تصغير/لون)، نفّذ update_node أولاً ثم رد صوتيًا.
 - التزم بالاختصار: لا تقل أكثر من جملة واحدة قصيرة وحادة (Punchy).
 - ممنوع ذكر الأسماء التقنية (أدوات، أرقام، ألوان) في كلامك.
-- STRICT TOOL ARGS: for update_node use ONLY {id, radius, color}. Never send weight, size, expansion, colour, node_id, or nodeId.
+- STRICT TOOL ARGS: for update_node use ONLY {id, radius, color, fluidity}. Never send weight, size, expansion, colour, node_id, or nodeId.
+- Fluidity Mapping: استخدم fluidity=0.0 إذا كان المستخدم يصل لحقيقة ثابتة، و fluidity=1.0 إذا كان مشتتاً ومضطرباً.
 
 [سري]:
 update_node: يمثل الـ radius الوزن (Weight) الحالي للكيان الإدراكي.`;
@@ -365,7 +408,8 @@ const systemInstructionDemo = `أنت Dawayir Cognitive OS في وضع العر�
 - إذا المستخدم طلب تعديل دائرة بشكل صريح، لازم تستدعي update_node قبل الكلام.
 - طبق فلسفة "الحكيم": ركز على جدولة المشاعر (Scheduling)؛ إذا كان المستخدم مشتتاً، أعطِ الأولوية لمعالجة الضغط (Reduce Stress Process).
 - استخدم "العامية المصرية" بذكاء لكسر الجمود التقني.
-- STRICT TOOL ARGS: for update_node use ONLY {id, radius, color}. Never send weight, size, expansion, colour, node_id, or nodeId.
+- STRICT TOOL ARGS: for update_node use ONLY {id, radius, color, fluidity}. Never send weight, size, expansion, colour, node_id, or nodeId.
+- Fluidity Mapping: استخدم fluidity=0.0 إذا كان المستخدم يصل لحقيقة ثابتة، و fluidity=1.0 إذا كان مشتتاً ومضطرباً.
 
 [Pillars]:
 - الوعي (Cyan), العلم (Green), الحقيقة (Magenta).`;
@@ -542,6 +586,10 @@ wss.on('connection', (ws, req) => {
         interactionCount: 0,
         lastInteractionTime: Date.now()
     };
+    const sessionArtifacts = {
+        latestReplay: null,
+        latestReplayFilename: null,
+    };
 
     function calculateMetrics() {
         const w1 = cognitiveState['1'].weight;
@@ -643,8 +691,122 @@ wss.on('connection', (ws, req) => {
             ? colorCandidate.toUpperCase()
             : cognitiveState[id].color;
 
+        const fluidity = Number.isFinite(Number(args.fluidity)) ? Number(args.fluidity) : 0.5;
+
         cognitiveState[id].color = color;
-        return { ...args, id, radius, color };
+        return { ...args, id, radius, color, fluidity };
+    }
+
+    const CIRCLE_NAMES = {
+        '1': 'Awareness',
+        '2': 'Knowledge',
+        '3': 'Truth',
+    };
+
+    function buildVisualReason(args, policy, metrics = {}) {
+        const id = String(args?.id ?? '1');
+        const circleName = CIRCLE_NAMES[id] || 'Awareness';
+        const overloadPct = Math.round((Number(metrics.overloadIndex) || 0) * 100);
+        const equilibriumPct = Math.round((Number(metrics.equilibriumScore) || 0) * 100);
+        const clarityDelta = Number(metrics.clarityDelta) || 0;
+
+        if (typeof args?.reason === 'string' && args.reason.trim()) {
+            return args.reason.trim();
+        }
+        if (policy === 'PRIORITIZE_GROUNDING') {
+            return `Grounding ${circleName} because overload is elevated (${overloadPct}%).`;
+        }
+        if (policy === 'PRIORITIZE_STRUCTURE') {
+            return `Rebalancing ${circleName} because coherence dropped (${equilibriumPct}% equilibrium).`;
+        }
+        if (id === '3' && clarityDelta > 0.08) {
+            return 'Reinforcing Truth because clarity is rising in this turn.';
+        }
+        if (id === '1') {
+            return 'Awareness moved first to reflect the current emotional signal.';
+        }
+        if (id === '2') {
+            return 'Knowledge expanded to give the thought more structure.';
+        }
+        return 'Truth shifted to stabilize the current insight.';
+    }
+
+    function annotateVisualArgs(args, policy, metrics = {}) {
+        const metric = policy === 'PRIORITIZE_GROUNDING'
+            ? 'overload'
+            : policy === 'PRIORITIZE_STRUCTURE'
+                ? 'equilibrium'
+                : String(args?.id ?? '1') === '3' && (Number(metrics.clarityDelta) || 0) > 0
+                    ? 'clarity'
+                    : 'turn';
+
+        return {
+            ...args,
+            source: 'agent',
+            policy,
+            metric,
+            reason: buildVisualReason(args, policy, metrics),
+        };
+    }
+
+    function sanitizeReplayMetrics(rawMetrics = {}) {
+        const equilibriumScore = Number(rawMetrics.equilibriumScore);
+        const overloadIndex = Number(rawMetrics.overloadIndex);
+        const clarityDelta = Number(rawMetrics.clarityDelta);
+        const interactionCount = Number(rawMetrics.interactionCount);
+
+        return {
+            equilibriumScore: Number.isFinite(equilibriumScore) ? equilibriumScore : Number(sessionMetrics.equilibriumScore || 0),
+            overloadIndex: Number.isFinite(overloadIndex) ? overloadIndex : Number(sessionMetrics.overloadIndex || 0),
+            clarityDelta: Number.isFinite(clarityDelta) ? clarityDelta : Number(sessionMetrics.clarityDelta || 0),
+            interactionCount: Number.isFinite(interactionCount) ? interactionCount : Number(sessionMetrics.interactionCount || 0),
+        };
+    }
+
+    function sanitizeReplayNodes(rawNodes = []) {
+        if (!Array.isArray(rawNodes)) return [];
+        return rawNodes
+            .map((node) => ({
+                id: Number(node?.id),
+                radius: Math.round(Number(node?.radius) || 0),
+                color: typeof node?.color === 'string' ? node.color : '#00F5FF',
+                label: typeof node?.label === 'string' ? node.label : '',
+            }))
+            .filter((node) => Number.isFinite(node.id) && node.radius > 0)
+            .sort((a, b) => a.id - b.id);
+    }
+
+    function sanitizeReplaySteps(rawSteps = []) {
+        if (!Array.isArray(rawSteps)) return [];
+        return rawSteps
+            .map((step) => {
+                const nodes = sanitizeReplayNodes(step?.nodes);
+                if (nodes.length === 0) return null;
+                const focusId = Number(step?.focusId);
+                return {
+                    atMs: Math.max(0, Math.round(Number(step?.atMs) || 0)),
+                    kind: typeof step?.kind === 'string' ? step.kind : 'update',
+                    focusId: Number.isFinite(focusId) ? focusId : null,
+                    reason: typeof step?.reason === 'string' ? step.reason : '',
+                    source: typeof step?.source === 'string' ? step.source : 'agent',
+                    policy: typeof step?.policy === 'string' ? step.policy : 'IDLE',
+                    metric: typeof step?.metric === 'string' ? step.metric : 'turn',
+                    nodes,
+                    metrics: sanitizeReplayMetrics(step?.metrics),
+                };
+            })
+            .filter(Boolean)
+            .slice(-160);
+    }
+
+    function encodeReplayArtifact(artifact) {
+        if (!artifact) return '';
+        try {
+            return Buffer.from(JSON.stringify(artifact), 'utf8').toString('base64');
+        } catch (error) {
+            logError('[Replay] Failed to encode replay artifact:', error);
+            return '';
+        }
     }
 
     function flushInputTranscriptBuffer() {
@@ -785,19 +947,53 @@ wss.on('connection', (ws, req) => {
         // Intercept save_mental_map for GCS upload
         for (const resp of filteredResponses) {
             if (resp.name === 'save_mental_map' && resp.response?.result?.ok) {
-                const nodes = resp.response.result.nodes;
-                if (nodes && BUCKET_NAME) {
-                    const filename = `mental_map_${Date.now()}.json`;
-                    logInfo(`Uploading mental map to GCS: ${filename}`);
+                const nodes = sanitizeReplayNodes(resp.response.result.nodes);
+                const replaySteps = sanitizeReplaySteps(resp.response.result.replayTrace);
+                const replayMetrics = sanitizeReplayMetrics(resp.response.result.metrics);
 
-                    const file = storage.bucket(BUCKET_NAME).file(filename);
-                    file.save(JSON.stringify(nodes, null, 2), {
-                        contentType: 'application/json',
-                    }).then(() => {
-                        logInfo('GCS Upload Successful');
-                    }).catch(err => {
-                        logError('GCS Upload Failed:', err);
-                    });
+                if (nodes.length > 0) {
+                    const timestampVal = Date.now();
+                    const filename = `mental_map_${timestampVal}.json`;
+                    const artifact = {
+                        version: 1,
+                        savedAt: new Date(timestampVal).toISOString(),
+                        metrics: replayMetrics,
+                        finalNodes: nodes,
+                        steps: replaySteps.length > 0 ? replaySteps : [{
+                            atMs: 0,
+                            kind: 'snapshot',
+                            focusId: null,
+                            reason: 'Final canvas snapshot',
+                            source: 'system',
+                            policy: 'IDLE',
+                            metric: 'turn',
+                            nodes,
+                            metrics: replayMetrics,
+                        }],
+                    };
+
+                    sessionArtifacts.latestReplay = artifact;
+                    sessionArtifacts.latestReplayFilename = filename;
+
+                    try {
+                        const localPath = path.join(LOCAL_REPORTS_DIR, filename);
+                        fs.writeFileSync(localPath, JSON.stringify(artifact, null, 2));
+                        logInfo(`[STORAGE] Mental map saved locally: ${filename}`);
+                    } catch (err) {
+                        logError('[STORAGE] Mental map local write failed:', err);
+                    }
+
+                    if (BUCKET_NAME) {
+                        logInfo(`Uploading mental map to GCS: ${filename}`);
+                        const file = storage.bucket(BUCKET_NAME).file(filename);
+                        file.save(JSON.stringify(artifact, null, 2), {
+                            contentType: 'application/json',
+                        }).then(() => {
+                            logInfo('GCS Upload Successful');
+                        }).catch(err => {
+                            logError('GCS Upload Failed:', err);
+                        });
+                    }
                 }
             }
 
@@ -805,6 +1001,12 @@ wss.on('connection', (ws, req) => {
                 const { summary, insights, recommendations } = resp.response.result;
                 const timestampVal = Date.now();
                 const filename = `session_report_${timestampVal}.md`;
+                const replayStepsCount = sessionArtifacts.latestReplay?.steps?.length || 0;
+                const replayBlob = encodeReplayArtifact(sessionArtifacts.latestReplay);
+                const replayComment = replayBlob ? `\n<!-- DAWAYIR_REPLAY:${replayBlob} -->` : '';
+                const replayEvidence = replayStepsCount > 0
+                    ? `\n## Replay Trace\n${replayStepsCount} visual state transition(s) captured for session replay.\n`
+                    : '';
 
                 const content = `
 # Dawayir Session Report
@@ -819,9 +1021,11 @@ ${insights}
 
 ## Recommendations
 ${recommendations || "N/A"}
+${replayEvidence}
 
 ---
 *Generated by Dawayir Live Agent (Gemini 2.0)*
+${replayComment}
                 `;
 
                 // 1. Save Locally
@@ -1018,7 +1222,7 @@ ${recommendations || "N/A"}
                         const toolCall = payload.toolCall || payload.tool_call;
                         if (toolCall) {
                             const functionCalls = toolCall.functionCalls || toolCall.function_calls || [];
-                            const serverTools = ['get_expert_insight', 'generate_session_report'];
+                            const serverTools = ['get_expert_insight'];
                             const visualTools = ['update_node', 'highlight_node', 'update_journey'];
                             const clientTools = functionCalls.filter(fc => !serverTools.includes(fc.name) && !visualTools.includes(fc.name));
                             const serverOnlyTools = functionCalls.filter(fc => serverTools.includes(fc.name));
@@ -1030,13 +1234,15 @@ ${recommendations || "N/A"}
                             }
 
                             if (visualOnlyTools.length > 0) {
+                                const activePolicy = cognitiveScheduler();
                                 const processedVisualTools = visualOnlyTools.map((fc, index) => {
                                     const visualId = `gemini_visual_${fc.id || Date.now()}_${index}`;
                                     if (fc.name === 'update_node') {
+                                        const normalizedArgs = normalizeUpdateNodeArgs(fc.args);
                                         return {
                                             ...fc,
                                             id: visualId,
-                                            args: normalizeUpdateNodeArgs(fc.args)
+                                            args: annotateVisualArgs(normalizedArgs, activePolicy, sessionMetrics),
                                         };
                                     }
                                     return {

@@ -6,9 +6,20 @@ import EndSessionConfirmModal from './components/EndSessionConfirmModal';
 import SettingsModal from './components/SettingsModal';
 import DashboardView from './components/DashboardView';
 import Visualizer from './components/Visualizer';
+import VoiceToneBadge from './components/VoiceToneBadge';
+import BreathingGuide from './components/BreathingGuide';
+import SacredPause from './components/SacredPause';
+import EmotionalWeather from './components/EmotionalWeather';
+import MirrorSentence from './components/MirrorSentence';
+import CognitiveVelocity from './components/CognitiveVelocity';
 import StatusBadge from './components/ui/StatusBadge';
 import AchievementBar from './components/AchievementBar';
+import JourneyTimeline from './components/JourneyTimeline';
+import CognitiveDNACard from './components/CognitiveDNACard';
+import CognitiveFingerprint from './components/CognitiveFingerprint';
+import { playTransitionSound, playInsightSound, playSessionCompleteSound } from './features/session/soundDesign';
 import logoCognitiveTrinity from './assets/dawayir-logo-cognitive-trinity.svg';
+
 import { STRINGS, NODE_LABELS, ONBOARDING_STEPS, CONNECT_PROGRESS } from './i18n/strings';
 import {
   INPUT_SAMPLE_RATE,
@@ -46,43 +57,100 @@ import { useSessionHotkeys } from './hooks/useSessionHotkeys';
 
 const AUTO_DEMO_SCRIPT = {
   ar: [
-    { prompt: 'ابدأ معي ديمو تلقائي قصير. عرف نفسك بجملة واحدة.' },
-    { prompt: 'دلوقتي ركز على دائرة الوعي: صغرها قليلًا وخلي اللون أهدى.' },
-    { prompt: 'ممتاز. كبر دائرة العلم شوية وخليها أوضح.' },
-    { prompt: 'حوّل التركيز للحقيقة وعدّل الألوان لتحقيق توازن أفضل.' },
-    { prompt: 'لو سمحت لخص الحالة الحالية في جملة قصيرة وواضحة.' },
-    { prompt: 'قبل النهاية، احفظ الخريطة الذهنية وأنشئ تقرير جلسة مختصر.' },
+    {
+      spoken: 'انا متوتر جدا ومش قادر اركز دلوقتي.',
+      prompt: 'انا متوتر جدا ومش قادر اركز دلوقتي. لو مناسب عدل الدوائر بهدوء.',
+      maxWaitMs: 15000,
+    },
+    {
+      spoken: 'خلينا نركز على الوعي.',
+      prompt: 'ركز على دائرة الوعي: صغرها قليلا واجعل اللون اهدى.',
+    },
+    {
+      spoken: 'عايز معرفة اوضح واكثر ثباتا.',
+      prompt: 'كبر دائرة العلم قليلا وخليها اوضح.',
+    },
+    {
+      spoken: 'دلوقتي عايز توازن اقوى في الحقيقة.',
+      prompt: 'حول التركيز للحقيقة وعدل الالوان لتحقيق توازن افضل.',
+    },
+    {
+      spoken: 'ممكن تلخيص سريع للحالة الحالية؟',
+      prompt: 'لو سمحت لخص الحالة الحالية في جملة قصيرة وواضحة.',
+    },
+    {
+      spoken: 'قبل ما ننهي، احفظ الجلسة.',
+      prompt: 'قبل النهاية احفظ الخريطة الذهنية وانشئ تقرير جلسة مختصر.',
+    },
   ],
   en: [
-    { prompt: 'Start a short auto demo. Introduce yourself in one sentence.' },
-    { prompt: 'Focus on Awareness: shrink it slightly and make the color calmer.' },
-    { prompt: 'Great. Enlarge Knowledge a bit and make it more vivid.' },
-    { prompt: 'Shift focus to Truth and rebalance the colors for better harmony.' },
-    { prompt: 'Please summarize the current state in one short clear sentence.' },
-    { prompt: 'Before ending, save the mental map and generate a short session report.' },
+    {
+      spoken: 'I feel overwhelmed and cannot focus right now.',
+      prompt: 'I feel overwhelmed and cannot focus right now. If appropriate, adjust circles gently.',
+      maxWaitMs: 15000,
+    },
+    {
+      spoken: 'Please focus on Awareness first.',
+      prompt: 'Focus on Awareness: shrink it slightly and make the color calmer.',
+    },
+    {
+      spoken: 'I need clearer knowledge and stronger structure.',
+      prompt: 'Enlarge Knowledge a bit and make it more vivid.',
+    },
+    {
+      spoken: 'Now shift attention to Truth for better balance.',
+      prompt: 'Shift focus to Truth and rebalance the colors for better harmony.',
+    },
+    {
+      spoken: 'Can you summarize my state in one short sentence?',
+      prompt: 'Please summarize the current state in one short clear sentence.',
+    },
+    {
+      spoken: 'Before ending, save this session.',
+      prompt: 'Before ending, save the mental map and generate a short session report.',
+    },
   ],
 };
 
 const AUTO_DEMO_COPY = {
   ar: {
-    start: 'تشغيل الديمو التلقائي',
-    stop: 'إيقاف الديمو',
-    booting: 'جاري تجهيز الديمو التلقائي...',
+    start: 'تشغيل الديمو الهجين',
+    stop: 'ايقاف الديمو',
+    booting: 'جاري تجهيز الديمو الهجين...',
     waitingSession: 'بانتظر اتصال Gemini Live...',
-    running: 'الديمو التلقائي شغال',
-    completed: 'الديمو التلقائي اكتمل',
-    canceled: 'تم إيقاف الديمو',
+    manualCue: 'اتكلم بصوتك دلوقتي: انا متوتر جدا الان.',
+    manualDetected: 'تمام، تم التقاط صوتك. التحويل لوكيل المستخدم.',
+    manualFallback: 'مافيش صوت واضح. هنكمل تلقائيا بوكيل المستخدم.',
+    running: 'وكيل المستخدم شغال',
+    completed: 'الديمو اكتمل بنجاح',
+    canceled: 'تم ايقاف الديمو',
     failed: 'تعذر بدء الديمو: تأكد من الاتصال',
   },
   en: {
-    start: 'Start Auto Demo',
-    stop: 'Stop Auto Demo',
-    booting: 'Preparing auto demo...',
+    start: 'Start Hybrid Demo',
+    stop: 'Stop Demo',
+    booting: 'Preparing hybrid demo...',
     waitingSession: 'Waiting for Gemini Live connection...',
-    running: 'Auto demo running',
-    completed: 'Auto demo completed',
-    canceled: 'Auto demo stopped',
-    failed: 'Auto demo failed: check connection',
+    manualCue: 'Speak now: "I feel overwhelmed right now."',
+    manualDetected: 'Voice captured. Switching to user agent.',
+    manualFallback: 'No clear voice detected. Continuing with user agent.',
+    running: 'User agent running',
+    completed: 'Hybrid demo completed',
+    canceled: 'Demo stopped',
+    failed: 'Demo failed: check connection',
+  },
+};
+
+const ONE_CLICK_DEMO_COPY = {
+  ar: {
+    start: 'تشغيل العرض المباشر',
+    launching: 'جاري تجهيز العرض...',
+    helper: 'يفتح الجلسة الحية ويشغل الديمو الهجين تلقائيًا للمحكمين.',
+  },
+  en: {
+    start: 'Run Live Demo',
+    launching: 'Preparing live demo...',
+    helper: 'Opens the live session and starts the hybrid demo automatically.',
   },
 };
 
@@ -91,6 +159,7 @@ function App() {
   const [lang, setLang] = useState('ar');
   const t = STRINGS[lang];
   const autoDemoCopy = useMemo(() => AUTO_DEMO_COPY[lang] ?? AUTO_DEMO_COPY.en, [lang]);
+  const oneClickDemoCopy = useMemo(() => ONE_CLICK_DEMO_COPY[lang] ?? ONE_CLICK_DEMO_COPY.en, [lang]);
   const [status, setStatus] = useState('Disconnected');
   const [errorMessage, setErrorMessage] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -110,7 +179,9 @@ function App() {
   const [isTranscriptVisible, setIsTranscriptVisible] = useState(true);
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
   const [isAutoDemoRunning, setIsAutoDemoRunning] = useState(false);
+  const [isWelcomeDemoLaunching, setIsWelcomeDemoLaunching] = useState(false);
   const [autoDemoStatus, setAutoDemoStatus] = useState('');
+  const [whyNowLine, setWhyNowLine] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(() => window.localStorage.getItem('dawayir-onboarding-seen') !== 'true');
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
@@ -136,6 +207,7 @@ function App() {
   const [connectStage, setConnectStage] = useState(0);
   const [isTransitioningToSetup, setIsTransitioningToSetup] = useState(false);
   const [isSetupIntro, setIsSetupIntro] = useState(false);
+  const [isSandMandalaActive, setIsSandMandalaActive] = useState(false);
   const isAgentSpeakingRef = useRef(false);
   const [commandText, setCommandText] = useState('');
   const [measuredLatencyMs, setMeasuredLatencyMs] = useState(null);
@@ -143,6 +215,10 @@ function App() {
   const turnLatencyCapturedRef = useRef(false);
   const lastBioSignalAtRef = useRef(0);
   const lastBioLevelRef = useRef('');
+  const [voiceTone, setVoiceTone] = useState('silent');
+  const [showBreathing, setShowBreathing] = useState(false);
+  const tenseStartRef = useRef(null);
+  const tenseTimerRef = useRef(null);
   const audioDiag = useMemo(() => {
     if (_lastEvent.includes('gemini_reconnecting') || _lastEvent.includes('ws_closed') || _lastEvent.includes('ws_error')) {
       return {
@@ -180,6 +256,233 @@ function App() {
   const userSpeechActiveRef = useRef(false);
   const lastSpeechAtRef = useRef(0);
   const speechResetTimerRef = useRef(null);
+
+  // ── FEATURE ① + ⑥: Dominant Circle Color for Acoustic Mirror + VoiceTone ──
+  const [dominantColor, setDominantColor] = useState('#00F5FF');
+  const dominantNodeRef = useRef(1); // id of currently dominant node
+
+  // ── FEATURE ①: Breathing Regulator ────────────────────────────────────────
+  const TENSE_TRIGGER_MS = 3000; // 3 seconds of tense → show breathing guide
+  const prevInsightRadiusRef = useRef(null); // Feature ④: Insight Detector
+
+  // ── FEATURE ┃: Emotional Weather ──────────────────────────────────────────────
+  const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [transitionCount, setTransitionCount] = useState(0);
+
+  // ── FEATURE ┄: Mirror Sentence ──────────────────────────────────────────────
+  // journeyPath: ordered list of unique dominant nodes this session [1, 2, 3] etc
+  const journeyPathRef = useRef([1]);
+  const [journeyPath, setJourneyPath] = useState([1]);
+
+  // FEATURE: Cognitive DNA Card
+  const [showDNACard, setShowDNACard] = useState(false);
+  const [dnaWeatherId, setDnaWeatherId] = useState('partly');
+  const [dnaMirrorSentence, setDnaMirrorSentence] = useState('');
+
+  // ── FEATURE ②: Sacred Pause ───────────────────────────────────────────────
+  // (tone passed into SacredPause component directly)
+
+  // ── FEATURE ③: Cognitive Transcript Coloring ─────────────────────────────
+  // dominantColor is already tracked above — we stamp each transcript entry with it
+
+  // ── FEATURE ④: Cognitive Transition Detection ──────────────────────────────
+  // Fires a toast when the dominant circle changes — this IS cognitive health.
+  const [transitionToast, setTransitionToast] = useState(null);
+  const transitionToastTimer = useRef(null);
+  const whyNowTimerRef = useRef(null);
+
+  const TRANSITION_MESSAGES = {
+    ar: {
+      '1→2': '🎯 عقلك انتقل من المشاعر للتفكير — هذا هو الوعي الإدراكي!',
+      '1→3': '✨ قفزة نادرة! من المشاعر مباشرةً للوضوح',
+      '2→1': '💭 رجعت للإحساس بعمق — الوعي العاطفي نشط',
+      '2→3': '🌟 عبرت من التفكير للحقيقة — لحظة وضوح!',
+      '3→1': '🔄 من الوضوح لاكتشاف مشاعر جديدة',
+      '3→2': '🔍 تعمق في تحليل قرارك — دماغك يعمل!',
+    },
+    en: {
+      '1→2': '🎯 Mind shifted from feelings to thinking — cognitive awareness!',
+      '1→3': '✨ Rare leap! From emotion directly to clarity',
+      '2→1': '💭 Returned to deep feeling — emotional awareness active',
+      '2→3': '🌟 Crossed from thinking to truth — moment of clarity!',
+      '3→1': '🔄 From clarity to discovering new feelings',
+      '3→2': '🔍 Deepening analysis of your decision — brain working!',
+    },
+  };
+
+  const getWhyNowCircleName = useCallback((nodeId) => {
+    const names = {
+      1: lang === 'ar' ? 'الوعي' : 'Awareness',
+      2: lang === 'ar' ? 'العلم' : 'Knowledge',
+      3: lang === 'ar' ? 'الحقيقة' : 'Truth',
+    };
+    return names[Number(nodeId)] ?? names[1];
+  }, [lang]);
+
+  const pushWhyNowLine = useCallback((payload) => {
+    if (!payload?.text) return;
+    setWhyNowLine(payload);
+    window.clearTimeout(whyNowTimerRef.current);
+    whyNowTimerRef.current = window.setTimeout(() => setWhyNowLine(null), payload.durationMs ?? 4200);
+  }, []);
+
+  const buildWhyNowPayload = useCallback(({ callId, callName, args, nodeId }) => {
+    const circleName = getWhyNowCircleName(nodeId);
+    const source = String(args?.source || '');
+    const policy = String(args?.policy || '');
+    const metric = String(args?.metric || '');
+    const reason = typeof args?.reason === 'string' ? args.reason.trim() : '';
+    const currentOverload = Number(cognitiveMetrics.overloadIndex) || 0;
+    const currentEquilibrium = Number(cognitiveMetrics.equilibriumScore) || 0;
+    const currentClarity = Number(cognitiveMetrics.clarityDelta) || 0;
+    const normalizedCallId = String(callId || '');
+
+    if (normalizedCallId.startsWith('server_cmd_') || normalizedCallId.startsWith('text_cmd_') || normalizedCallId.startsWith('client_cmd_')) {
+      return {
+        tone: 'direct',
+        text: lang === 'ar'
+          ? `لماذا الآن: ${circleName} تغيّرت لأنك طلبت ذلك مباشرة.`
+          : `Why now: ${circleName} changed because you asked for it directly.`,
+      };
+    }
+
+    if (normalizedCallId.startsWith('sentiment_') || source === 'bio_signal') {
+      return {
+        tone: 'bio',
+        text: lang === 'ar'
+          ? `لماذا الآن: ${circleName} تحرّكت لأن النظام التقط توترًا أو إشارة حسية في اللحظة الحالية.`
+          : `Why now: ${circleName} moved because the system detected a live bio-signal or stress cue.`,
+      };
+    }
+
+    if (source === 'vision') {
+      return {
+        tone: 'focus',
+        text: lang === 'ar'
+          ? `لماذا الآن: ${circleName} اتعدّلت بناءً على قراءة بصرية من الكاميرا.`
+          : `Why now: ${circleName} changed from a live visual reading.`,
+      };
+    }
+
+    if (callName === 'highlight_node') {
+      return {
+        tone: 'focus',
+        text: lang === 'ar'
+          ? `لماذا الآن: النظام يسلّط الضوء على ${circleName} لأنه محور الدور الحالي.`
+          : `Why now: the system is spotlighting ${circleName} as the focus of this turn.`,
+      };
+    }
+
+    if (policy === 'PRIORITIZE_GROUNDING' || metric === 'overload' || currentOverload > 0.72) {
+      return {
+        tone: 'ground',
+        text: lang === 'ar'
+          ? `لماذا الآن: الضغط المعرفي مرتفع، فالنظام يعيد تهدئة ${circleName}.`
+          : `Why now: cognitive overload is high, so the system is grounding ${circleName}.`,
+      };
+    }
+
+    if (policy === 'PRIORITIZE_STRUCTURE' || metric === 'equilibrium' || currentEquilibrium < 0.42) {
+      return {
+        tone: 'balance',
+        text: lang === 'ar'
+          ? `لماذا الآن: التوازن منخفض، فالنظام يعيد بناء ${circleName} بشكل أكثر اتساقًا.`
+          : `Why now: equilibrium dropped, so the system is restructuring ${circleName}.`,
+      };
+    }
+
+    if (metric === 'clarity' || (Number(nodeId) === 3 && currentClarity > 0.08)) {
+      return {
+        tone: 'clarity',
+        text: lang === 'ar'
+          ? `لماذا الآن: الوضوح يرتفع، لذلك يتم تعزيز ${circleName}.`
+          : `Why now: clarity is rising, so ${circleName} is being reinforced.`,
+      };
+    }
+
+    if (reason) {
+      return {
+        tone: 'neutral',
+        text: lang === 'ar'
+          ? `لماذا الآن: ${circleName} تتكيّف مع هذا الدور من الحوار.`
+          : `Why now: ${reason}`,
+      };
+    }
+
+    return {
+      tone: 'neutral',
+      text: lang === 'ar'
+        ? `لماذا الآن: ${circleName} تتكيّف مع آخر دور في الحوار.`
+        : `Why now: ${circleName} is adapting to the latest turn.`,
+    };
+  }, [cognitiveMetrics.clarityDelta, cognitiveMetrics.equilibriumScore, cognitiveMetrics.overloadIndex, getWhyNowCircleName, lang]);
+
+  const snapshotReplayNodes = useCallback(() => {
+    const fallbackLabels = NODE_LABELS[lang] || NODE_LABELS.en;
+    const nodes = canvasRef.current?.getNodes?.() || [];
+    return nodes
+      .map((node) => ({
+        id: Number(node.id),
+        radius: Math.round(Number(node.radius) || 0),
+        color: typeof node.color === 'string' ? node.color : '#00F5FF',
+        label: String(node.label || fallbackLabels[String(node.id)] || ''),
+      }))
+      .filter((node) => Number.isFinite(node.id))
+      .sort((a, b) => a.id - b.id);
+  }, [lang]);
+
+  const resetSessionReplay = useCallback(() => {
+    sessionReplayStartedAtRef.current = Date.now();
+    lastReplaySignatureRef.current = '';
+    const initialNodes = snapshotReplayNodes();
+    sessionReplayRef.current = initialNodes.length > 0 ? [{
+      atMs: 0,
+      kind: 'start',
+      focusId: null,
+      reason: lang === 'ar' ? 'بداية الجلسة' : 'Session start',
+      source: 'system',
+      policy: 'IDLE',
+      metric: 'turn',
+      nodes: initialNodes,
+      metrics: { ...cognitiveMetrics },
+    }] : [];
+  }, [cognitiveMetrics, lang, snapshotReplayNodes]);
+
+  const captureReplayStep = useCallback((kind, payload = {}) => {
+    const nodes = snapshotReplayNodes();
+    if (nodes.length === 0) return;
+
+    if (!sessionReplayStartedAtRef.current) {
+      sessionReplayStartedAtRef.current = Date.now();
+    }
+
+    const step = {
+      atMs: Math.max(0, Date.now() - sessionReplayStartedAtRef.current),
+      kind,
+      focusId: Number.isFinite(Number(payload.focusId)) ? Number(payload.focusId) : null,
+      reason: typeof payload.reason === 'string' ? payload.reason : '',
+      source: typeof payload.source === 'string' ? payload.source : 'agent',
+      policy: typeof payload.policy === 'string' ? payload.policy : 'IDLE',
+      metric: typeof payload.metric === 'string' ? payload.metric : 'turn',
+      nodes,
+      metrics: { ...cognitiveMetrics },
+    };
+
+    const signature = JSON.stringify({
+      kind: step.kind,
+      focusId: step.focusId,
+      reason: step.reason,
+      nodes: step.nodes.map((node) => ({ id: node.id, radius: node.radius, color: node.color })),
+    });
+
+    if (lastReplaySignatureRef.current === signature && kind === 'update') {
+      return;
+    }
+
+    lastReplaySignatureRef.current = signature;
+    sessionReplayRef.current = [...sessionReplayRef.current, step].slice(-160);
+  }, [cognitiveMetrics, snapshotReplayNodes]);
+
 
   const resetUserSpeaking = useCallback(() => {
     userSpeechActiveRef.current = false;
@@ -243,11 +546,20 @@ function App() {
     }
   }, [isConnected, isStarting, appView, hasSessionStarted]);
 
+  useEffect(() => {
+    if (isTranscriptVisible && transcriptEndRef.current) {
+      transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [transcript, isTranscriptVisible]);
+
+  useEffect(() => () => window.clearTimeout(whyNowTimerRef.current), []);
+
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
   const wsRef = useRef(null);
   const micStreamRef = useRef(null);
   const micContextRef = useRef(null);
+  const transcriptEndRef = useRef(null);
   const micSourceRef = useRef(null);
   const micWorkletRef = useRef(null);
   const micProcessorRef = useRef(null);
@@ -261,9 +573,16 @@ function App() {
   const autoDemoRunIdRef = useRef(0);
   const autoDemoTimerRef = useRef(null);
   const autoDemoPendingStartRef = useRef(false);
+  const oneClickDemoPendingRef = useRef(false);
+  const autoDemoSpeechUtteranceRef = useRef(null);
+  const autoDemoShouldRestoreMicRef = useRef(false);
   const appViewRef = useRef(appView);
   const isConnectedRef = useRef(isConnected);
+  const transcriptRef = useRef(transcript);
   const sessionContextRef = useRef([]); // Stores last few text segments for context preservation
+  const sessionReplayRef = useRef([]);
+  const sessionReplayStartedAtRef = useRef(0);
+  const lastReplaySignatureRef = useRef('');
   const restoreAfterGeminiReconnectRef = useRef(false);
   const lastRestorePromptAtRef = useRef(0);
   const connectLockRef = useRef(false);
@@ -301,6 +620,10 @@ function App() {
   useEffect(() => {
     isConnectedRef.current = isConnected;
   }, [isConnected]);
+
+  useEffect(() => {
+    transcriptRef.current = transcript;
+  }, [transcript]);
 
   const startCamera = useCallback(async () => {
     console.log("[Camera] Starting camera...");
@@ -1045,12 +1368,107 @@ function App() {
           canvasRef.current?.updateNode(safeId, updates);
           // Auto-pulse so the change is visually obvious
           canvasRef.current?.pulseNode(safeId);
+          const whyNowPayload = buildWhyNowPayload({
+            callId: call.id,
+            callName: call.name,
+            args,
+            nodeId: safeId,
+          });
+          pushWhyNowLine(whyNowPayload);
+          captureReplayStep('update', {
+            focusId: safeId,
+            reason: whyNowPayload.text,
+            source: args?.source || (String(call.id || '').startsWith('sentiment_') ? 'bio_signal' : 'agent'),
+            policy: args?.policy || 'IDLE',
+            metric: args?.metric || 'turn',
+          });
+
+          // ── SATELLITE NODE SPAWN ──────────────────────────────────────
+          // Extract the driving topic from tool args and spawn it as a
+          // satellite node orbiting the updated circle. This is the
+          // "Cognitive Awareness System" — seeing WHAT you're feeling AND WHY.
+          const topicRaw = args.topic ?? args.reason ?? args.label ?? args.note ?? '';
+          if (topicRaw && typeof topicRaw === 'string' && topicRaw.trim().length > 1) {
+            const topic = topicRaw.trim().split(/\s+/)[0].slice(0, 8);
+            canvasRef.current?.addSatellite?.(safeId, topic);
+          } else {
+            // Smart fallback: derive a topic from the last transcript user message
+            const lastUserMsg = transcript.findLast?.(t => t.role === 'user')?.text || '';
+            if (lastUserMsg.length > 3) {
+              const words = lastUserMsg.split(/\s+/).filter(w => w.length > 3);
+              if (words.length > 0) {
+                const word = words[Math.floor(Math.random() * Math.min(3, words.length))];
+                canvasRef.current?.addSatellite?.(safeId, word.slice(0, 7));
+              }
+            }
+          }
+          // ── END SATELLITE ─────────────────────────────────────────────
+
+          // ── FEATURE ④: COGNITIVE TRANSITION DETECTION ─────────────────
+          // Check if the updated node is now dominant — if the dominant node
+          // changed, fire a celebratory toast. This moment IS cognitive health.
+          const allNodes = canvasRef.current?.getNodes?.() || [];
+          if (allNodes.length > 0) {
+            const dom = allNodes.reduce((a, b) => (a.radius > b.radius ? a : b));
+            // Update dominant color for Acoustic Mirror (Feature ⑥)
+            if (dom.color) setDominantColor(dom.color);
+
+            if (dom.id !== dominantNodeRef.current) {
+              const prevId = dominantNodeRef.current;
+              dominantNodeRef.current = dom.id;
+              // ── Update journey path for Mirror Sentence (Feature ┄) ──
+              if (journeyPathRef.current[journeyPathRef.current.length - 1] !== dom.id) {
+                journeyPathRef.current = [...journeyPathRef.current, dom.id];
+                setJourneyPath([...journeyPathRef.current]);
+                setTransitionCount(c => c + 1);
+                // Feature Sound: play cognitive transition chime
+                playTransitionSound(prevId, dom.id);
+              }
+              const msgKey = `${prevId}→${dom.id}`;
+              const msgs = TRANSITION_MESSAGES[lang] || TRANSITION_MESSAGES.en;
+              const msg = msgs[msgKey];
+              if (msg) {
+                setTransitionToast(msg);
+                clearTimeout(transitionToastTimer.current);
+                transitionToastTimer.current = setTimeout(() => setTransitionToast(null), 4000);
+                canvasRef.current?.triggerBloom?.(); // Clarity Bloom on truth transition
+              }
+            }
+          }
+          // ── END TRANSITION DETECTION ───────────────────────────────────
+
+          // ── FEATURE ④: INSIGHT DETECTOR (Ah-ha Moment) ────────────────
+          // Pattern: Truth circle radius grew by >15px in this update
+          // + user was recently speaking = INSIGHT moment
+          if (safeId === 3 && updates.radius !== undefined) {
+            const prevR = prevInsightRadiusRef.current ?? 80;
+            const newR = Number(updates.radius);
+            if (newR - prevR > 15 && userSpeechActiveRef.current) {
+              // 🌟 Insight moment detected!
+              const insightMsg = lang === 'ar'
+                ? '✨ لحظة وضوح رُصدت! عقلك توصّل لشيء مهم'
+                : '✨ Insight moment detected! Your mind reached clarity';
+              setTransitionToast(insightMsg);
+              clearTimeout(transitionToastTimer.current);
+              transitionToastTimer.current = setTimeout(() => setTransitionToast(null), 5000);
+              canvasRef.current?.triggerBloom?.();
+              // Feature Sound: play insight arpeggio
+              playInsightSound();
+              unlockAchievement('truthShift');
+            }
+            prevInsightRadiusRef.current = newR;
+          }
+          // ── END INSIGHT DETECTOR ───────────────────────────────────────
+
           if (safeId === 1) unlockAchievement('awarenessShift');
           else if (safeId === 2) unlockAchievement('knowledgeShift');
           else if (safeId === 3) unlockAchievement('truthShift');
           if (updates.color) unlockAchievement('sentimentShift');
           const callId = String(call.id || '');
           if (callId.startsWith('server_cmd_')) unlockAchievement('voiceCommand');
+
+
+
         } else if (call.name === 'highlight_node') {
           const id = Number(args.id);
           const currentNodes = canvasRef.current?.getNodes() || [];
@@ -1060,6 +1478,20 @@ function App() {
 
           console.log(`[App] Highlighting node ${id}`);
           canvasRef.current?.pulseNode(id);
+          const whyNowPayload = buildWhyNowPayload({
+            callId: call.id,
+            callName: call.name,
+            args,
+            nodeId: id,
+          });
+          pushWhyNowLine(whyNowPayload);
+          captureReplayStep('highlight', {
+            focusId: id,
+            reason: whyNowPayload.text,
+            source: args?.source || 'agent',
+            policy: args?.policy || 'IDLE',
+            metric: args?.metric || 'turn',
+          });
         } else if (call.name === 'update_journey') {
           const STAGE_MAP = {
             'overwhelmed': 'Overwhelmed',
@@ -1073,10 +1505,21 @@ function App() {
         } else if (call.name === 'save_mental_map') {
           const nodes = canvasRef.current?.getNodes() || [];
           console.log(`[App] Saving mental map with ${nodes.length} nodes`);
+          captureReplayStep('save', {
+            reason: lang === 'ar' ? 'تم حفظ الخريطة الذهنية.' : 'Mental map saved.',
+            source: 'system',
+            policy: 'IDLE',
+            metric: 'turn',
+          });
           responses.push({
             id: call.id,
             name: call.name,
-            response: { nodes, ok: true },
+            response: {
+              nodes,
+              replayTrace: sessionReplayRef.current,
+              metrics: cognitiveMetrics,
+              ok: true,
+            },
           });
           continue;
         } else if (call.name === 'generate_session_report') {
@@ -1135,7 +1578,7 @@ function App() {
     }
     setToolCallsCount((prev) => prev + functionCalls.length);
     setLastEvent(`tool_call:${functionCalls.length}`);
-  }, [unlockAchievement]);
+  }, [buildWhyNowPayload, captureReplayStep, cognitiveMetrics, lang, pushWhyNowLine, unlockAchievement]);
 
   // Handle text command submission - agent-controlled only (no local circle mutation)
   const handleTextCommand = useCallback((text) => {
@@ -1174,6 +1617,74 @@ function App() {
     })
   ), [clearAutoDemoTimer]);
 
+  const stopSyntheticUserSpeech = useCallback(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      // Ignore cancellation race errors.
+    }
+    autoDemoSpeechUtteranceRef.current = null;
+  }, []);
+
+  const speakSyntheticUserLine = useCallback((text, runId) => (
+    new Promise((resolve) => {
+      if (autoDemoRunIdRef.current !== runId) {
+        resolve(false);
+        return;
+      }
+
+      const cleaned = (typeof text === 'string' ? text : '').replace(/[*_`#]/g, '').trim();
+      if (!cleaned) {
+        resolve(true);
+        return;
+      }
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        resolve(true);
+        return;
+      }
+
+      stopSyntheticUserSpeech();
+
+      const utterance = new SpeechSynthesisUtterance(cleaned);
+      const isArabic = /[\u0600-\u06FF]/.test(cleaned);
+      utterance.lang = isArabic ? 'ar-EG' : 'en-US';
+      utterance.rate = isArabic ? 0.98 : 1.02;
+      utterance.pitch = 0.86;
+      utterance.volume = 1;
+
+      const voices = window.speechSynthesis.getVoices?.() ?? [];
+      const langPrefix = isArabic ? 'ar' : 'en';
+      const matchingVoices = voices.filter((voice) =>
+        String(voice.lang || '').toLowerCase().startsWith(langPrefix)
+      );
+      const chosenVoice = matchingVoices.find((voice) => !voice.default) || matchingVoices[0];
+      if (chosenVoice) {
+        utterance.voice = chosenVoice;
+      }
+
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        if (autoDemoSpeechUtteranceRef.current === utterance) {
+          autoDemoSpeechUtteranceRef.current = null;
+        }
+        resolve(ok && autoDemoRunIdRef.current === runId);
+      };
+
+      utterance.onend = () => finish(true);
+      utterance.onerror = () => finish(false);
+      autoDemoSpeechUtteranceRef.current = utterance;
+
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        finish(false);
+      }
+    })
+  ), [stopSyntheticUserSpeech]);
+
   const waitForAutoDemoReady = useCallback(async (runId, timeoutMs = 25000) => {
     const startedAt = Date.now();
     while ((Date.now() - startedAt) < timeoutMs) {
@@ -1210,19 +1721,62 @@ function App() {
     return true;
   }, [sleepForAutoDemo]);
 
-  const stopAutoDemo = useCallback((reason = 'auto_demo_stopped', statusText = null) => {
+  const waitForManualUserTurn = useCallback(async (runId, timeoutMs = 9000) => {
+    const startedAt = Date.now();
+    const initialUserEntries = transcriptRef.current.filter((entry) => entry.role === 'user').length;
+
+    while ((Date.now() - startedAt) < timeoutMs) {
+      if (autoDemoRunIdRef.current !== runId) return false;
+      const userEntries = transcriptRef.current.filter((entry) => entry.role === 'user').length;
+      if (userEntries > initialUserEntries || userSpeechActiveRef.current) {
+        return true;
+      }
+      const keepGoing = await sleepForAutoDemo(180, runId);
+      if (!keepGoing) return false;
+    }
+    return false;
+  }, [sleepForAutoDemo]);
+
+  const pauseMicForSyntheticDemo = useCallback(async () => {
+    if (!isMicActiveRef.current) return;
+    autoDemoShouldRestoreMicRef.current = true;
+    try {
+      await stopMicrophone();
+    } catch {
+      // Ignore mic pause errors during demo mode.
+    }
+  }, [stopMicrophone]);
+
+  const restoreMicAfterSyntheticDemo = useCallback(() => {
+    if (!autoDemoShouldRestoreMicRef.current) return;
+    autoDemoShouldRestoreMicRef.current = false;
+    if (!isConnectedRef.current || !setupCompleteRef.current || isMicActiveRef.current) return;
+
+    startMicrophone().catch(() => {
+      // Ignore restore mic failures in auto demo mode.
+    });
+  }, [startMicrophone]);
+
+  const stopAutoDemo = useCallback((reason = 'auto_demo_stopped', statusText = null, options = {}) => {
+    const { restoreMic = true } = options;
     const hadActiveDemo = isAutoDemoRunning || autoDemoPendingStartRef.current;
     autoDemoRunIdRef.current += 1;
     clearAutoDemoTimer();
     autoDemoPendingStartRef.current = false;
+    stopSyntheticUserSpeech();
     setIsAutoDemoRunning(false);
     if (statusText !== null) {
       setAutoDemoStatus(statusText);
     }
+    if (restoreMic) {
+      restoreMicAfterSyntheticDemo();
+    } else {
+      autoDemoShouldRestoreMicRef.current = false;
+    }
     if (hadActiveDemo) {
       setLastEvent(reason);
     }
-  }, [clearAutoDemoTimer, isAutoDemoRunning]);
+  }, [clearAutoDemoTimer, isAutoDemoRunning, restoreMicAfterSyntheticDemo, stopSyntheticUserSpeech]);
 
   const handleBioStateChange = useCallback((level) => {
     if (appView !== 'live' || !isConnected) return;
@@ -1237,13 +1791,17 @@ function App() {
     lastBioLevelRef.current = level;
     lastBioSignalAtRef.current = now;
 
-    const hintText = level === 'stressed'
-      ? (lang === 'ar'
-        ? '(إشارة حسية: يوجد ضغط صوتي/توتر ملحوظ. لو مناسب، عدّل الدوائر بصمت باستخدام update_node بدون شرح تقني.)'
-        : '(Bio signal: stress detected. If appropriate, adjust circles silently via update_node.)')
-      : (lang === 'ar'
-        ? '(إشارة حسية: النبرة هادئة. حافظ على الاستقرار أو عدّل الدوائر بخفة عند الحاجة.)'
-        : '(Bio signal: calm tone. Keep circles stable or adjust gently if needed.)');
+    // FEATURE ④: Cognitive Resonance/Dissonance Persona Shift
+    let hintText = '';
+    if (level === 'stressed') {
+      hintText = lang === 'ar'
+        ? '(إشارة حسية مخفية: عقل المستخدم في حالة جمود وتوتر (Dissonance). تخلّف مؤقتاً عن النبرة الهادئة المتعاطفة، كن أسرع، أكثر حزماً، اطرح سؤالاً يتحدى منطقه لكسر الجمود. استشعر توتره واعكسه.)'
+        : '(Hidden Bio signal: User is rigid/stressed (Dissonance). Temporarily drop empathetic tone, speak faster, be firmer. Ask a challenging question to break their mental loop.)';
+    } else {
+      hintText = lang === 'ar'
+        ? '(إشارة حسية مخفية: عقل المستخدم في حالة تقبل وتدفق (Resonance). استعد نبرتك الأدفأ، والأكثر حكمة وهدوءاً. اربط أفكاره ببعضها وساعده على التوسع بصدق والوصول للاستبصار.)'
+        : '(Hidden Bio signal: User is flowing/receptive (Resonance). Return to your warmest, wisest, and calmest voice. Synthesize their thoughts and guide gently towards insight.)';
+    }
 
     socket.send(JSON.stringify({
       clientContent: {
@@ -1251,7 +1809,7 @@ function App() {
         turnComplete: false,
       },
     }));
-    setLastEvent(`bio_signal:${level}`);
+    setLastEvent(`persona_shift:${level}`);
   }, [appView, isConnected, lang]);
 
   // Quick circle action (from UI buttons)
@@ -1319,8 +1877,27 @@ function App() {
     }, 280);
   }, [isTransitioningToSetup]);
 
+  const handleSandMandala = useCallback(() => {
+    setIsSandMandalaActive(true);
+    // Erase session data:
+    setTranscript([]);
+    setCognitiveMetrics({ equilibriumScore: 0.6, overloadIndex: 0.0, clarityDelta: 0.0 });
+    setCapturedImage(null);
+    setJourneyPath([1]);
+    journeyPathRef.current = [1];
+    setTransitionCount(0);
+    setSessionStartTime(null);
+
+    // Play release animation, then go to welcome
+    window.setTimeout(() => {
+      setIsSandMandalaActive(false);
+      setAppView('welcome');
+      setHasSessionStarted(false);
+    }, 3800);
+  }, []);
+
   const disconnect = useCallback(async () => {
-    stopAutoDemo('auto_demo_stopped_disconnect', '');
+    stopAutoDemo('auto_demo_stopped_disconnect', '', { restoreMic: false });
     manualCloseRef.current = true;
     if (reconnectTimeoutRef.current) {
       window.clearTimeout(reconnectTimeoutRef.current);
@@ -1448,6 +2025,15 @@ function App() {
       setIsStarting(false);
       setStatus('Connected (waiting setupComplete)');
       setLastEvent('ws_open');
+      // ── Feature ⑬⑭⑮: Reset session tracking on new connection ──
+      setSessionStartTime(Date.now());
+      resetSessionReplay();
+      setTransitionCount(0);
+      journeyPathRef.current = [1];
+      setJourneyPath([1]);
+      dominantNodeRef.current = 1;
+      prevInsightRadiusRef.current = null;
+
     };
 
     socket.onmessage = async (event) => {
@@ -1535,7 +2121,8 @@ function App() {
               }
               if (!found) {
                 const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-                next.push({ role: 'user', text: bufferedUserTextRef.current, time: timeStr, finished: !!dt.finished });
+                // ── Feature ③: Stamp cognitive color at time of speech ──
+                next.push({ role: 'user', text: bufferedUserTextRef.current, time: timeStr, finished: !!dt.finished, cogColor: dominantNodeRef.current === 2 ? '#00FF41' : dominantNodeRef.current === 3 ? '#FF00E5' : '#00F5FF' });
               }
               if (next.length >= 5) unlockAchievement('deepConvo');
               return next.slice(-6);
@@ -1563,7 +2150,8 @@ function App() {
               const next = [...prev];
               if (isNewTurn) {
                 const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-                next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
+                // ── Feature ③: Agent responses also get cognitive color ──
+                next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false, cogColor: dominantNodeRef.current === 2 ? '#00FF41' : dominantNodeRef.current === 3 ? '#FF00E5' : '#00F5FF' });
               } else {
                 let found = false;
                 for (let i = next.length - 1; i >= 0; i--) {
@@ -1927,6 +2515,7 @@ function App() {
     stopPlayback,
     preCue,
     resetUserSpeaking,
+    resetSessionReplay,
     resolveTurnLatency,
   ]);
 
@@ -1956,6 +2545,7 @@ function App() {
       if (autoDemoRunIdRef.current === runId) {
         autoDemoPendingStartRef.current = false;
         clearAutoDemoTimer();
+        restoreMicAfterSyntheticDemo();
         setIsAutoDemoRunning(false);
         setAutoDemoStatus(autoDemoCopy.failed);
         setLastEvent('auto_demo_not_ready');
@@ -1965,8 +2555,31 @@ function App() {
 
     autoDemoPendingStartRef.current = false;
     const steps = AUTO_DEMO_SCRIPT[lang] ?? AUTO_DEMO_SCRIPT.en;
+    let scriptedStartIndex = 0;
 
-    for (let i = 0; i < steps.length; i += 1) {
+    setAutoDemoStatus(autoDemoCopy.manualCue);
+    setLastEvent('auto_demo_manual_stage');
+    const manualCaptured = await waitForManualUserTurn(runId, 9000);
+    if (autoDemoRunIdRef.current !== runId) return;
+
+    if (manualCaptured) {
+      setAutoDemoStatus(autoDemoCopy.manualDetected);
+      setLastEvent('auto_demo_manual_detected');
+      scriptedStartIndex = 1;
+
+      const settledAfterManual = await waitForAgentToSettle(runId, 16000);
+      if (!settledAfterManual) return;
+    } else {
+      setAutoDemoStatus(autoDemoCopy.manualFallback);
+      setLastEvent('auto_demo_manual_timeout');
+    }
+
+    await pauseMicForSyntheticDemo();
+    if (autoDemoRunIdRef.current !== runId) return;
+    const pauseGapOk = await sleepForAutoDemo(300, runId);
+    if (!pauseGapOk) return;
+
+    for (let i = scriptedStartIndex; i < steps.length; i += 1) {
       if (autoDemoRunIdRef.current !== runId) return;
 
       if (!isConnectedRef.current || !setupCompleteRef.current || appViewRef.current !== 'live') {
@@ -1975,6 +2588,7 @@ function App() {
         if (!restored) {
           if (autoDemoRunIdRef.current === runId) {
             clearAutoDemoTimer();
+            restoreMicAfterSyntheticDemo();
             setIsAutoDemoRunning(false);
             setAutoDemoStatus(autoDemoCopy.failed);
             setLastEvent('auto_demo_lost_connection');
@@ -1985,7 +2599,15 @@ function App() {
 
       const currentStep = steps[i];
       setAutoDemoStatus(`${autoDemoCopy.running} ${i + 1}/${steps.length}`);
-      handleTextCommand(currentStep.prompt);
+
+      const spokenText = currentStep?.spoken || currentStep?.prompt || '';
+      const promptText = currentStep?.prompt || spokenText;
+
+      const syntheticSpeechOk = await speakSyntheticUserLine(spokenText, runId);
+      if (!syntheticSpeechOk && autoDemoRunIdRef.current !== runId) return;
+
+      if (autoDemoRunIdRef.current !== runId) return;
+      handleTextCommand(promptText);
 
       const keptOpen = await sleepForAutoDemo(750, runId);
       if (!keptOpen) return;
@@ -1999,6 +2621,7 @@ function App() {
 
     if (autoDemoRunIdRef.current !== runId) return;
     clearAutoDemoTimer();
+    restoreMicAfterSyntheticDemo();
     setIsAutoDemoRunning(false);
     setAutoDemoStatus(autoDemoCopy.completed);
     setLastEvent('auto_demo_completed');
@@ -2007,6 +2630,9 @@ function App() {
     autoDemoCopy.canceled,
     autoDemoCopy.completed,
     autoDemoCopy.failed,
+    autoDemoCopy.manualCue,
+    autoDemoCopy.manualDetected,
+    autoDemoCopy.manualFallback,
     autoDemoCopy.running,
     autoDemoCopy.waitingSession,
     clearAutoDemoTimer,
@@ -2015,11 +2641,32 @@ function App() {
     isAutoDemoRunning,
     isStarting,
     lang,
+    pauseMicForSyntheticDemo,
+    restoreMicAfterSyntheticDemo,
     sleepForAutoDemo,
+    speakSyntheticUserLine,
     stopAutoDemo,
+    waitForManualUserTurn,
     waitForAgentToSettle,
     waitForAutoDemoReady,
   ]);
+
+  const handleLaunchOneClickDemo = useCallback(() => {
+    if (isTransitioningToSetup || isAutoDemoRunning || oneClickDemoPendingRef.current) {
+      return;
+    }
+
+    setShowOnboarding(false);
+
+    if (appView === 'welcome') {
+      oneClickDemoPendingRef.current = true;
+      setIsWelcomeDemoLaunching(true);
+      handleEnterSetup();
+      return;
+    }
+
+    handleAutoDemoToggle();
+  }, [appView, handleAutoDemoToggle, handleEnterSetup, isAutoDemoRunning, isTransitioningToSetup]);
 
   useSessionHotkeys({
     appView,
@@ -2034,13 +2681,24 @@ function App() {
   });
 
   useEffect(() => {
+    if (!oneClickDemoPendingRef.current) return;
+    if (appView !== 'setup' && appView !== 'live') return;
+
+    oneClickDemoPendingRef.current = false;
+    setIsWelcomeDemoLaunching(false);
+    handleAutoDemoToggle();
+  }, [appView, handleAutoDemoToggle]);
+
+  useEffect(() => {
     const introTimer = setTimeout(() => setIsCinematicReady(true), 60);
     return () => clearTimeout(introTimer);
   }, []);
 
   useEffect(() => () => {
     clearAutoDemoTimer();
-  }, [clearAutoDemoTimer]);
+    stopSyntheticUserSpeech();
+    autoDemoShouldRestoreMicRef.current = false;
+  }, [clearAutoDemoTimer, stopSyntheticUserSpeech]);
 
   return (
     <div className={`App ${isCinematicReady ? 'cinematic-in' : 'cinematic-prep'}`} role="application" aria-label="Dawayir live session application">
@@ -2050,18 +2708,68 @@ function App() {
 
       {appView === 'welcome' && (
         <div className={`welcome-screen ${isTransitioningToSetup ? 'exiting' : ''}`}>
+          {/* Animated background orbs */}
+          <div className="welcome-orbs" aria-hidden="true">
+            <div className="welcome-orb welcome-orb-1" />
+            <div className="welcome-orb welcome-orb-2" />
+            <div className="welcome-orb welcome-orb-3" />
+          </div>
+          {/* Constellation particles */}
+          <div className="welcome-particles" aria-hidden="true">
+            {Array.from({ length: 20 }).map((_, i) => (
+              <div key={i} className="welcome-particle" style={{
+                left: `${4 + (i * 4.8) % 90}%`,
+                top: `${6 + (i * 7.1) % 82}%`,
+                animationDelay: `${(i * 0.4).toFixed(1)}s`,
+                width: `${2 + i % 3}px`,
+                height: `${2 + i % 3}px`,
+              }} />
+            ))}
+          </div>
+
           <img src={logoCognitiveTrinity} alt="Dawayir" className="welcome-logo ds-slide-up-fade" />
           <div className="brand-name-large ds-slide-up-fade">{t.brandName}</div>
           <div className="brand-subtitle ds-slide-up-fade-delay">{t.brandSub}</div>
-          <button className="primary-btn ds-slide-up-fade-delay-more welcome-cta" onClick={handleEnterSetup}>
-            {t.enterSpace}
-          </button>
+          <div className="brand-hook ds-slide-up-fade-delay"
+            style={{ fontSize: '15px', opacity: 0.55, marginTop: '-8px', marginBottom: '4px', fontWeight: 400 }}
+          >{t.brandHook}</div>
+
+          {/* Three micro-circles preview */}
+          <div className="welcome-circles-preview ds-slide-up-fade-delay" aria-hidden="true">
+            <div className="wcp wcp-awareness" />
+            <div className="wcp wcp-knowledge" />
+            <div className="wcp wcp-truth" />
+          </div>
+
+          {/* CTA with glow ring */}
+          <div className="welcome-cta-wrap ds-slide-up-fade-delay-more">
+            <div className="welcome-cta-ring" aria-hidden="true" />
+            <div className="welcome-cta-stack">
+              <button
+                className="primary-btn welcome-cta welcome-demo-cta"
+                onClick={handleLaunchOneClickDemo}
+                disabled={isWelcomeDemoLaunching}
+              >
+                {isWelcomeDemoLaunching ? oneClickDemoCopy.launching : oneClickDemoCopy.start}
+              </button>
+              <button
+                className="secondary welcome-secondary-cta"
+                onClick={handleEnterSetup}
+                disabled={isWelcomeDemoLaunching}
+              >
+                {t.enterSpace}
+              </button>
+              <div className="welcome-demo-helper">{oneClickDemoCopy.helper}</div>
+            </div>
+          </div>
+
           <div className="lang-toggle-container ds-slide-up-fade-delay-more">
             <button className={`icon-btn lang-toggle ${lang === 'ar' ? 'active' : ''}`} onClick={() => setLang('ar')}>{lang === 'ar' ? 'عربى' : 'AR'}</button>
             <button className={`icon-btn lang-toggle ${lang === 'en' ? 'active' : ''}`} onClick={() => setLang('en')}>{lang === 'en' ? 'English' : 'EN'}</button>
           </div>
         </div>
       )}
+
 
       {(appView === 'dashboard' || appView === 'setup' || appView === 'live') && (
         <aside
@@ -2086,6 +2794,16 @@ function App() {
                     <div className="brand-arabic">{t.brandSub}</div>
                   </div>
                   <div className="header-actions">
+                    {/* ── Feature ┃: EMOTIONAL WEATHER ── */}
+                    {isConnected && (
+                      <EmotionalWeather
+                        dominantNodeId={dominantNodeRef.current}
+                        transitionCount={transitionCount}
+                        sessionStartTime={sessionStartTime}
+                        lang={lang}
+                        isConnected={isConnected}
+                      />
+                    )}
                     <button aria-label={lang === 'en' ? 'Switch to Arabic' : 'Switch to English'} className="icon-btn lang-toggle" onClick={() => setLang(l => l === 'en' ? 'ar' : 'en')} title="Toggle Language">
                       {lang === 'en' ? 'AR' : 'EN'}
                     </button>
@@ -2108,12 +2826,17 @@ function App() {
                 {isStarting && (
                   <ConnectProgressCard steps={connectSteps} stage={connectStage} />
                 )}
-                <div className="debug-status-line" title="setup/mic/retries/tools/last/rt">
+                <div className="debug-status-line" title="setup/mic/retries/tools/last/rt" style={{ display: 'none' }}>
                   {debugLineText}
                 </div>
                 {autoDemoStatus && (
                   <div className={`auto-demo-status-line ${isAutoDemoRunning ? 'running' : ''}`}>
                     {autoDemoStatus}
+                  </div>
+                )}
+                {whyNowLine && (
+                  <div className={`why-now-line ${whyNowLine.tone || 'neutral'}`} role="status" aria-live="polite">
+                    {whyNowLine.text}
                   </div>
                 )}
               </div>
@@ -2125,32 +2848,42 @@ function App() {
                     <div className="setup-hint-card">
                       <img src={logoCognitiveTrinity} alt="" className="inline-logo" />
                       <div>
-                        <strong>{lang === 'ar' ? 'جلسة صوتية مع خريطة حية' : 'A voice session with a live mental map'}</strong>
-                        <p>{lang === 'ar' ? 'التقاط الصورة اختياري. ابدأ الجلسة، واتكلم براحتك، والدوائر هتوضح رحلتك.' : 'The image capture is optional. Start the session, speak freely, and let the circles map the journey.'}</p>
+                        <strong>{lang === 'ar' ? 'مراية لعقلك — في الوقت الحقيقي' : 'A real-time mirror for your mind'}</strong>
+                        <p>{lang === 'ar' ? 'اتكلم براحتك عن أي حاجة بتضغط عليك. الدوائر هتتغير أمامك وتعكس رحلتك من الفوضى للوضوح. التقاط الصورة اختياري تماماً.' : 'Speak freely about anything weighing on you. The circles will shift in real-time, mapping your journey from chaos to clarity. Camera is completely optional.'}</p>
                       </div>
                     </div>
                     <video ref={videoRef} autoPlay playsInline muted className="visually-hidden" />
 
                     {!isCameraActive && !capturedImage ? (
-                      <div className="setup-actions-row">
-                        <button className="primary-btn outline-btn flex-center setup-action-btn" onClick={startCamera}>
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                          {t.captureBtn}
+                      <>
+                        <div className="setup-actions-row">
+                          <button className="primary-btn outline-btn flex-center setup-action-btn" onClick={startCamera}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                            {t.captureBtn}
+                          </button>
+                          <button className="primary-btn flex-center setup-action-btn" onClick={connect} disabled={isConnected || isStarting}>
+                            {isStarting ? (
+                              <div className="loading-container">
+                                <span className="loading-text">{t.connecting}</span>
+                                <div className="spinner"><div className="spinner-ring"></div></div>
+                              </div>
+                            ) : (
+                              <>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"></path><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"></path></svg>
+                                {t.enterSpace}
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <button
+                          className="secondary setup-skip-btn"
+                          style={{ marginTop: '8px', width: '100%', fontSize: '13px', opacity: 0.7 }}
+                          onClick={connect}
+                          disabled={isConnected || isStarting}
+                        >
+                          {t.skipCamera}
                         </button>
-                        <button className="primary-btn flex-center setup-action-btn" onClick={connect} disabled={isConnected || isStarting}>
-                          {isStarting ? (
-                            <div className="loading-container">
-                              <span className="loading-text">{t.connecting}</span>
-                              <div className="spinner"><div className="spinner-ring"></div></div>
-                            </div>
-                          ) : (
-                            <>
-                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"></path><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"></path></svg>
-                              {t.enterSpace}
-                            </>
-                          )}
-                        </button>
-                      </div>
+                      </>
                     ) : isCameraActive ? (
                       <div className="video-capture-flow">
                         <div className="video-container">
@@ -2207,6 +2940,13 @@ function App() {
                 </div>
               )}
 
+              {/* ── FEATURE ④: COGNITIVE TRANSITION TOAST ────────────────── */}
+              {transitionToast && (
+                <div className="cognitive-transition-toast" key={transitionToast}>
+                  {transitionToast}
+                </div>
+              )}
+
               {/* Connected Activity - LIVE SCREEN ONLY */}
               {appView === 'live' && isConnected && (
                 <div className="section">
@@ -2239,12 +2979,87 @@ function App() {
                   </div>
 
                   <div className="visual-feedback">
+                    {/* FEATURE ② + ⑤: Cognitive Fingerprint Live Sync */}
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px', position: 'relative', zIndex: 10 }}>
+                      <CognitiveFingerprint
+                        sessionId="live-session-temp"
+                        reportContent={transcript.map(t => t.text).join(' ')}
+                        lang={lang}
+                        size={160}
+                        liveState={isAgentSpeaking ? 'speaking' : _isUserSpeaking ? 'listening' : 'thinking'}
+                        voiceTone={voiceTone}
+                      />
+                    </div>
                     <Visualizer
                       stream={micStreamRef.current}
                       isConnected={isConnected}
                       lang={lang}
                       onStressLevelChange={handleBioStateChange}
+                      dominantColor={dominantColor}
                     />
+
+                    {/* ── Feature ┄: COGNITIVE VELOCITY ── */}
+                    <CognitiveVelocity
+                      dominantNodeId={dominantNodeRef.current}
+                      dominantRadius={(() => {
+                        const nodes = canvasRef.current?.getNodes?.() || [];
+                        return nodes.find(n => n.id === dominantNodeRef.current)?.radius || 80;
+                      })()}
+                      isConnected={isConnected}
+                      lang={lang}
+                    />
+
+                    {/* ── Feature ①: VOICE TONE BADGE + Breathing Trigger ── */}
+                    <VoiceToneBadge
+                      stream={micStreamRef.current}
+                      isConnected={isConnected}
+                      lang={lang}
+                      canvasRef={canvasRef}
+                      onToneChange={(tone) => {
+                        setVoiceTone(tone);
+                        // Map tone to node color for Acoustic Mirror (Feature ⑥)
+                        const colorMap = { tense: '#FF5032', excited: '#FFC800', calm: '#FF00E5', focused: '#00FF41' };
+                        if (colorMap[tone]) setDominantColor(colorMap[tone]);
+
+                        // Feature ①: Breathing Regulator — trigger after 3s of tense
+                        if (tone === 'tense') {
+                          if (!tenseStartRef.current) {
+                            tenseStartRef.current = Date.now();
+                            clearTimeout(tenseTimerRef.current);
+                            tenseTimerRef.current = setTimeout(() => {
+                              setShowBreathing(true);
+                              tenseStartRef.current = null;
+                            }, 3000); // TENSE_TRIGGER_MS replaced directly to be safe
+                          }
+                        } else {
+                          tenseStartRef.current = null;
+                          clearTimeout(tenseTimerRef.current);
+                        }
+                      }}
+                    />
+
+                    {/* ── Feature ⑦: THE SACRED PAUSE ── */}
+                    {/* Joins user in silence and dims interface if quiet for 5+ seconds */}
+                    <SacredPause
+                      tone={voiceTone}
+                      isConnected={isConnected}
+                      lang={lang}
+                      isAgentSpeaking={isAgentSpeaking}
+                      onPauseTriggered={() => {
+                        // Secret instruction to Gemini when sacred pause starts
+                        const socket = wsRef.current;
+                        if (socket && socket.readyState === WebSocket.OPEN) {
+                          socket.send(JSON.stringify({
+                            clientContent: {
+                              turns: [{ role: 'user', parts: [{ text: lang === 'ar' ? '(إشارة صمت: المستخدم يتأمل في صمت الآن وتظهر له تعويذة الصمت المريحة. بادله الصمت ولا تتحدث إلا إذا كان لديك شيء عميق جدا تضيفه للمساحة، أو انتظره.)' : '(Silence detected: User is reflecting. Hold space with them. Do not speak unless necessary or requested, embrace the silence.)' }] }],
+                              turnComplete: false,
+                            },
+                          }));
+                          setLastEvent('sacred_pause_triggered');
+                        }
+                      }}
+                    />
+
 
                     {/* Cognitive OS Metrics Overlay */}
                     <div className="cognitive-metrics-overlay">
@@ -2341,7 +3156,21 @@ function App() {
       {/* Session Complete Screen */}
       {appView === 'complete' && (
         <div className="complete-screen complete-overlay">
-          <div className="complete-card">
+          {isSandMandalaActive && (
+            <style>{`
+              @keyframes sand-shatter {
+                0% { transform: scale(1); filter: blur(0) grayscale(0); opacity: 1; }
+                20% { transform: scale(1.05) translateY(-5px); filter: blur(2px) grayscale(0.5); opacity: 0.8; }
+                50% { transform: scale(1.1) translateY(-20px); filter: blur(15px) sepia(1) hue-rotate(-50deg); opacity: 0.5; letter-spacing: 12px; }
+                100% { transform: scale(1.5) translateY(-80px); filter: blur(40px) opacity(0); opacity: 0; letter-spacing: 30px; }
+              }
+              .sand-mandala-active {
+                animation: sand-shatter 3.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+                pointer-events: none;
+              }
+            `}</style>
+          )}
+          <div className={`complete-card ${isSandMandalaActive ? 'sand-mandala-active' : ''}`}>
             <div className="success-icon-container">
               <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 10px rgba(0, 255, 65, 0.4))' }}>
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
@@ -2351,9 +3180,25 @@ function App() {
             <h2 className="complete-title">
               {lang === 'ar' ? 'رحلة اكتملت' : 'Journey Complete'}
             </h2>
+
+            {/* ── Feature ┄: MIRROR SENTENCE ── */}
+            <MirrorSentence
+              journeyPath={journeyPath}
+              transitionCount={transitionCount}
+              lang={lang}
+              visible={true}
+            />
             <p className="complete-subtitle">
               {lang === 'ar' ? 'لقد انتهت جلستك، وتم حفظ مسارك المعرفي في بنك الذاكرة.' : 'Your session has ended, and your cognitive path is saved in the Memory Bank.'}
             </p>
+
+            {/* Journey Timeline */}
+            <JourneyTimeline
+              journeyPath={journeyPath}
+              transitionCount={transitionCount}
+              sessionDurationMs={sessionStartTime ? Date.now() - sessionStartTime : 0}
+              lang={lang}
+            />
             <div className="complete-stats-table">
               <div className="complete-stat-row complete-stat-row-divider">
                 <span className="complete-stat-label">{lang === 'ar' ? 'التوازن النهائي' : 'Equilibrium'}</span>
@@ -2376,6 +3221,24 @@ function App() {
               </button>
               <button className="primary-btn complete-action-btn complete-action-secondary" onClick={() => setAppView('dashboard')}>
                 {lang === 'ar' ? 'بنك الذاكرة' : 'Memory Bank'}
+              </button>
+              {/* DNA Card share button */}
+              <button
+                className="dna-share-trigger-btn"
+                onClick={() => setShowDNACard(true)}
+                title={lang === 'ar' ? 'شارك رحلتك' : 'Share your journey'}
+              >
+                {lang === 'ar' ? '✦ شارك رحلتك' : '✦ Share Journey'}
+              </button>
+
+              {/* Feature 10: Sand Mandala (Let Go) */}
+              <button
+                className="primary-btn outline-btn complete-action-btn"
+                onClick={handleSandMandala}
+                style={{ width: '100%', marginTop: '8px', opacity: 0.8, color: '#ffb347', borderColor: 'rgba(255, 179, 71, 0.3)' }}
+                title={lang === 'ar' ? 'انسف الماندالا وامسح البيانات' : 'Blow away the Mandala (Erase Data)'}
+              >
+                {lang === 'ar' ? '💨 التخلي (مسح)' : '💨 Detach & Erase'}
               </button>
             </div>
           </div>
@@ -2428,11 +3291,21 @@ function App() {
           <div className="transcript-overlay" style={{ display: isTranscriptVisible ? 'flex' : 'none' }}>
             <div className="transcript-messages">
               {transcript.map((entry, idx) => (
-                <div key={idx} className={`transcript-entry transcript-${entry.role}`}>
+                <div
+                  key={idx}
+                  className={`transcript-entry transcript-${entry.role}`}
+                  style={entry.cogColor ? {
+                    /* ── Feature ③: COGNITIVE TRANSCRIPT COLORING ── */
+                    borderLeft: entry.role === 'user' ? `2px solid ${entry.cogColor}` : undefined,
+                    borderRight: entry.role === 'model' ? `2px solid ${entry.cogColor}` : undefined,
+                    background: `${entry.cogColor}08`,
+                  } : undefined}
+                >
                   <span className="transcript-time">{entry.time}</span>
                   <span className="transcript-text">{entry.text}</span>
                 </div>
               ))}
+              <div ref={transcriptEndRef} />
             </div>
           </div>
         </section>
@@ -2462,12 +3335,40 @@ function App() {
         </div>
       )}
 
+      {/* ── Feature ①: BREATHING GUIDE ── */}
+      <BreathingGuide
+        active={showBreathing}
+        lang={lang}
+        onComplete={() => setShowBreathing(false)}
+      />
+
+      {/* ── Feature ②: SACRED PAUSE ── */}
+      {appView === 'live' && isConnected && (
+        <SacredPause tone={voiceTone} isConnected={isConnected} lang={lang} />
+      )}
+
       <main id="main-canvas-content" className="app-canvas-main" role="main" aria-label={lang === 'ar' ? 'مساحة الدوائر' : 'Circle canvas'}>
         <h1 className="visually-hidden">{lang === 'ar' ? 'تطبيق دواير للجلسات الصوتية' : 'Dawayir live voice session app'}</h1>
         <DawayirCanvas ref={canvasRef} lang={lang} />
       </main>
+
+      {/* ── DNA CARD MODAL ── */}
+      {showDNACard && (
+        <CognitiveDNACard
+          lang={lang}
+          mirrorSentence={dnaMirrorSentence}
+          weatherId={dnaWeatherId}
+          dominantNodeId={dominantNodeRef.current}
+          transitionCount={transitionCount}
+          sessionDurationMs={sessionStartTime ? Date.now() - sessionStartTime : 0}
+          journeyPath={journeyPath}
+          onClose={() => setShowDNACard(false)}
+        />
+      )}
     </div>
   );
+
 }
 
 export default App;
+

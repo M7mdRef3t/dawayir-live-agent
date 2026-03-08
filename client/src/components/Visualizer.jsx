@@ -1,10 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-function Visualizer({ stream, isConnected, lang, onStressLevelChange }) {
+/**
+ * FEATURE ⑥ — ACOUSTIC MIRROR
+ * The waveform bars adopt the color of the dominant cognitive circle.
+ * When you talk about emotions → bars are cyan (Awareness).
+ * When you think analytically → bars are green (Knowledge).
+ * When you reach clarity → bars become magenta (Truth).
+ * "Your voice reveals its cognitive color."
+ */
+
+function Visualizer({ stream, isConnected, lang, onStressLevelChange, dominantColor }) {
   const canvasRef = useRef(null);
   const [stressLevel, setStressLevel] = useState('calm');
   const stressLevelRef = useRef('calm');
   const lastFrameTimeRef = useRef(0);
+  const dominantColorRef = useRef(dominantColor || '#00F5FF');
+
+  useEffect(() => {
+    dominantColorRef.current = dominantColor || '#00F5FF';
+  }, [dominantColor]);
 
   useEffect(() => {
     if (!stream || !isConnected) return undefined;
@@ -27,6 +41,18 @@ function Visualizer({ stream, isConnected, lang, onStressLevelChange }) {
 
     let animationFrameId;
     let stressTimer;
+
+    const hexToRgb = (hex) => {
+      try {
+        return [
+          parseInt(hex.slice(1, 3), 16),
+          parseInt(hex.slice(3, 5), 16),
+          parseInt(hex.slice(5, 7), 16),
+        ];
+      } catch {
+        return [0, 245, 255];
+      }
+    };
 
     const draw = (timestamp) => {
       const frameInterval = 1000 / TARGET_FPS;
@@ -60,12 +86,16 @@ function Visualizer({ stream, isConnected, lang, onStressLevelChange }) {
         }, 2000);
       }
 
+      // ⑥ ACOUSTIC MIRROR: bars use dominant circle color
+      const [r, g, b] = hexToRgb(dominantColorRef.current);
+
       const barWidth = (canvas.width / bufferLength) * 2.5;
       let x = 0;
 
       for (let i = 0; i < bufferLength; i += 1) {
         const barHeight = (dataArray[i] / 255) * canvas.height;
-        ctx.fillStyle = `rgba(0, 245, 255, ${dataArray[i] / 255})`;
+        const alpha = 0.3 + (dataArray[i] / 255) * 0.7;
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
         ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
         x += barWidth + 1;
       }

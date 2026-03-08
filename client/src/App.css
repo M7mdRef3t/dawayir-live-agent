@@ -2081,8 +2081,9 @@ html[lang="ar"] .App>.transcript-container {
   gap: 12px;
   padding: 10px;
   padding-bottom: 30px;
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 80%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 0%, black 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%);
+  scroll-behavior: smooth;
 }
 
 .transcript-messages::-webkit-scrollbar {
@@ -2557,6 +2558,48 @@ html[lang="ar"] .audio-diagnostic-badge {
   color: rgba(164, 255, 212, 0.95);
 }
 
+.why-now-line {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(125, 224, 255, 0.18);
+  background: linear-gradient(135deg, rgba(6, 16, 29, 0.82), rgba(7, 31, 44, 0.72));
+  color: rgba(221, 241, 255, 0.92);
+  font-size: 11px;
+  line-height: 1.45;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+}
+
+.why-now-line.direct {
+  border-color: rgba(0, 245, 255, 0.28);
+  color: rgba(185, 249, 255, 0.96);
+}
+
+.why-now-line.bio {
+  border-color: rgba(255, 174, 0, 0.28);
+  color: rgba(255, 226, 160, 0.96);
+}
+
+.why-now-line.ground {
+  border-color: rgba(255, 122, 122, 0.3);
+  color: rgba(255, 210, 210, 0.95);
+}
+
+.why-now-line.balance {
+  border-color: rgba(80, 255, 199, 0.28);
+  color: rgba(190, 255, 228, 0.95);
+}
+
+.why-now-line.clarity {
+  border-color: rgba(255, 0, 229, 0.28);
+  color: rgba(255, 203, 247, 0.95);
+}
+
+.why-now-line.focus {
+  border-color: rgba(125, 155, 255, 0.28);
+  color: rgba(214, 224, 255, 0.96);
+}
+
 .audio-diagnostic-badge {
   top: 24px !important;
   right: 24px !important;
@@ -2587,6 +2630,7 @@ html.prefers-high-contrast .overlay,
 html.prefers-high-contrast .transcript-text,
 html.prefers-high-contrast .audio-diagnostic-badge,
 html.prefers-high-contrast .debug-status-line,
+html.prefers-high-contrast .why-now-line,
 html.prefers-high-contrast .status-badge {
   border-color: rgba(255, 255, 255, 0.85) !important;
   box-shadow: none !important;
@@ -2604,4 +2648,1336 @@ html.prefers-reduced-motion *::after {
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ① — VOICE TONE BADGE
+   Real-time voice tone indicator next to the waveform.
+   Colors shift: cyan=calm, green=focused, red=tense, gold=excited
+   ════════════════════════════════════════════════════════════════ */
+.voice-tone-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 30px;
+  font-size: 12px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(10px);
+  transition: all 0.5s ease;
+  margin-top: 6px;
+  cursor: default;
+  user-select: none;
+}
+
+.voice-tone-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: tone-pulse 1.8s ease-in-out infinite;
+}
+
+.voice-tone-label {
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+}
+
+@keyframes tone-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.4);
+    opacity: 0.7;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ④ — COGNITIVE TRANSITION TOAST
+   Celebratory message when dominant circle changes
+   ════════════════════════════════════════════════════════════════ */
+.cognitive-transition-toast {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  background: rgba(10, 10, 30, 0.92);
+  border: 1px solid rgba(255, 0, 229, 0.4);
+  border-radius: 16px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-family: 'Outfit', sans-serif;
+  color: #fff;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 0 32px rgba(255, 0, 229, 0.25), 0 8px 32px rgba(0, 0, 0, 0.4);
+  text-align: center;
+  max-width: 420px;
+  animation: toast-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    toast-out 0.5s ease 3.5s forwards;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px) scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px) scale(0.95);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ② — COGNITIVE FINGERPRINT
+   Unique SVG pattern generated per session
+   ════════════════════════════════════════════════════════════════ */
+.cognitive-fingerprint-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 0, 229, 0.15);
+  transition: box-shadow 0.3s ease;
+}
+
+.cognitive-fingerprint-wrapper:hover {
+  box-shadow: 0 0 24px rgba(255, 0, 229, 0.2);
+}
+
+.cognitive-fingerprint-svg {
+  animation: fingerprint-rotate 60s linear infinite;
+}
+
+@keyframes fingerprint-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fingerprint-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ③ — CROSS-SESSION GROWTH ARC
+   ════════════════════════════════════════════════════════════════ */
+.growth-arc-panel {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 255, 65, 0.15);
+  border-radius: 20px;
+  padding: 20px;
+  margin: 16px 0;
+  backdrop-filter: blur(12px);
+}
+
+.growth-arc-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  margin: 12px 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  font-family: 'Outfit', sans-serif;
+}
+
+.growth-arc-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.growth-arc-icon {
+  font-size: 22px;
+}
+
+.growth-arc-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+}
+
+.growth-arc-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 2px 0 0;
+  font-family: 'Outfit', sans-serif;
+}
+
+.growth-sparkline-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.growth-sparkline {
+  border-radius: 8px;
+  overflow: visible;
+}
+
+.sparkline-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.04em;
+}
+
+.growth-deltas {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.growth-delta-card {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gdelta-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Outfit', sans-serif;
+}
+
+.gdelta-val {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+}
+
+.growth-insight {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: 'Outfit', sans-serif;
+  line-height: 1.5;
+  margin: 0;
+  padding: 10px;
+  background: rgba(0, 255, 65, 0.04);
+  border-radius: 10px;
+  border-left: 2px solid rgba(0, 255, 65, 0.3);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ⑦ — COGNITIVE COACH CARD
+   One behavioral suggestion after each session
+   ════════════════════════════════════════════════════════════════ */
+.cognitive-coach-card {
+  background: linear-gradient(135deg, rgba(0, 245, 255, 0.05), rgba(0, 255, 65, 0.05));
+  border: 1px solid rgba(0, 245, 255, 0.2);
+  border-radius: 20px;
+  padding: 20px 24px;
+  margin: 16px 0;
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+}
+
+.cognitive-coach-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #00F5FF, #00FF41, #FF00E5);
+  background-size: 200% 100%;
+  animation: coach-shimmer 3s linear infinite;
+}
+
+@keyframes coach-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.coach-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.coach-icon {
+  font-size: 24px;
+}
+
+.coach-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+}
+
+.coach-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 3px 0 0;
+  font-family: 'Outfit', sans-serif;
+}
+
+.coach-insight {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: 'Outfit', sans-serif;
+  line-height: 1.7;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  border-right: 3px solid rgba(0, 245, 255, 0.4);
+  quotes: none;
+  font-style: normal;
+}
+
+[dir="rtl"] .coach-insight {
+  border-right: none;
+  border-left: 3px solid rgba(0, 245, 255, 0.4);
+}
+
+.coach-footer {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.coach-tag {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(0, 245, 255, 0.08);
+  border: 1px solid rgba(0, 245, 255, 0.2);
+  color: rgba(0, 245, 255, 0.8);
+  font-family: 'Outfit', sans-serif;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ⑤ — SHARE SESSION BUTTON
+   ════════════════════════════════════════════════════════════════ */
+.share-session-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: rgba(255, 0, 229, 0.08);
+  border: 1px solid rgba(255, 0, 229, 0.25);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(8px);
+}
+
+.share-session-btn:hover {
+  background: rgba(255, 0, 229, 0.15);
+  border-color: rgba(255, 0, 229, 0.5);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(255, 0, 229, 0.2);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ① — BREATHING GUIDE OVERLAY
+   Full-screen gentle overlay with animated breath circle
+   ════════════════════════════════════════════════════════════════ */
+.breathing-guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 4, 20, 0.75);
+  backdrop-filter: blur(16px);
+  animation: breathe-overlay-in 0.5s ease;
+  pointer-events: none;
+}
+
+@keyframes breathe-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.breathing-guide-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 36px 48px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  text-align: center;
+  backdrop-filter: blur(20px);
+}
+
+.breathing-guide-hint {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+  letter-spacing: 0.05em;
+}
+
+.breathing-circle-wrap {
+  position: relative;
+}
+
+.breathing-phase-label {
+  font-size: 20px;
+  font-weight: 600;
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+  transition: color 0.5s ease;
+  letter-spacing: 0.04em;
+}
+
+.breathing-phase-seconds {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ② — SACRED PAUSE OVERLAY
+   Appears after 5s silence — makes the pause meaningful
+   ════════════════════════════════════════════════════════════════ */
+.sacred-pause-overlay {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8888;
+  pointer-events: none;
+  animation: sacred-in 0.8s ease;
+}
+
+@keyframes sacred-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.sacred-pause-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 32px;
+  background: rgba(10, 10, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  backdrop-filter: blur(20px);
+  text-align: center;
+}
+
+.sacred-orbs {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.sacred-orb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: sacred-orb-pulse 3s ease-in-out infinite;
+}
+
+.sacred-orb-awareness {
+  background: #00F5FF;
+  animation-delay: 0s;
+}
+
+.sacred-orb-knowledge {
+  background: #00FF41;
+  animation-delay: 0.8s;
+}
+
+.sacred-orb-truth {
+  background: #FF00E5;
+  animation-delay: 1.6s;
+}
+
+@keyframes sacred-orb-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.6);
+    opacity: 1;
+  }
+}
+
+.sacred-pause-main {
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.3);
+  margin: 0;
+  letter-spacing: 0.3em;
+  animation: ellipsis-breathe 2s ease-in-out infinite;
+}
+
+@keyframes ellipsis-breathe {
+
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.sacred-pause-sub {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+  max-width: 260px;
+  line-height: 1.5;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ⑤ — FINGERPRINT EXPORT BUTTON
+   ════════════════════════════════════════════════════════════════ */
+.fingerprint-export-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  margin-top: 4px;
+  background: rgba(255, 0, 229, 0.08);
+  border: 1px solid rgba(255, 0, 229, 0.25);
+  border-radius: 20px;
+  color: rgba(255, 0, 229, 0.85);
+  font-size: 11px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  letter-spacing: 0.03em;
+}
+
+.fingerprint-export-btn:hover {
+  background: rgba(255, 0, 229, 0.18);
+  border-color: rgba(255, 0, 229, 0.6);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(255, 0, 229, 0.3);
+  transform: translateY(-1px);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ⑬ — EMOTIONAL WEATHER BADGE
+   Live weather icon in header that tracks cognitive journey
+   ════════════════════════════════════════════════════════════════ */
+.emotional-weather-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: var(--weather-glow, rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  transition: all 0.6s ease;
+  cursor: default;
+  user-select: none;
+}
+
+.weather-changing {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.weather-icon {
+  font-size: 16px;
+  line-height: 1;
+  animation: weather-float 3s ease-in-out infinite;
+}
+
+@keyframes weather-float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.weather-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ⑭ — MIRROR SENTENCE
+   One poetic sentence shown at session end
+   ════════════════════════════════════════════════════════════════ */
+.mirror-sentence-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 24px;
+  margin: 16px 0;
+  background: linear-gradient(135deg, rgba(255, 0, 229, 0.06), rgba(0, 245, 255, 0.04));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  animation: mirror-reveal 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes mirror-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.mirror-sentence-ornament {
+  font-size: 20px;
+  color: rgba(255, 200, 0, 0.7);
+  letter-spacing: 0.2em;
+  animation: ornament-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ornament-pulse {
+
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+.mirror-sentence-text {
+  font-size: 16px;
+  font-family: 'Outfit', sans-serif;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1.7;
+  text-align: center;
+  margin: 0;
+  font-style: italic;
+  quotes: none;
+  max-width: 320px;
+}
+
+[dir="rtl"] .mirror-sentence-text {
+  font-style: normal;
+  font-weight: 500;
+}
+
+.mirror-sentence-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.06em;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ⑮ — COGNITIVE VELOCITY
+   Shows the rate/speed of cognitive state change
+   ════════════════════════════════════════════════════════════════ */
+.cognitive-velocity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid color-mix(in srgb, var(--vel-color, #00F5FF) 30%, transparent);
+  margin-top: 6px;
+  transition: all 0.5s ease;
+  cursor: default;
+  user-select: none;
+}
+
+.vel-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.vel-label {
+  font-size: 11px;
+  color: var(--vel-color, rgba(255, 255, 255, 0.6));
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  transition: color 0.5s ease;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ⑲ — PREMIUM LANDING PAGE
+   Cinematic welcome screen with orbs, particles, and glow ring
+   ════════════════════════════════════════════════════════════════ */
+
+/* Animated background orbs */
+.welcome-orbs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.welcome-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  animation: orb-drift 12s ease-in-out infinite alternate;
+}
+
+.welcome-orb-1 {
+  width: 400px;
+  height: 400px;
+  background: rgba(0, 245, 255, 0.07);
+  top: -120px;
+  left: -120px;
+  animation-duration: 14s;
+}
+
+.welcome-orb-2 {
+  width: 350px;
+  height: 350px;
+  background: rgba(255, 0, 229, 0.06);
+  bottom: -100px;
+  right: -100px;
+  animation-duration: 11s;
+  animation-delay: 2s;
+}
+
+.welcome-orb-3 {
+  width: 280px;
+  height: 280px;
+  background: rgba(0, 255, 65, 0.05);
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-duration: 16s;
+  animation-delay: 4s;
+}
+
+@keyframes orb-drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate(30px, -20px) scale(1.08);
+  }
+
+  100% {
+    transform: translate(-20px, 30px) scale(0.95);
+  }
+}
+
+/* Constellation particles */
+.welcome-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.welcome-particle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+  animation: particle-twinkle 4s ease-in-out infinite alternate;
+}
+
+@keyframes particle-twinkle {
+  0% {
+    opacity: 0.1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.5;
+    transform: scale(1.4);
+  }
+
+  100% {
+    opacity: 0.15;
+    transform: scale(0.8);
+  }
+}
+
+/* Three mini circles preview */
+.welcome-circles-preview {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  margin: 12px 0 4px;
+}
+
+.wcp {
+  border-radius: 50%;
+  animation: wcp-pulse 3s ease-in-out infinite;
+}
+
+.wcp-awareness {
+  width: 14px;
+  height: 14px;
+  background: #00F5FF;
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.6);
+  animation-delay: 0s;
+}
+
+.wcp-knowledge {
+  width: 18px;
+  height: 18px;
+  background: #00FF41;
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.6);
+  animation-delay: 0.5s;
+}
+
+.wcp-truth {
+  width: 14px;
+  height: 14px;
+  background: #FF00E5;
+  box-shadow: 0 0 8px rgba(255, 0, 229, 0.6);
+  animation-delay: 1s;
+}
+
+@keyframes wcp-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+
+  50% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+}
+
+/* CTA glow ring */
+.welcome-cta-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin: 16px 0 8px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.welcome-cta-ring {
+  position: absolute;
+  inset: -8px;
+  border-radius: 32px;
+  background: linear-gradient(135deg, #00F5FF44, #FF00E544, #00FF4144);
+  filter: blur(10px);
+  animation: ring-breathe 3s ease-in-out infinite;
+  z-index: 0;
+}
+
+@keyframes ring-breathe {
+
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: scale(1.04);
+  }
+}
+
+.welcome-cta-stack {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.welcome-cta-wrap .primary-btn {
+  position: relative;
+  z-index: 1;
+}
+
+.welcome-cta-stack .welcome-cta,
+.welcome-secondary-cta {
+  margin-top: 0;
+  max-width: none;
+}
+
+.welcome-demo-cta {
+  box-shadow: 0 18px 48px rgba(0, 245, 255, 0.18);
+}
+
+.welcome-secondary-cta {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(4, 10, 35, 0.64);
+}
+
+.welcome-demo-helper {
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(228, 233, 255, 0.68);
+  text-align: center;
+  padding: 2px 10px 0;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ⑰ — JOURNEY TIMELINE
+   Horizontal story strip in session complete screen
+   ════════════════════════════════════════════════════════════════ */
+.journey-timeline-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  margin: 10px 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  animation: timeline-in 0.6s ease;
+}
+
+@keyframes timeline-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.journey-timeline-title {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+  letter-spacing: 0.05em;
+}
+
+.journey-timeline-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.journey-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.journey-node-icon {
+  font-size: 18px;
+  color: var(--node-color, #fff);
+  filter: drop-shadow(0 0 4px var(--node-color, #fff));
+  transition: color 0.3s ease;
+}
+
+.journey-node-label {
+  font-size: 9px;
+  color: var(--node-color, rgba(255, 255, 255, 0.5));
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.journey-node-time {
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.3);
+  font-family: 'Outfit', sans-serif;
+}
+
+.journey-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+}
+
+.journey-connector-line {
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.15));
+  margin-bottom: 2px;
+}
+
+.journey-connector-time {
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.25);
+  font-family: 'Outfit', sans-serif;
+  white-space: nowrap;
+}
+
+.journey-timeline-sub {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+  text-align: center;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE ⑱ — COGNITIVE DNA CARD
+   Full-screen shareable card modal
+   ════════════════════════════════════════════════════════════════ */
+.dna-card-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  background: rgba(4, 4, 20, 0.85);
+  backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: dna-overlay-in 0.4s ease;
+}
+
+@keyframes dna-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.dna-card-container {
+  position: relative;
+  width: 340px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: linear-gradient(160deg, #080820 0%, #0d0d2a 60%, #080820 100%);
+  border: 1px solid color-mix(in srgb, var(--dominant-color, #FF00E5) 30%, transparent);
+  border-radius: 28px;
+  padding: 28px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 0 60px color-mix(in srgb, var(--dominant-color, #FF00E5) 15%, transparent);
+  animation: dna-card-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes dna-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.88) translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.dna-card-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.dna-card-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.dna-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.dna-card-brand {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+}
+
+.dna-card-subtitle {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.05em;
+}
+
+.dna-weather-orb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 90px;
+  height: 90px;
+}
+
+.dna-weather-emoji {
+  font-size: 56px;
+  position: relative;
+  z-index: 1;
+  animation: weather-float 3s ease-in-out infinite;
+}
+
+.dna-weather-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0.15;
+  filter: blur(20px);
+}
+
+.dna-mirror-sentence {
+  font-size: 14px;
+  font-family: 'Outfit', sans-serif;
+  color: rgba(255, 255, 255, 0.88);
+  text-align: center;
+  line-height: 1.7;
+  margin: 0;
+  font-style: italic;
+  max-width: 280px;
+  border-left: none;
+  quotes: none;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dna-journey-strip {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.dna-journey-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dna-journey-dot-label {
+  position: absolute;
+  top: 20px;
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Outfit', sans-serif;
+  white-space: nowrap;
+}
+
+.dna-journey-line {
+  width: 24px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 2px;
+}
+
+.dna-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  width: 100%;
+  justify-content: space-around;
+  margin-top: 8px;
+}
+
+.dna-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.dna-stat-val {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+}
+
+.dna-stat-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'Outfit', sans-serif;
+}
+
+.dna-stat-divider {
+  width: 1px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dna-card-footer {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.15);
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.1em;
+}
+
+.dna-export-btn {
+  width: 100%;
+  padding: 12px;
+  background: color-mix(in srgb, var(--dominant-color, #FF00E5) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dominant-color, #FF00E5) 35%, transparent);
+  border-radius: 14px;
+  color: var(--dominant-color, #FF00E5);
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.dna-export-btn:hover {
+  background: color-mix(in srgb, var(--dominant-color, #FF00E5) 22%, transparent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--dominant-color, #FF00E5) 25%, transparent);
+  transform: translateY(-1px);
+}
+
+/* DNA Share trigger button on complete screen */
+.dna-share-trigger-btn {
+  padding: 10px 18px;
+  background: linear-gradient(135deg, rgba(255, 200, 0, 0.1), rgba(255, 0, 229, 0.1));
+  border: 1px solid rgba(255, 200, 0, 0.3);
+  border-radius: 14px;
+  color: rgba(255, 200, 0, 0.9);
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  letter-spacing: 0.03em;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.dna-share-trigger-btn:hover {
+  background: linear-gradient(135deg, rgba(255, 200, 0, 0.18), rgba(255, 0, 229, 0.15));
+  border-color: rgba(255, 200, 0, 0.6);
+  box-shadow: 0 0 16px rgba(255, 200, 0, 0.2);
+  transform: translateY(-1px);
 }

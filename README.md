@@ -1,29 +1,69 @@
-# Dawayir (دوائر) — Real-Time Multimodal Mental Clarity Agent 🧠✨
+# دواير — Dawayir 🔵🟢🟣
 
-> **"From Static Chatbots to Living, Breathing AI Companions"**
->
+> ### *"The only voice AI that turns your mental chaos into visual clarity — in real-time."*
+
 > *Built for the [Gemini Live Agent Challenge](https://geminiliveagentchallenge.devpost.com/) — Live Agents Track 🗣️*
+> *Powered by **Gemini 2.0 Flash** · **Gemini Live API** · **Google Cloud Run***
 
 ---
 
-## 🌟 Project Overview
+## 🎬 See It in Action
 
-**Dawayir** (Arabic for "Circles") is a **real-time multimodal consciousness facilitator** that uses the **Gemini Live API** to analyze and visualize a user's mental state through voice, vision, and an interactive canvas — all in real-time.
+> **[▶ Watch the 2-minute Demo](./submission-assets/)** ← judges: start here
 
-Unlike traditional chatbots constrained to text boxes, Dawayir creates a **living mental space** where three interactive circles — **الوعي (Awareness)**, **العلم (Knowledge)**, and **الحقيقة (Truth)** — dynamically change size, color, and behavior based on what the user shares verbally and visually. The AI doesn't just talk; it **acts, remembers, and visualizes** your inner world.
+---
 
-Dawayir is **grounded** in the proprietary **Al-Rehla (الرحلة)** psychological framework, ensuring every insight is scientifically backed by core therapeutic principles — not hallucinated.
+## 💡 The Problem (in 10 seconds)
 
-### Architecture Diagram
+When people are stressed, anxious, or mentally overwhelmed — they can't **see** what's happening in their mind. Traditional therapy takes weeks. Generic chatbots give generic replies.
+
+**Nobody has built a tool that shows you, in real-time, as you speak, exactly where your mind is:**
+- Is it stuck in emotions?
+- Is it starting to think rationally?
+- Has it reached a decision?
+
+---
+
+## 🧠 The Solution: Dawayir (Arabic for "Circles")
+
+**Dawayir** is a **live voice AI companion** that listens to you speak and instantly visualizes your mental journey through three dynamic circles on a canvas:
+
+| Circle | Color | Meaning | Tracks |
+|---|---|---|---|
+| **الوعي** Awareness | 🔵 Cyan | Your feelings now | Emotional intensity |
+| **العلم** Knowledge | 🟢 Green | Your logic & thinking | Analytical depth |
+| **الحقيقة** Truth | 🟣 Purple | Your core decision | Clarity & resolution |
+
+As you speak, the circles **breathe, grow, and shift in real-time** — giving you a **living mirror of your mind** that no chatbot has ever offered.
+
+---
+
+## ⚡ What Makes This Technically Extraordinary
+
+| Capability | Implementation |
+|---|---|
+| **Real-Time Bidirectional Voice** | Gemini Live API — full-duplex PCM16 audio stream, <200ms latency |
+| **Live Canvas Mutation via Tool Calling** | `update_node`, `highlight_node`, `pulseAll` — circles respond mid-conversation |
+| **Multimodal Vision** | Camera snapshot → Gemini reads your facial expression and adjusts the session |
+| **Cognitive Kernel** | Deterministic server-side state machine enforcing stability constraints on all AI decisions |
+| **Memory Bank** | Sessions saved to Google Cloud Storage — recall any past mental map |
+| **Knowledge Base Grounding** | `get_expert_insight` tool retrieves Al-Rehla principles to prevent hallucination |
+| **Egyptian Arabic + English** | Bilingual — culturally rich, warm, empathetic persona in both languages |
+| **Scale-to-Zero Cloud** | Google Cloud Run: $0 when idle, auto-scales under load |
+| **Infrastructure as Code** | Full Terraform + Cloud Build CI/CD pipeline |
+
+---
+
+## 🏗️ Architecture
 
 ```mermaid
 graph TD
     subgraph "👤 The Human Presence (Browser UI)"
-        U[🎙️ User Speech] -->|PCM16 16kHz| AP[Audio Pipe / Worklet]
+        U[🎙️ User Speech] -->|PCM16 16kHz| AP[Audio Worklet]
         CAM[📸 Camera Snapshot] -->|Visual Pulse Check| WS
         AP --> WS[WebSocket Stream]
         WS -->|Dynamic Feedback| V[Waveform Visualizer]
-        WS -->|State Mutation| RC[React Canvas / Glassmorphism]
+        WS -->|State Mutation| RC[React Canvas / Circles]
     end
 
     subgraph "🎯 The Maestro (Google Cloud Run)"
@@ -51,13 +91,28 @@ graph TD
     style KB fill:#00FF7F,stroke:#333,stroke-width:2px,color:#000
 ```
 
-> For a deep-dive into the architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+> Deep dive: [ARCHITECTURE.md](./ARCHITECTURE.md)
+
+---
+
+## 🥇 Why Dawayir Wins
+
+### Against every other submission:
+
+| What others build | What Dawayir builds |
+|---|---|
+| Text chatbots with therapy prompts | **Live voice** with real-time visual feedback |
+| Static sentiment analysis | **Dynamic canvas** that mutates as you speak |
+| English-only tools | **Arabic-first** (underserved market of 400M+ speakers) |
+| "AI coach" with no memory | **Persistent Memory Bank** across sessions |
+| Tool calls that trigger after the conversation | **Mid-conversation tool calls** that change the UI live |
+
+### The Cognitive Kernel (our secret weapon):
+Unlike any other submission, Dawayir has a **server-side Cognitive Kernel** — a deterministic state machine that mediates **every** AI decision through stability policies before it touches the UI. The LLM reasons; the Kernel enforces. This prevents jarring transitions and ensures a therapeutic, grounded experience.
 
 ---
 
 ## ✅ Prerequisites
-
-Before running Dawayir locally, ensure you have:
 
 | Requirement | Details |
 |---|---|
@@ -66,7 +121,7 @@ Before running Dawayir locally, ensure you have:
 | **Vertex AI API** | Enabled (`aiplatform.googleapis.com`) |
 | **Cloud Run API** | Enabled (`run.googleapis.com`) |
 | **Cloud Storage API** | Enabled (`storage.googleapis.com`) |
-| **Gemini API Key** | Obtainable from [Google AI Studio](https://aistudio.google.com/apikey) |
+| **Gemini API Key** | From [Google AI Studio](https://aistudio.google.com/apikey) |
 | **GCS Bucket** | For persisting mental maps and session reports |
 
 > **Terraform users:** All API enablements are automated in `main.tf`. Run `terraform apply` to provision everything.
@@ -86,11 +141,6 @@ cd dawayir-live-agent
 
 Create a `.env` file in the `server/` directory:
 
-```bash
-cd server
-cp .env.example .env   # Or create manually:
-```
-
 ```dotenv
 # Required
 GEMINI_API_KEY=your_gemini_api_key_here
@@ -99,12 +149,10 @@ GOOGLE_CLOUD_STORAGE_BUCKET=your_gcs_bucket_name
 
 # Optional (defaults shown)
 GEMINI_LIVE_MODEL=gemini-2.0-flash-exp
-GEMINI_API_VERSION=v1alpha
 PORT=8080
-LOG_LEVEL=info
 ```
 
-### 3. Install & Run the Backend (The Maestro)
+### 3. Install & Run the Backend
 
 ```bash
 cd server
@@ -112,9 +160,7 @@ npm install
 npm start
 ```
 
-The server starts on `http://localhost:8080` with WebSocket support.
-
-### 4. Install & Run the Frontend (The Pulse)
+### 4. Install & Run the Frontend
 
 ```bash
 cd client
@@ -122,34 +168,25 @@ npm install
 npm run dev
 ```
 
-The frontend starts on `http://localhost:5173` and connects to the backend WebSocket.
+Open `http://localhost:5173`, allow microphone access, and start speaking.
 
-### 5. Open in Browser
-
-Navigate to `http://localhost:5173`, allow microphone access, and start speaking.
-
-> **⚠️ Best Experience:** Use headphones or earbuds for optimal interruption handling and to prevent echo.
+> **⚠️ Best Experience:** Use headphones or earbuds to prevent audio echo.
 
 ---
 
 ## ☁️ Cloud Deployment (Google Cloud Run)
 
-### Option A: Automated via Terraform (Recommended)
+### Option A: Terraform (Recommended)
 
 ```bash
-# From project root
 terraform init
 terraform apply -var="project_id=YOUR_PROJECT_ID" -var="gemini_api_key=YOUR_KEY"
 ```
 
-This provisions Cloud Run, GCS bucket, IAM policies, and enables all required APIs (including Vertex AI).
-
-### Option B: Manual via Cloud Build
+### Option B: Cloud Build Script
 
 ```bash
-cd server
-chmod +x cloud-deploy.sh
-./cloud-deploy.sh
+cd server && chmod +x cloud-deploy.sh && ./cloud-deploy.sh
 ```
 
 ### Option C: Cloud Build YAML
@@ -157,53 +194,6 @@ chmod +x cloud-deploy.sh
 ```bash
 gcloud builds submit --config=server/cloudbuild.yaml
 ```
-
-> See [cloud-deploy.sh](./server/cloud-deploy.sh), [cloudbuild.yaml](./server/cloudbuild.yaml), and [main.tf](./main.tf) for full automation proof.
-
----
-
-## 🚀 Key Features & Technical Strengths
-
-| Feature | Implementation |
-|---|---|
-| **Cognitive Kernel** | Deterministic state machine enforcing stability constraints and psychological "Process Scheduling" |
-| **Metrics Overlay** | Real-time tracking of Equilibrium, Overload, and Clarity Δ for empirical progress evidence |
-| **Ultra-Low Latency (<200ms)** | Full-duplex WebSocket streaming with PCM16 audio — zero REST overhead |
-| **Live Tool Calling** | `update_node`, `highlight_node`, `save_mental_map`, `generate_session_report`, `get_expert_insight` |
-| **Multimodal Vision** | Camera snapshot analysis via Visual Pulse Check for facial/emotional context |
-| **Knowledge Base Grounding** | Server-side `get_expert_insight` tool retrieves Al-Rehla principles to prevent hallucination |
-| **Cloud Memory Persistence** | Mental maps & session reports saved to Google Cloud Storage |
-| **Token Optimization** | Context compression via `save_mental_map` + visual downsampling to control API costs |
-| **Scale-to-Zero** | Cloud Run ensures $0 compute cost when idle |
-| **Infrastructure as Code** | Full Terraform + Cloud Build pipeline for automated deployment |
-| **Interruption Handling** | Barge-in support for natural conversation flow |
-| **Egyptian Arabic Persona** | Warm, empathetic, culturally-aware mental clarity coaching |
-
----
-
-## 🥇 Differentiated Value & Related Work
-
-Dawayir is not just a multimodal interface; it is a **Cognitive Operating System**. 
-
-While other projects focus on conversational therapy or generic sentiment analysis, Dawayir introduces a **Cognitive Kernel**—a deterministic state machine that mediates all AI decisions through stability metrics before they affect the user interface.
-
-### 🧩 The Cognitive Kernel
-- **Separation of Concerns:** The LLM (Gemini) acts as the reasoning engine, but the Kernel (our server-side state engine) enforces physical and psychological stability constraints.
-- **Deterministic UI Mutation:** Every change to the visual canvas is calculated via stability policies (e.g., *Max Delta Per Turn*), preventing erratic or jarring transitions that could cause user distress.
-- **Process Scheduling:** The system acts as a scheduler for mental tasks, prioritizing "Grounding" (Awareness expansion) when high stress is detected and "Structuring" (Knowledge focus) when confusion is observed.
-
-### 📊 Real-Time Cognitive Metrics (The Evidence)
-During the live demo, a glassmorphism overlay displays real-time system metrics:
-- **Equilibrium Score:** Measures the balance between Awareness, Knowledge, and Truth.
-- **Overload Index:** Quantifies cognitive load based on input intensity and state stability.
-- **Clarity Delta:** Provides empirical evidence of user progress by tracking Truth alignment improvement from session start to finish.
-
-### 📚 Competitive Landscape & Market Fit
-| Competitor / Project | Dawayir Difference |
-|---|---|
-| **Xaia (Cedars-Sinai)** | Focuses on 3D VR avatars for therapy; Dawayir uses an abstract, dynamic "Cognitive Grammar" to visualize the mind's structure in real-time. |
-| **Cognitive Canvas (Devpost)** | Focuses on static journaling to map thoughts; Dawayir is a **live, multimodal kernel** responding to sub-second audio cues. |
-| **Emotion-Aware Research** | Often theoretical or diagnostic; Dawayir implements a **Production-Ready Kernel** that acts as an OS layer for mental health. |
 
 ---
 
@@ -213,20 +203,20 @@ During the live demo, a glassmorphism overlay displays real-time system metrics:
 dawayir-live-agent/
 ├── client/                  # React + Vite frontend
 │   ├── src/
-│   │   ├── App.jsx          # Main application (Canvas + Audio + WS)
+│   │   ├── App.jsx          # Main application (Canvas + Audio + WS + Tool Calls)
 │   │   ├── App.css          # Glassmorphism design system
+│   │   ├── components/
+│   │   │   └── DawayirCanvas.jsx  # Animated 3-circle cognitive canvas
 │   │   └── audio/           # AudioWorkletProcessor (PCM16 capture)
 │   └── package.json
 ├── server/                  # Node.js backend (The Maestro)
 │   ├── index.js             # Express + WS + Gemini Live API integration
-│   ├── knowledge_base.json  # Al-Rehla grounding data
+│   ├── knowledge_base.json  # Al-Rehla therapeutic grounding data
 │   ├── cloud-deploy.sh      # Automated Cloud Run deployment
 │   ├── cloudbuild.yaml      # Cloud Build CI/CD pipeline
-│   ├── Dockerfile           # Container configuration
-│   └── package.json
+│   └── Dockerfile
 ├── main.tf                  # Terraform IaC (Cloud Run + GCS + APIs)
 ├── ARCHITECTURE.md          # Detailed system architecture
-├── TECHNICAL_BLOG_POST.md   # Published content (bonus)
 └── README.md                # This file
 ```
 
@@ -238,10 +228,11 @@ dawayir-live-agent/
 |---|---|
 | **Challenge** | Gemini Live Agent Challenge |
 | **Track** | Live Agents 🗣️ |
-| **Primary SDK** | Google GenAI SDK (`@google/genai` v1.42.0) |
+| **Primary SDK** | Google GenAI SDK (`@google/genai`) |
 | **Model** | Gemini 2.0 Flash (Native Audio) |
-| **Cloud Services** | Google Cloud Run, Google Cloud Storage, Vertex AI API |
+| **Cloud Services** | Google Cloud Run · Google Cloud Storage · Vertex AI |
 | **IaC** | Terraform + Cloud Build |
+| **Language Support** | Arabic (Egyptian dialect) + English |
 
 ---
 
@@ -251,5 +242,5 @@ ISC © 2025 Mohammed Refaat
 
 ---
 
-*Created with ❤️ for the Gemini Live Agent Challenge*
+*Built with ❤️ for the Gemini Live Agent Challenge — where AI meets the human mind.*
 *#GeminiLiveAgentChallenge #GoogleCloud #BuildWithAI #GeminiAPI*
