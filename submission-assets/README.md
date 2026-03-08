@@ -5,7 +5,9 @@ This folder contains judge-facing assets for the Dawayir submission.
 ## Quick Links
 
 - 4-minute video script: [VIDEO_SCRIPT_4_MIN.md](./VIDEO_SCRIPT_4_MIN.md)
+- Arabic voice + English subtitles: [VIDEO_SCRIPT_AR_EN.md](./VIDEO_SCRIPT_AR_EN.md)
 - 60-second judge pitch: [PITCH_60_SEC.md](./PITCH_60_SEC.md)
+- Recording shot list: [SHOT_LIST.md](./SHOT_LIST.md)
 - Cinematic home screen: [ui-demo/homepage-idle.png](./ui-demo/homepage-idle.png)
 - Connected live session: [ui-demo/connected-state.png](./ui-demo/connected-state.png)
 - Camera active: [ui-demo/camera-active.png](./ui-demo/camera-active.png)
