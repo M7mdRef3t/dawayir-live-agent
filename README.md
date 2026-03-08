@@ -4,6 +4,24 @@
 
 Built for the Gemini Live Agent Challenge.
 
+## Visual Highlights
+
+### Cinematic Entry
+
+![Dawayir cinematic home screen](./submission-assets/ui-demo/homepage-idle.png)
+
+### Live Session
+
+![Dawayir connected live session](./submission-assets/ui-demo/connected-state.png)
+
+### Vision and Multimodal Update
+
+![Dawayir live camera update](./submission-assets/ui-demo/live-camera-update.png)
+
+### Tool Calling on the Canvas
+
+![Dawayir tool call effect on circles](./submission-assets/ui-demo/tool-call-effect.png)
+
 ## What It Is
 
 Dawayir is a real-time multimodal AI experience for cognitive and emotional reflection.
