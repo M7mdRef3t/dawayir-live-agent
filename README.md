@@ -6,6 +6,10 @@ Built for the Gemini Live Agent Challenge.
 
 ## Visual Highlights
 
+![Dawayir live overview](./submission-assets/ui-demo/dawayir-live-overview.gif)
+
+Judge-ready assets: [submission-assets/README.md](./submission-assets/README.md)
+
 ### Cinematic Entry
 
 ![Dawayir cinematic home screen](./submission-assets/ui-demo/homepage-idle.png)
