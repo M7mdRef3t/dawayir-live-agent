@@ -1,0 +1,20 @@
+- application "Dawayir live session application" [ref=e3]:
+  - link "تخطي إلى المحتوى الرئيسي" [ref=e4] [cursor=pointer]:
+    - /url: "#main-canvas-content"
+  - generic [ref=e5]:
+    - heading "الترحيب" [level=2] [ref=e6]
+    - img "Dawayir" [ref=e7]
+    - generic [ref=e8]: دواير
+    - generic [ref=e9]: حوّل اللي جواك لصورة أوضح.
+    - generic [ref=e10]: جلسة صوتية ترسم حالتك أمامك.
+    - generic [ref=e13]:
+      - button "تشغيل العرض المباشر" [ref=e14] [cursor=pointer]
+      - button "يلا نبدأ" [ref=e15] [cursor=pointer]
+      - generic [ref=e16]: يفتح الجلسة الحية ويشغل الديمو الهجين تلقائيًا للمحكمين.
+    - generic [ref=e17]:
+      - button "عربى" [ref=e18] [cursor=pointer]
+      - button "EN" [ref=e19] [cursor=pointer]
+  - main "مساحة الدوائر":
+    - heading "تطبيق دواير للجلسات الصوتية" [level=1] [ref=e20]
+    - 'img "خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة" [ref=e21]'
+  - status [ref=e22]

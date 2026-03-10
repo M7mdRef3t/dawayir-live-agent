@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import CognitiveMap from './CognitiveMap';
 import NeuralGraph from './NeuralGraph';
 import CognitiveFingerprint from './CognitiveFingerprint';
 import CognitiveCoach from './CognitiveCoach';
@@ -9,6 +8,120 @@ import SessionHighlightReel from './SessionHighlightReel';
 import SessionSignatureCard from './SessionSignatureCard';
 import JudgeModePanel from './JudgeModePanel';
 import '../dashboard-styles.css';
+
+// ══════════════════════════════════════════════════
+// PROGRESS ACROSS SESSIONS — Visual History
+// Reads saved circle states from localStorage and
+// renders a sparkline chart showing change over time.
+// ══════════════════════════════════════════════════
+function ProgressTimeline({ lang }) {
+  const [history, setHistory] = React.useState([]);
+
+  React.useEffect(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('dawayir_progress') || '[]');
+      setHistory(raw.slice(-12)); // last 12 sessions
+    } catch {}
+  }, []);
+
+  if (history.length < 2) {
+    return (
+      <div className="progress-timeline-empty" style={{
+        padding: '24px', textAlign: 'center', opacity: 0.5,
+        fontFamily: "'Outfit', sans-serif", fontSize: '14px',
+      }}>
+        {lang === 'ar' ? 'ابدأ جلستين على الأقل لرؤية تقدمك' : 'Complete at least 2 sessions to see your progress'}
+      </div>
+    );
+  }
+
+  const circleColors = { 1: '#00F5FF', 2: '#00FF41', 3: '#FF00E5' };
+  const circleNames = lang === 'ar'
+    ? { 1: 'أنت', 2: 'العلم', 3: 'الواقع' }
+    : { 1: 'You', 2: 'Science', 3: 'Reality' };
+
+  const width = 320;
+  const height = 100;
+  const padding = 20;
+  const chartW = width - padding * 2;
+  const chartH = height - padding * 2;
+
+  const getPath = (circleId) => {
+    const points = history.map((session, i) => {
+      const circle = session.circles?.find(c => c.id === circleId);
+      const radius = circle?.radius || 50;
+      const x = padding + (i / (history.length - 1)) * chartW;
+      const y = padding + chartH - ((radius - 30) / 90) * chartH;
+      return `${x},${y}`;
+    });
+    return 'M' + points.join(' L');
+  };
+
+  return (
+    <div className="progress-timeline" style={{
+      background: 'rgba(255,255,255,0.03)', borderRadius: '16px',
+      padding: '16px', marginTop: '16px',
+      border: '1px solid rgba(255,255,255,0.06)',
+    }}>
+      <h4 style={{
+        fontFamily: "'Outfit', sans-serif", fontSize: '13px',
+        color: 'rgba(255,255,255,0.5)', margin: '0 0 12px 0',
+        letterSpacing: '0.5px', textTransform: 'uppercase',
+      }}>
+        {lang === 'ar' ? 'رحلة التقدم' : 'Progress Journey'}
+      </h4>
+
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto' }}>
+        {/* Grid lines */}
+        {[0.25, 0.5, 0.75].map(p => (
+          <line key={p}
+            x1={padding} y1={padding + chartH * (1 - p)}
+            x2={padding + chartW} y2={padding + chartH * (1 - p)}
+            stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
+        ))}
+
+        {/* Circle paths */}
+        {[1, 2, 3].map(id => (
+          <path key={id} d={getPath(id)}
+            fill="none" stroke={circleColors[id]}
+            strokeWidth="2" opacity="0.7"
+            strokeLinecap="round" strokeLinejoin="round" />
+        ))}
+
+        {/* Latest dots */}
+        {[1, 2, 3].map(id => {
+          const lastSession = history[history.length - 1];
+          const circle = lastSession?.circles?.find(c => c.id === id);
+          const radius = circle?.radius || 50;
+          const x = padding + chartW;
+          const y = padding + chartH - ((radius - 30) / 90) * chartH;
+          return (
+            <g key={`dot-${id}`}>
+              <circle cx={x} cy={y} r="4" fill={circleColors[id]} opacity="0.9" />
+              <text x={x + 8} y={y + 3} fill={circleColors[id]}
+                fontSize="7" fontFamily="'Outfit', sans-serif" opacity="0.8">
+                {circleNames[id]}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      <div style={{
+        display: 'flex', justifyContent: 'space-between',
+        fontSize: '10px', color: 'rgba(255,255,255,0.3)',
+        fontFamily: "'Outfit', sans-serif", marginTop: '4px',
+        padding: '0 4px',
+      }}>
+        <span>{history.length} {lang === 'ar' ? 'جلسات' : 'sessions'}</span>
+        <span>{new Date(history[history.length - 1]?.date).toLocaleDateString(
+          lang === 'ar' ? 'ar-EG' : 'en-US', { month: 'short', day: 'numeric' }
+        )}</span>
+      </div>
+    </div>
+  );
+}
+
 
 const REPLAY_MARKER = /<!--\s*DAWAYIR_REPLAY:([A-Za-z0-9+/=]+)\s*-->/;
 
@@ -60,7 +173,13 @@ function getCircleDelta(currentNodes = [], previousNodes = []) {
 }
 
 
-function DashboardView({ onBack, lang, emptyLogoSrc }) {
+function DashboardView({
+  onBack,
+  lang,
+  emptyLogoSrc,
+  reducedMotion = false,
+  viewHeadingProps = {},
+}) {
   const presentationRootRef = useRef(null);
   const replaySectionRef = useRef(null);
   const highlightSectionRef = useRef(null);
@@ -146,10 +265,10 @@ function DashboardView({ onBack, lang, emptyLogoSrc }) {
   }, [compareSnapshot, currentSnapshot]);
   const presentationSteps = useMemo(() => ([
     { label: lang === 'ar' ? 'إعادة الجلسة' : 'Replay', ref: replaySectionRef },
-    { label: lang === 'ar' ? 'الشريط الأذكى' : 'Highlight Reel', ref: highlightSectionRef },
+    { label: lang === 'ar' ? 'أهم اللقطات' : 'Highlight Reel', ref: highlightSectionRef },
     { label: lang === 'ar' ? 'اللحظة الفاصلة' : 'Signature Moment', ref: signatureSectionRef },
     { label: lang === 'ar' ? 'وضع التحكيم' : 'Judge Mode', ref: judgeSectionRef },
-    { label: lang === 'ar' ? 'فارق الجلسات' : 'Cross-Session Diff', ref: diffSectionRef },
+    { label: lang === 'ar' ? 'فرق الجلسات' : 'Cross-Session Diff', ref: diffSectionRef },
   ]), [lang]);
 
   const clearDemoRoute = () => {
@@ -271,62 +390,71 @@ function DashboardView({ onBack, lang, emptyLogoSrc }) {
   const handleShareSession = (report) => {
     const shareData = {
       title: report?.filename || 'Dawayir Session',
-      text: lang === 'ar'
-        ? 'شاهد بصمتي الإدراكية من جلسة دواير'
-        : 'View my cognitive fingerprint from a Dawayir session',
+      text: lang === 'ar' ? 'شوف بصمتي الإدراكية من جلسة دواير' : 'View my cognitive fingerprint from a Dawayir session',
       url: window.location.origin + '?session=' + encodeURIComponent(btoa(report?.filename || '')),
     };
     if (navigator.share) {
       navigator.share(shareData).catch(() => null);
     } else {
       navigator.clipboard.writeText(shareData.url).then(() => {
-        alert(lang === 'ar' ? '✅ تم نسخ الرابط!' : '✅ Link copied!');
+        alert(lang === 'ar' ? '✅ تم نسخ الرابط.' : '✅ Link copied!');
       });
     }
   };
 
   return (
-    <div className="dashboard-view">
+        <div className="dashboard-view">
       <header className="dashboard-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '20px' }}>
-        <button className="back-btn" onClick={selectedReport ? () => setSelectedReport(null) : onBack}>
-          {selectedReport ? (lang === 'ar' ? '← رجوع للقائمة' : '← Back to Museum') : (lang === 'ar' ? '← رجوع للتجربة' : '← Back to Live')}
+        <button className="ds-btn ds-btn--ghost back-btn" onClick={selectedReport ? () => setSelectedReport(null) : onBack}>
+          {selectedReport ? (lang === 'ar' ? '← رجوع للقائمة' : '← Back to Museum') : (lang === 'ar' ? '← رجوع للجلسة' : '← Back to Live')}
         </button>
-        <h2>{selectedReport ? (lang === 'ar' ? 'تفاصيل الذكرى' : 'Memory Insight') : (lang === 'ar' ? 'المتحف الإدراكي' : 'Museum of Mind')}</h2>
+        <h2 {...viewHeadingProps}>
+          {selectedReport ? (lang === 'ar' ? 'تفاصيل الجلسة' : 'Memory Insight') : (lang === 'ar' ? 'أرشيف الجلسات' : 'Museum of Mind')}
+        </h2>
       </header>
 
       {!selectedReport && !loading && (
         <>
           <div className="dashboard-stats-grid">
-            <div className="dashboard-stat-card">
+            <div className="ds-card dashboard-stat-card">
               <span className="stat-label">{lang === 'ar' ? 'إجمالي الجلسات' : 'Total Sessions'}</span>
               <strong className="stat-value">{totalReports}</strong>
               <div className="stat-trend positive">{lang === 'ar' ? `آخر جلسة: ${latestDate}` : `Last session: ${latestDate}`}</div>
             </div>
-            <div className="dashboard-stat-card">
+            <div className="ds-card dashboard-stat-card">
               <span className="stat-label">{lang === 'ar' ? 'متوسط الوضوح' : 'Avg Clarity'}</span>
               <strong className="stat-value">68%</strong>
               <div className="stat-trend positive">+5%</div>
             </div>
-            <div className="dashboard-stat-card">
+            <div className="ds-card dashboard-stat-card">
               <span className="stat-label">{lang === 'ar' ? 'أكثر دائرة نشطة' : 'Top Circle'}</span>
-              <strong className="stat-value" style={{ color: 'var(--ds-cyan-500)' }}>{lang === 'ar' ? 'الوعي' : 'Awareness'}</strong>
+              <strong className="stat-value" style={{ color: 'var(--ds-cyan-500)' }}>{lang === 'ar' ? 'أنت' : 'You'}</strong>
             </div>
           </div>
 
           {/* ── Feature ③ CROSS-SESSION GROWTH ARC ────────────────────── */}
           <GrowthArc lang={lang} />
 
+          {/* ── PROGRESS ACROSS SESSIONS ────────────────────── */}
+          <ProgressTimeline lang={lang} />
+
           <div className="cognitive-distribution-panel">
-            <h3>{lang === 'ar' ? 'توزيـع المسـار المعرفـي' : 'Cognitive Journey Distribution'}</h3>
-            <div className="distribution-chart">
-              <div className="dist-bar awareness" style={{ width: '45%' }} title="Awareness: 45%"></div>
-              <div className="dist-bar knowledge" style={{ width: '30%' }} title="Knowledge: 30%"></div>
-              <div className="dist-bar truth" style={{ width: '25%' }} title="Truth: 25%"></div>
+            <h3>{lang === 'ar' ? 'توزيع الرحلة الإدراكية' : 'Cognitive Journey Distribution'}</h3>
+            <div
+              className="distribution-chart"
+              role="img"
+              aria-label={lang === 'ar'
+                ? 'توزيع الرحلة الإدراكية: أنت ٤٥٪، العلم ٣٠٪، الواقع ٢٥٪'
+                : 'Cognitive journey distribution: You 45%, Science 30%, Reality 25%'}
+            >
+              <div className="dist-bar awareness" style={{ width: '45%' }} title="Awareness: 45%" aria-hidden="true"></div>
+              <div className="dist-bar knowledge" style={{ width: '30%' }} title="Knowledge: 30%" aria-hidden="true"></div>
+              <div className="dist-bar truth" style={{ width: '25%' }} title="Truth: 25%" aria-hidden="true"></div>
             </div>
             <div className="dist-legend">
-              <div className="legend-item"><span className="dot awareness"></span> {lang === 'ar' ? 'الوعي' : 'Awareness'}</div>
-              <div className="legend-item"><span className="dot knowledge"></span> {lang === 'ar' ? 'العلم' : 'Knowledge'}</div>
-              <div className="legend-item"><span className="dot truth"></span> {lang === 'ar' ? 'الحقيقة' : 'Truth'}</div>
+              <div className="legend-item"><span className="dot awareness"></span> {lang === 'ar' ? 'أنت' : 'You'}</div>
+              <div className="legend-item"><span className="dot knowledge"></span> {lang === 'ar' ? 'العلم' : 'Science'}</div>
+              <div className="legend-item"><span className="dot truth"></span> {lang === 'ar' ? 'الواقع' : 'Reality'}</div>
             </div>
           </div>
         </>
@@ -335,15 +463,22 @@ function DashboardView({ onBack, lang, emptyLogoSrc }) {
       {!selectedReport && (
         <div className="dashboard-tools">
           <div className="search-container">
-            <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            <svg aria-hidden="true" className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            <label htmlFor="dashboard-search" className="visually-hidden">
+              {lang === 'ar' ? 'ابحث في الجلسات' : 'Search sessions'}
+            </label>
             <input
+              id="dashboard-search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="command-input dashboard-search"
-              placeholder={lang === 'ar' ? 'ابحث في ذكرياتك...' : 'Search your memories...'}
+              className="ds-field__input dashboard-search"
+              placeholder={lang === 'ar' ? 'دوّر في جلساتك...' : 'Search your memories...'}
             />
           </div>
-          <select className="command-send-btn dashboard-sort" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+          <label htmlFor="dashboard-sort" className="visually-hidden">
+            {lang === 'ar' ? 'ترتيب الجلسات' : 'Sort sessions'}
+          </label>
+          <select id="dashboard-sort" className="ds-field__select dashboard-sort" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
             <option value="recent">{lang === 'ar' ? 'الأحدث' : 'Most recent'}</option>
             <option value="name">{lang === 'ar' ? 'الاسم' : 'Name'}</option>
           </select>
@@ -353,7 +488,7 @@ function DashboardView({ onBack, lang, emptyLogoSrc }) {
       {loading ? (
         <div className="loader">
           <div className="spinner-ring"></div>
-          <span>{lang === 'ar' ? 'جاري استدعاء الذكريات...' : 'Recalling memories...'}</span>
+          <span>{lang === 'ar' ? 'بنسترجع الجلسات...' : 'Recalling memories...'}</span>
         </div>
       ) : selectedReport ? (
         <div
@@ -375,17 +510,17 @@ function DashboardView({ onBack, lang, emptyLogoSrc }) {
               </p>
             </div>
             <div className="presentation-toolbar-actions">
-              <button className="presentation-btn primary" onClick={demoRouteActive ? handleStopDemoRoute : handleStartDemoRoute}>
+              <button className="ds-btn ds-btn--primary presentation-btn" onClick={demoRouteActive ? handleStopDemoRoute : handleStartDemoRoute}>
                 {demoRouteActive
                   ? (lang === 'ar' ? 'إيقاف المسار التلقائي' : 'Stop Demo Route')
                   : (lang === 'ar' ? 'ابدأ المسار التلقائي' : 'Start Demo Route')}
               </button>
-              <button className="presentation-btn" onClick={() => setJudgeModeActive((value) => !value)}>
+              <button className="ds-btn ds-btn--secondary presentation-btn" onClick={() => setJudgeModeActive((value) => !value)}>
                 {judgeModeActive
                   ? (lang === 'ar' ? 'إظهار كل التفاصيل' : 'Show Full Insight')
                   : (lang === 'ar' ? 'تفعيل Judge Mode' : 'Enable Judge Mode')}
               </button>
-              <button className="presentation-btn" onClick={handleToggleJudgeFullscreen}>
+              <button className="ds-btn ds-btn--secondary presentation-btn" onClick={handleToggleJudgeFullscreen}>
                 {presentationFullscreen
                   ? (lang === 'ar' ? 'الخروج من ملء الشاشة' : 'Exit Fullscreen')
                   : (lang === 'ar' ? 'ملء الشاشة للتحكيم' : 'Judge Fullscreen')}
@@ -438,29 +573,29 @@ function DashboardView({ onBack, lang, emptyLogoSrc }) {
               {compareReport && currentSnapshot && compareSnapshot && compareDeltas ? (
                 <div className="session-diff-grid">
                   <div className="session-diff-fingerprints">
-                    <div className="diff-fingerprint-card">
+                    <div className="ds-card diff-fingerprint-card">
                       <span>{lang === 'ar' ? 'الآن' : 'Current'}</span>
                       <CognitiveFingerprint reportContent={selectedReport.content} sessionId={selectedReport.filename} lang={lang} size={134} />
                     </div>
                     <div className="diff-fingerprint-divider">
                       <strong>{lang === 'ar' ? 'مقابل' : 'vs'}</strong>
                     </div>
-                    <div className="diff-fingerprint-card">
+                    <div className="ds-card diff-fingerprint-card">
                       <span>{lang === 'ar' ? 'قبلها' : 'Previous'}</span>
                       <CognitiveFingerprint reportContent={compareReport.content} sessionId={compareReport.filename} lang={lang} size={134} />
                     </div>
                   </div>
 
                   <div className="session-diff-metrics">
-                    <div className="session-diff-metric-card">
+                    <div className="ds-card session-diff-metric-card">
                       <small>{lang === 'ar' ? 'الوضوح' : 'Clarity'}</small>
                       <strong className={compareDeltas.clarity >= 0 ? 'is-positive' : 'is-negative'}>{compareDeltas.clarity >= 0 ? '+' : ''}{compareDeltas.clarity}%</strong>
                     </div>
-                    <div className="session-diff-metric-card">
+                    <div className="ds-card session-diff-metric-card">
                       <small>{lang === 'ar' ? 'التوازن' : 'Equilibrium'}</small>
                       <strong className={compareDeltas.equilibrium >= 0 ? 'is-positive' : 'is-negative'}>{compareDeltas.equilibrium >= 0 ? '+' : ''}{compareDeltas.equilibrium}%</strong>
                     </div>
-                    <div className="session-diff-metric-card">
+                    <div className="ds-card session-diff-metric-card">
                       <small>{lang === 'ar' ? 'الضغط' : 'Overload'}</small>
                       <strong className={compareDeltas.overload <= 0 ? 'is-positive' : 'is-negative'}>{compareDeltas.overload >= 0 ? '+' : ''}{compareDeltas.overload}%</strong>
                     </div>
@@ -468,7 +603,7 @@ function DashboardView({ onBack, lang, emptyLogoSrc }) {
 
                   <div className="session-diff-circles">
                     {circleDiff.map((circle) => (
-                      <div key={circle.id} className="session-diff-circle-card">
+                      <div key={circle.id} className="ds-card session-diff-circle-card">
                         <span className="session-diff-circle-name" style={{ color: circle.color }}>{circle.label}</span>
                         <strong className={circle.delta >= 0 ? 'is-positive' : 'is-negative'}>{circle.delta >= 0 ? '+' : ''}{circle.delta}px</strong>
                       </div>
@@ -514,7 +649,7 @@ function DashboardView({ onBack, lang, emptyLogoSrc }) {
               <NeuralGraph
                 reportContent={selectedReport.content}
                 lang={lang}
-                animate={true}
+                animate={!reducedMotion}
               />
             </div>
 
@@ -546,7 +681,7 @@ function DashboardView({ onBack, lang, emptyLogoSrc }) {
 
                 {/* ── Feature ⑤ LIVE SHARE ─────────────────────────────── */}
                 <button
-                  className="share-session-btn"
+                  className="ds-btn ds-btn--secondary share-session-btn"
                   onClick={() => handleShareSession(selectedReport)}
                   title={lang === 'ar' ? 'شارك بصمتك الإدراكية' : 'Share your cognitive fingerprint'}
                 >
@@ -569,11 +704,11 @@ function DashboardView({ onBack, lang, emptyLogoSrc }) {
       ) : (
         <div className="reports-list">
           {filteredReports.length === 0 ? (
-            <div className="empty-state-card">
+            <div className="ds-card empty-state-card">
               <img src={emptyLogoSrc} alt="" className="empty-state-logo" />
               <h3>{lang === 'ar' ? 'بنك الذاكرة خالي' : 'Memory Bank Empty'}</h3>
               <p>{lang === 'ar' ? 'ابدأ أول رحلة معرفية، وسيتم تسجيل كل البصائر هنا بانتظام.' : 'Embark on your first journey, and all insights will be recorded here.'}</p>
-              <button className="primary-btn dashboard-start-btn" onClick={onBack}>
+              <button className="ds-btn ds-btn--primary dashboard-start-btn" onClick={onBack}>
                 {lang === 'ar' ? 'ابدأ الرحلة' : 'Start Journey'}
               </button>
             </div>
@@ -593,7 +728,7 @@ function DashboardView({ onBack, lang, emptyLogoSrc }) {
                   return (
                     <div
                       key={report.name}
-                      className={`report-card-premium museum-artifact ${scatteredReports.has(report.name) ? 'sand-mandala-effect' : ''}`}
+                      className={`ds-card ds-card--glass ds-card--interactive ${scatteredReports.has(report.name) ? 'sand-mandala-effect' : ''}`}
                       onClick={() => !scatteredReports.has(report.name) && viewReport(report.name)}
                       style={{ animationDelay: `${idx * 0.15}s` }}
                     >

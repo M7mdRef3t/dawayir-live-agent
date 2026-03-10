@@ -1,0 +1,36 @@
+- application "Dawayir live session application" [ref=e3]:
+  - link "تخطي إلى المحتوى الرئيسي" [ref=e4] [cursor=pointer]:
+    - /url: "#main-canvas-content"
+  - complementary "لوحة التحكم" [ref=e23]:
+    - heading "تجهيز الجلسة" [active] [level=2] [ref=e24]
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e27]:
+          - img "Dawayir" [ref=e28]
+          - generic [ref=e29]: دواير
+          - generic [ref=e30]: حوّل اللي جواك لصورة أوضح.
+        - generic [ref=e31]:
+          - generic "الأفكار متشابكة" [ref=e32]:
+            - img "عاصفة" [ref=e33]: 🌪️
+            - generic [ref=e34]: عاصفة
+          - button "Switch to English" [ref=e35] [cursor=pointer]: EN
+      - status [ref=e36]: الجلسة شغالة
+      - generic [ref=e38]: بانتظر اتصال Gemini Live...
+    - generic [ref=e39]:
+      - generic [ref=e40]:
+        - generic [ref=e42]:
+          - strong [ref=e43]: مراية لعقلك — في الوقت الحقيقي
+          - paragraph [ref=e44]: اتكلم براحتك عن أي حاجة بتضغط عليك. الدوائر هتتغير أمامك وتعكس رحلتك من الفوضى للوضوح. التقاط الصورة اختياري تماماً.
+        - generic [ref=e46]:
+          - button "اقرأ حالتي" [ref=e47] [cursor=pointer]:
+            - img [ref=e48]
+            - text: اقرأ حالتي
+          - button "يلا نبدأ" [disabled] [ref=e51]:
+            - img [ref=e52]
+            - text: يلا نبدأ
+        - button "تخطي ← ابدأ بالصوت فقط" [disabled] [ref=e57]
+      - button "ايقاف الديمو" [ref=e59] [cursor=pointer]
+  - main "مساحة الدوائر":
+    - heading "تطبيق دواير للجلسات الصوتية" [level=1] [ref=e20]
+    - 'img "خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة" [ref=e21]'
+  - status [ref=e22]: تم الانتقال إلى تجهيز الجلسة

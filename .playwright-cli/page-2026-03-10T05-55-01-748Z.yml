@@ -1,0 +1,146 @@
+- application "Dawayir live session application" [ref=e3]:
+  - link "تخطي إلى المحتوى الرئيسي" [ref=e4] [cursor=pointer]:
+    - /url: "#main-canvas-content"
+  - complementary "لوحة التحكم":
+    - heading "الجلسة الحية" [level=2]
+    - generic:
+      - generic:
+        - generic:
+          - img "Dawayir"
+          - generic: دواير
+          - generic: حوّل اللي جواك لصورة أوضح.
+        - generic:
+          - generic "بداية الوضوح":
+            - img "جزئياً مشمس": ⛅
+            - generic: جزئياً مشمس
+          - button "Switch to English": EN
+      - status: الجلسة شغالة
+      - generic: الديمو اكتمل بنجاح
+    - generic:
+      - generic:
+        - generic:
+          - generic: ١. التشتت
+        - generic:
+          - generic: ٢. التركيز
+        - generic:
+          - generic: ٣. الوضوح
+      - generic: اتكلم براحتك — بسمعك...
+      - generic:
+        - generic:
+          - generic "بصمتك الإدراكية الخاصة":
+            - img "بصمتك الإدراكية الخاصة"
+            - paragraph: بصمتك الإدراكية
+            - button "⬇ احفظها كصورة"
+        - generic:
+          - generic: هادي دلوقتي
+          - img "شكل موجة الصوت"
+        - generic:
+          - generic: 🌀
+          - generic: بتستوعب بهدوء
+        - generic:
+          - generic:
+            - button "إغلاق": ✕
+            - paragraph: ...
+            - paragraph: السكوت جزء من الرحلة، خد وقتك
+        - generic:
+          - generic:
+            - generic: التوازن
+            - generic: 76%
+          - generic:
+            - generic: الضغط
+            - generic: 15%
+          - generic:
+            - generic: الوضوح Δ
+            - generic: +25%
+        - generic "معنى الدوائر الحالية":
+          - generic:
+            - generic: 🔮
+            - generic: دواير اللحظة دي
+          - generic:
+            - generic:
+              - generic: الواقع
+              - paragraph: الحقائق الموضوعية في حياتك بتطلع للسطح — الواقع مش محتاج تفسير.
+          - generic:
+            - generic:
+              - meter "أنت"
+              - generic: أنت
+            - generic:
+              - meter "العلم"
+              - generic: العلم
+            - generic:
+              - meter "الواقع"
+              - generic: الواقع
+      - generic:
+        - generic:
+          - button "شغّل الكاميرا": شغّل الكاميرا
+        - button "تشغيل الديمو الهجين"
+        - button "أنهي الجلسة": أنهي الجلسة
+  - region "الدردشة" [ref=e27]:
+    - button "▼ المحادثة" [expanded] [ref=e28] [cursor=pointer]
+    - log [ref=e30]:
+      - generic [ref=e31]:
+        - generic [ref=e32]: وكيل المستخدم
+        - generic [ref=e33]: ٠٧:٥٣ ص
+        - generic [ref=e34]: ببدأ مهمة وأسيبها عشان
+      - generic [ref=e35]:
+        - generic [ref=e36]: دواير
+        - generic [ref=e37]: ٠٧:٥٣ ص
+        - generic [ref=e38]: التشتت قطع عليك اليوم.
+      - generic [ref=e39]:
+        - generic [ref=e40]: وكيل المستخدم
+        - generic [ref=e41]: ٠٧:٥٣ ص
+        - generic [ref=e42]: كله بيطلب وأنا اللي باجي على نفسي
+      - generic [ref=e43]:
+        - generic [ref=e44]: دواير
+        - generic [ref=e45]: ٠٧:٥٣ ص
+        - generic [ref=e46]: إرضاء الناس استنزف
+      - generic [ref=e47]:
+        - generic [ref=e48]: وكيل المستخدم
+        - generic [ref=e49]: ٠٧:٥٣ ص
+        - generic [ref=e50]: مفيش حدود واضحة، الشغل
+      - generic [ref=e51]:
+        - generic [ref=e52]: دواير
+        - generic [ref=e53]: ٠٧:٥٣ ص
+        - generic [ref=e54]: عدم وجود حدود خلاك
+      - generic [ref=e55]:
+        - generic [ref=e56]: وكيل المستخدم
+        - generic [ref=e57]: ٠٧:٥٣ ص
+        - generic [ref=e58]: هحدد ساعات شغل وبعدها
+      - generic [ref=e59]:
+        - generic [ref=e60]: دواير
+        - generic [ref=e61]: ٠٧:٥٣ ص
+        - generic [ref=e62]: تحديد ساعات بداية
+  - toolbar "أدوات الجلسة" [ref=e23]:
+    - button "إظهار اللوحة" [ref=e24] [cursor=pointer]
+    - button "المحادثة" [ref=e25] [cursor=pointer]
+    - button "أنهي الجلسة" [ref=e26] [cursor=pointer]
+  - status "الإنجازات":
+    - generic [ref=e63]: 3/11
+    - list:
+      - listitem "أول كلمة — بدأت الجلسة" [ref=e64]:
+        - generic [ref=e65]: 🎤
+      - listitem "أول رد — دواير جاوبت" [ref=e66]:
+        - generic [ref=e67]: 🗣️
+      - listitem "الوعي اتحرك — دايرة الوعي اتبدلت" [ref=e68]:
+        - generic [ref=e69]: 🔵
+      - listitem "العلم اتحرك — دايرة العلم اتبدلت" [ref=e70]:
+        - generic [ref=e71]: 🟢
+      - listitem "الحقيقة اتحركت — دايرة الحقيقة اتبدلت" [ref=e72]:
+        - generic [ref=e73]: 🟣
+      - listitem "محادثة عميقة — أكتر من ٥ ردود" [ref=e74]:
+        - generic [ref=e75]: 💬
+      - listitem "تحول في الإحساس — الألوان اتغيرت مع حالتك" [ref=e76]:
+        - generic [ref=e77]: 💡
+      - listitem "مقاطعة ناجحة — وقفت دواير في وقتها" [ref=e78]:
+        - generic [ref=e79]: ✋
+      - listitem "قراءة بالصورة — دواير قرأت حالتك من الصورة" [ref=e80]:
+        - generic [ref=e81]: 👁️
+      - listitem "أمر صوتي — حرّكت الدواير بصوتك" [ref=e82]:
+        - generic [ref=e83]: 🎯
+      - listitem "رجع الاتصال — الجلسة كملت تلقائي" [ref=e84]:
+        - generic [ref=e85]: 🔄
+  - generic: جاري مراقبة سبب أي تقطيع...
+  - main "مساحة الدوائر":
+    - heading "تطبيق دواير للجلسات الصوتية" [level=1] [ref=e20]
+    - 'img "خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة" [ref=e21]'
+  - status [ref=e22]: التوازن 76٪، الضغط 15٪، الوضوح +25٪

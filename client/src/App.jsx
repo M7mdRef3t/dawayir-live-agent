@@ -1,5 +1,109 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DawayirCanvas from './components/DawayirCanvas';
+
+// ══════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════
+// HAPTIC FEEDBACK — Vibrate on circle shifts
+// Uses the Vibration API to provide tactile feedback
+// when circles change significantly.
+// ══════════════════════════════════════════════════
+const triggerHaptic = (pattern = [30]) => {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
+};
+const HAPTIC_PATTERNS = {
+  circleShift: [25],           // short tap for circle update
+  insightMoment: [40, 30, 40], // double tap for insight
+  clarityBloom: [60, 40, 60, 40, 80], // crescendo for clarity
+  otherSpawn: [20, 20, 20],    // triple light tap for person
+};
+
+// ══════════════════════════════════════════════════
+// PROGRESS ACROSS SESSIONS
+// Stores final circle states in localStorage so
+// users can see how they have changed over time.
+// ══════════════════════════════════════════════════
+const saveSessionProgress = (nodes) => {
+  try {
+    const history = JSON.parse(localStorage.getItem('dawayir_progress') || '[]');
+    history.push({
+      date: new Date().toISOString(),
+      circles: nodes.map(n => ({ id: n.id, radius: Math.round(n.radius), label: n.label })),
+    });
+    // Keep last 20 sessions
+    const trimmed = history.slice(-20);
+    localStorage.setItem('dawayir_progress', JSON.stringify(trimmed));
+  } catch {}
+};
+
+const getSessionHistory = () => {
+  try {
+    return JSON.parse(localStorage.getItem('dawayir_progress') || '[]');
+  } catch { return []; }
+};
+// AMBIENT SOUND — Singing Bowl Drone
+// Creates a subtle harmonic drone using Web Audio API
+// that plays when the agent is speaking.
+// ══════════════════════════════════════════════════
+const createAmbientDrone = () => {
+  let ctx = null;
+  let gainNode = null;
+  let oscs = [];
+  let isPlaying = false;
+
+  const start = () => {
+    if (isPlaying) return;
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(0, ctx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.04, ctx.currentTime + 2); // very quiet
+      gainNode.connect(ctx.destination);
+
+      // Singing bowl harmonics: fundamental + overtones
+      const freqs = [174, 261, 396]; // healing frequencies (Solfeggio)
+      freqs.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        // Subtle vibrato
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(0.3 + i * 0.1, ctx.currentTime);
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.setValueAtTime(1.5, ctx.currentTime);
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        lfo.start();
+
+        const oscGain = ctx.createGain();
+        oscGain.gain.setValueAtTime(0.015 / (i + 1), ctx.currentTime); // quieter overtones
+        osc.connect(oscGain);
+        oscGain.connect(gainNode);
+        osc.start();
+        oscs.push({ osc, lfo, oscGain });
+      });
+      isPlaying = true;
+    } catch (e) { console.warn('[Ambient] Failed:', e); }
+  };
+
+  const stop = () => {
+    if (!isPlaying || !ctx) return;
+    try {
+      gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.5);
+      setTimeout(() => {
+        oscs.forEach(o => { try { o.osc.stop(); o.lfo.stop(); } catch {} });
+        oscs = [];
+        try { ctx.close(); } catch {}
+        ctx = null;
+        isPlaying = false;
+      }, 2000);
+    } catch {}
+  };
+
+  return { start, stop, isPlaying: () => isPlaying };
+};
+
 import ConnectProgressCard from './components/ConnectProgressCard';
 import OnboardingModal from './components/OnboardingModal';
 import EndSessionConfirmModal from './components/EndSessionConfirmModal';
@@ -17,6 +121,8 @@ import AchievementBar from './components/AchievementBar';
 import JourneyTimeline from './components/JourneyTimeline';
 import CognitiveDNACard from './components/CognitiveDNACard';
 import CognitiveFingerprint from './components/CognitiveFingerprint';
+import CircleMeaningPanel from './components/CircleMeaningPanel';
+import CircleFirstShiftTooltip from './components/CircleFirstShiftTooltip';
 import { playTransitionSound, playInsightSound, playSessionCompleteSound } from './features/session/soundDesign';
 import logoCognitiveTrinity from './assets/dawayir-logo-cognitive-trinity.svg';
 
@@ -43,6 +149,7 @@ import {
 import {
   getInlineData,
   getParts,
+  getServerContent,
   getToolCall,
   isSetupCompleteMessage,
   getServerErrorMessage,
@@ -51,6 +158,14 @@ import {
   getTurnDataAudioBlobs,
 } from './features/session/protocol';
 import { useSessionHotkeys } from './hooks/useSessionHotkeys';
+import { applyAppSettingsToDocument, readStoredAppSettings, persistAppSettings } from './utils/appSettings';
+import {
+  getCircleAnnouncement,
+  getLocalizedErrorMessage,
+  getMetricsAnnouncement,
+  getTranscriptAnnouncement,
+  getViewAnnouncement,
+} from './utils/accessibility';
 
 // moved to features/session/constants
 // Client-side VAD removed -- Gemini's built-in VAD handles turn detection.
@@ -58,56 +173,90 @@ import { useSessionHotkeys } from './hooks/useSessionHotkeys';
 const AUTO_DEMO_SCRIPT = {
   ar: [
     {
-      spoken: 'انا متوتر جدا ومش قادر اركز دلوقتي.',
-      prompt: 'انا متوتر جدا ومش قادر اركز دلوقتي. لو مناسب عدل الدوائر بهدوء.',
-      maxWaitMs: 15000,
+      spoken: 'أنا داخل الجلسة ومشدود من كتر الطلبات اللي فوق دماغي.',
+      audioPath: '/demo-audio/ar/demo_0.mp3',
+      maxWaitMs: 11000,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '+2%', pitch: '+0Hz', volume: '+12%' },
     },
     {
-      spoken: 'خلينا نركز على الوعي.',
-      prompt: 'ركز على دائرة الوعي: صغرها قليلا واجعل اللون اهدى.',
+      spoken: 'أكتر حاجة مقلقاني إن البيت والشغل داخلين في بعض طول الوقت.',
+      audioPath: '/demo-audio/ar/demo_1.mp3',
+      maxWaitMs: 10500,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '+2%', pitch: '+0Hz', volume: '+12%' },
     },
     {
-      spoken: 'عايز معرفة اوضح واكثر ثباتا.',
-      prompt: 'كبر دائرة العلم قليلا وخليها اوضح.',
+      spoken: 'أنا كل شوية أسيب اللي في إيدي عشان ألحق طلب جديد، فبتوه أكتر.',
+      audioPath: '/demo-audio/ar/demo_2.mp3',
+      maxWaitMs: 10200,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '+1%', pitch: '+0Hz', volume: '+11%' },
     },
     {
-      spoken: 'دلوقتي عايز توازن اقوى في الحقيقة.',
-      prompt: 'حول التركيز للحقيقة وعدل الالوان لتحقيق توازن افضل.',
+      spoken: 'ولو أنا صريح، اللي تعبني إني حاسس إني لازم أرضي الكل.',
+      audioPath: '/demo-audio/ar/demo_3.mp3',
+      maxWaitMs: 9800,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '+1%', pitch: '+0Hz', volume: '+11%' },
     },
     {
-      spoken: 'ممكن تلخيص سريع للحالة الحالية؟',
-      prompt: 'لو سمحت لخص الحالة الحالية في جملة قصيرة وواضحة.',
+      spoken: 'يعني أصل الضغط مش الطلبات بس، أصل الضغط إني مش حاطط حدود واضحة.',
+      audioPath: '/demo-audio/ar/demo_4.mp3',
+      maxWaitMs: 9800,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '+0%', pitch: '+0Hz', volume: '+10%' },
     },
     {
-      spoken: 'قبل ما ننهي، احفظ الجلسة.',
-      prompt: 'قبل النهاية احفظ الخريطة الذهنية وانشئ تقرير جلسة مختصر.',
+      spoken: 'الخلاصة واضحة: هقول إمتى أقدر أرد، ومش هحاول أرضي الكل دلوقتي.',
+      audioPath: '/demo-audio/ar/demo_5.mp3',
+      maxWaitMs: 9600,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '-1%', pitch: '-1Hz', volume: '+10%' },
     },
   ],
   en: [
     {
-      spoken: 'I feel overwhelmed and cannot focus right now.',
-      prompt: 'I feel overwhelmed and cannot focus right now. If appropriate, adjust circles gently.',
-      maxWaitMs: 15000,
+      spoken: 'I am coming in tense because too many demands are stacked on me.',
+      audioPath: '/demo-audio/en/demo_0.mp3',
+      maxWaitMs: 11000,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '+1%', pitch: '+0Hz', volume: '+8%' },
     },
     {
-      spoken: 'Please focus on Awareness first.',
-      prompt: 'Focus on Awareness: shrink it slightly and make the color calmer.',
+      spoken: 'What is pressing on me most is that home and work keep bleeding into each other.',
+      audioPath: '/demo-audio/en/demo_1.mp3',
+      maxWaitMs: 10500,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '+1%', pitch: '+0Hz', volume: '+8%' },
     },
     {
-      spoken: 'I need clearer knowledge and stronger structure.',
-      prompt: 'Enlarge Knowledge a bit and make it more vivid.',
+      spoken: 'I keep dropping what is in my hand every time a new request shows up.',
+      audioPath: '/demo-audio/en/demo_2.mp3',
+      maxWaitMs: 10200,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '+0%', pitch: '+0Hz', volume: '+8%' },
     },
     {
-      spoken: 'Now shift attention to Truth for better balance.',
-      prompt: 'Shift focus to Truth and rebalance the colors for better harmony.',
+      spoken: 'If I am honest, what drains me is feeling like I have to satisfy everyone.',
+      audioPath: '/demo-audio/en/demo_3.mp3',
+      maxWaitMs: 9800,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '+0%', pitch: '+0Hz', volume: '+7%' },
     },
     {
-      spoken: 'Can you summarize my state in one short sentence?',
-      prompt: 'Please summarize the current state in one short clear sentence.',
+      spoken: 'So the real pressure is not the requests alone, it is having no clear boundaries.',
+      audioPath: '/demo-audio/en/demo_4.mp3',
+      maxWaitMs: 9800,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '+0%', pitch: '+0Hz', volume: '+7%' },
     },
     {
-      spoken: 'Before ending, save this session.',
-      prompt: 'Before ending, save the mental map and generate a short session report.',
+      spoken: 'The summary is clear now: I will set a response window and stop pleasing everyone at once.',
+      audioPath: '/demo-audio/en/demo_5.mp3',
+      maxWaitMs: 9600,
+      speaker: 'synthetic_user_male',
+      tts: { rate: '-1%', pitch: '-1Hz', volume: '+7%' },
     },
   ],
 };
@@ -118,9 +267,7 @@ const AUTO_DEMO_COPY = {
     stop: 'ايقاف الديمو',
     booting: 'جاري تجهيز الديمو الهجين...',
     waitingSession: 'بانتظر اتصال Gemini Live...',
-    manualCue: 'اتكلم بصوتك دلوقتي: انا متوتر جدا الان.',
-    manualDetected: 'تمام، تم التقاط صوتك. التحويل لوكيل المستخدم.',
-    manualFallback: 'مافيش صوت واضح. هنكمل تلقائيا بوكيل المستخدم.',
+    opening: 'دواير بيفتتح الجلسة...',
     running: 'وكيل المستخدم شغال',
     completed: 'الديمو اكتمل بنجاح',
     canceled: 'تم ايقاف الديمو',
@@ -131,9 +278,7 @@ const AUTO_DEMO_COPY = {
     stop: 'Stop Demo',
     booting: 'Preparing hybrid demo...',
     waitingSession: 'Waiting for Gemini Live connection...',
-    manualCue: 'Speak now: "I feel overwhelmed right now."',
-    manualDetected: 'Voice captured. Switching to user agent.',
-    manualFallback: 'No clear voice detected. Continuing with user agent.',
+    opening: 'Dawayir is opening the session...',
     running: 'User agent running',
     completed: 'Hybrid demo completed',
     canceled: 'Demo stopped',
@@ -156,8 +301,29 @@ const ONE_CLICK_DEMO_COPY = {
 
 function App() {
   const [isCinematicReady, setIsCinematicReady] = useState(false);
-  const [lang, setLang] = useState('ar');
+  const [appSettings, setAppSettings] = useState(() => readStoredAppSettings());
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(
+    () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+  );
+  const lang = appSettings.language;
   const t = STRINGS[lang];
+  const updateAppSettings = useCallback((nextSettingsOrUpdater) => {
+    setAppSettings((current) => {
+      const nextSettings = typeof nextSettingsOrUpdater === 'function'
+        ? nextSettingsOrUpdater(current)
+        : nextSettingsOrUpdater;
+      return persistAppSettings(nextSettings);
+    });
+  }, []);
+  const setLang = useCallback((nextLanguageOrUpdater) => {
+    updateAppSettings((current) => ({
+      ...current,
+      language: typeof nextLanguageOrUpdater === 'function'
+        ? nextLanguageOrUpdater(current.language)
+        : nextLanguageOrUpdater,
+    }));
+  }, [updateAppSettings]);
+  const effectiveReducedMotion = appSettings.reducedMotion || prefersReducedMotion;
   const autoDemoCopy = useMemo(() => AUTO_DEMO_COPY[lang] ?? AUTO_DEMO_COPY.en, [lang]);
   const oneClickDemoCopy = useMemo(() => ONE_CLICK_DEMO_COPY[lang] ?? ONE_CLICK_DEMO_COPY.en, [lang]);
   const [status, setStatus] = useState('Disconnected');
@@ -178,11 +344,16 @@ function App() {
   const [transcript, setTranscript] = useState([]); // Live transcript entries
   const [isTranscriptVisible, setIsTranscriptVisible] = useState(true);
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
+  const ambientDroneRef = useRef(null);
+  if (!ambientDroneRef.current) ambientDroneRef.current = createAmbientDrone();
   const [isAutoDemoRunning, setIsAutoDemoRunning] = useState(false);
   const [isWelcomeDemoLaunching, setIsWelcomeDemoLaunching] = useState(false);
   const [autoDemoStatus, setAutoDemoStatus] = useState('');
   const [whyNowLine, setWhyNowLine] = useState(null);
-  const [showOnboarding, setShowOnboarding] = useState(() => window.localStorage.getItem('dawayir-onboarding-seen') !== 'true');
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    const storedSettings = readStoredAppSettings();
+    return !storedSettings.rememberOnboarding || window.localStorage.getItem('dawayir-onboarding-seen') !== 'true';
+  });
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -204,6 +375,8 @@ function App() {
   const unlockAchievement = useCallback((key) => {
     setAchievements((prev) => prev[key] ? prev : { ...prev, [key]: true });
   }, []);
+  const [showCircleIntro, setShowCircleIntro] = useState(false);
+  const circleIntroShownRef = useRef(false);
   const [connectStage, setConnectStage] = useState(0);
   const [isTransitioningToSetup, setIsTransitioningToSetup] = useState(false);
   const [isSetupIntro, setIsSetupIntro] = useState(false);
@@ -293,31 +466,33 @@ function App() {
 
   const TRANSITION_MESSAGES = {
     ar: {
-      '1→2': '🎯 عقلك انتقل من المشاعر للتفكير — هذا هو الوعي الإدراكي!',
-      '1→3': '✨ قفزة نادرة! من المشاعر مباشرةً للوضوح',
-      '2→1': '💭 رجعت للإحساس بعمق — الوعي العاطفي نشط',
-      '2→3': '🌟 عبرت من التفكير للحقيقة — لحظة وضوح!',
-      '3→1': '🔄 من الوضوح لاكتشاف مشاعر جديدة',
-      '3→2': '🔍 تعمق في تحليل قرارك — دماغك يعمل!',
+      '1→2': '🔬 وعيك وصل للعلم — اللي حاسس بيه بيتأكد بالمعرفة',
+      '1→3': '🌍 قفزة من وعيك للواقع — لحظة صدق نادرة',
+      '2→1': '💭 العلم لمس وعيك — اللي تعلمته بيأثر فعلاً',
+      '2→3': '🌟 من المعرفة للواقع — دماغك بيرسم الصورة الحقيقية!',
+      '3→1': '🔄 الواقع بيلعب في وعيك — حاسس بأثره',
+      '3→2': '🔍 الواقع بيسأل: وإيه اللي يقوله العلم؟',
     },
     en: {
-      '1→2': '🎯 Mind shifted from feelings to thinking — cognitive awareness!',
-      '1→3': '✨ Rare leap! From emotion directly to clarity',
-      '2→1': '💭 Returned to deep feeling — emotional awareness active',
-      '2→3': '🌟 Crossed from thinking to truth — moment of clarity!',
-      '3→1': '🔄 From clarity to discovering new feelings',
-      '3→2': '🔍 Deepening analysis of your decision — brain working!',
+      '1→2': '🔬 Your awareness met knowledge — what you feel is confirmed by what is known',
+      '1→3': '🌍 Rare leap — from your inner world directly to reality',
+      '2→1': '💭 Knowledge touched your awareness — what you learned is landing inside you',
+      '2→3': '🌟 From knowledge to reality — your mind is mapping what is actually true!',
+      '3→1': '🔄 Reality is moving through your awareness — you feel its impact',
+      '3→2': '🔍 Reality asks: what does knowledge say about this?',
     },
   };
 
+
   const getWhyNowCircleName = useCallback((nodeId) => {
     const names = {
-      1: lang === 'ar' ? 'الوعي' : 'Awareness',
-      2: lang === 'ar' ? 'العلم' : 'Knowledge',
-      3: lang === 'ar' ? 'الحقيقة' : 'Truth',
+      1: lang === 'ar' ? 'وعيك' : 'your Awareness',
+      2: lang === 'ar' ? 'دايرة العلم' : 'Knowledge',
+      3: lang === 'ar' ? 'دايرة الواقع' : 'Reality',
     };
     return names[Number(nodeId)] ?? names[1];
   }, [lang]);
+
 
   const pushWhyNowLine = useCallback((payload) => {
     if (!payload?.text) return;
@@ -326,95 +501,65 @@ function App() {
     whyNowTimerRef.current = window.setTimeout(() => setWhyNowLine(null), payload.durationMs ?? 4200);
   }, []);
 
+
   const buildWhyNowPayload = useCallback(({ callId, callName, args, nodeId }) => {
     const circleName = getWhyNowCircleName(nodeId);
+    const circleId = Number(nodeId);
     const source = String(args?.source || '');
     const policy = String(args?.policy || '');
     const metric = String(args?.metric || '');
-    const reason = typeof args?.reason === 'string' ? args.reason.trim() : '';
     const currentOverload = Number(cognitiveMetrics.overloadIndex) || 0;
     const currentEquilibrium = Number(cognitiveMetrics.equilibriumScore) || 0;
     const currentClarity = Number(cognitiveMetrics.clarityDelta) || 0;
     const normalizedCallId = String(callId || '');
 
+    // User-commanded shift
     if (normalizedCallId.startsWith('server_cmd_') || normalizedCallId.startsWith('text_cmd_') || normalizedCallId.startsWith('client_cmd_')) {
       return {
         tone: 'direct',
         text: lang === 'ar'
-          ? `لماذا الآن: ${circleName} تغيّرت لأنك طلبت ذلك مباشرة.`
-          : `Why now: ${circleName} changed because you asked for it directly.`,
+          ? `انت اللي قررت تحول ${circleName} - ده وعي بنفسك.`
+          : `You chose to shift ${circleName} - that's self-awareness in action.`,
       };
     }
 
+    // Bio-signal / stress detection
     if (normalizedCallId.startsWith('sentiment_') || source === 'bio_signal') {
-      return {
-        tone: 'bio',
-        text: lang === 'ar'
-          ? `لماذا الآن: ${circleName} تحرّكت لأن النظام التقط توترًا أو إشارة حسية في اللحظة الحالية.`
-          : `Why now: ${circleName} moved because the system detected a live bio-signal or stress cue.`,
-      };
+      if (circleId === 1) {
+        return { tone: 'bio', text: lang === 'ar' ? 'جسمك بيقول حاجة - مشاعرك اكبر من كلامك دلوقتي.' : "Your body is speaking - your feelings are louder than your words right now." };
+      }
+      return { tone: 'bio', text: lang === 'ar' ? `${circleName} تحركت - جزء منك بيتفاعل قبل ما تفكر.` : `${circleName} moved - part of you is responding before thinking.` };
     }
 
+    // Vision / camera reading
     if (source === 'vision') {
-      return {
-        tone: 'focus',
-        text: lang === 'ar'
-          ? `لماذا الآن: ${circleName} اتعدّلت بناءً على قراءة بصرية من الكاميرا.`
-          : `Why now: ${circleName} changed from a live visual reading.`,
-      };
+      return { tone: 'focus', text: lang === 'ar' ? `وشك قال حاجة - ${circleName} اتعدلت على اساس قرايتك البصرية.` : `Your face said something - ${circleName} shifted from what the camera saw.` };
     }
 
+    // Highlight / spotlight
     if (callName === 'highlight_node') {
-      return {
-        tone: 'focus',
-        text: lang === 'ar'
-          ? `لماذا الآن: النظام يسلّط الضوء على ${circleName} لأنه محور الدور الحالي.`
-          : `Why now: the system is spotlighting ${circleName} as the focus of this turn.`,
-      };
+      const msgs = { ar: { 1: 'دلوقتي مهم تسمع لجسمك ومشاعرك.', 2: 'وقت التفكير والتحليل - عقلك فاعل.', 3: 'قيمك بتتكلم - استمع لنفسك الحقيقية.' }, en: { 1: 'Now is the time to listen to your feelings.', 2: 'Thinking time - your mind is active.', 3: 'Your values are speaking - listen to your true self.' } };
+      return { tone: 'focus', text: (msgs[lang] || msgs.ar)[circleId] || (lang === 'ar' ? `${circleName} في البؤرة دلوقتي.` : `${circleName} is in focus now.`) };
     }
 
+    // Overload / grounding
     if (policy === 'PRIORITIZE_GROUNDING' || metric === 'overload' || currentOverload > 0.72) {
-      return {
-        tone: 'ground',
-        text: lang === 'ar'
-          ? `لماذا الآن: الضغط المعرفي مرتفع، فالنظام يعيد تهدئة ${circleName}.`
-          : `Why now: cognitive overload is high, so the system is grounding ${circleName}.`,
-      };
+      return { tone: 'ground', text: lang === 'ar' ? 'في ضغط جواك - مشاعرك محتاجة مساحة دلوقتي.' : "There's pressure inside - your feelings need space right now." };
     }
 
+    // Low equilibrium
     if (policy === 'PRIORITIZE_STRUCTURE' || metric === 'equilibrium' || currentEquilibrium < 0.42) {
-      return {
-        tone: 'balance',
-        text: lang === 'ar'
-          ? `لماذا الآن: التوازن منخفض، فالنظام يعيد بناء ${circleName} بشكل أكثر اتساقًا.`
-          : `Why now: equilibrium dropped, so the system is restructuring ${circleName}.`,
-      };
+      return { tone: 'balance', text: lang === 'ar' ? 'في اختلال بين عقلك ومشاعرك - ده طبيعي، بنعدل.' : "There's tension between your mind and feelings - that's normal, recalibrating." };
     }
 
-    if (metric === 'clarity' || (Number(nodeId) === 3 && currentClarity > 0.08)) {
-      return {
-        tone: 'clarity',
-        text: lang === 'ar'
-          ? `لماذا الآن: الوضوح يرتفع، لذلك يتم تعزيز ${circleName}.`
-          : `Why now: clarity is rising, so ${circleName} is being reinforced.`,
-      };
+    // Clarity rising (especially Truth circle)
+    if (metric === 'clarity' || (circleId === 3 && currentClarity > 0.08)) {
+      return { tone: 'clarity', text: lang === 'ar' ? 'وضوح بيجي - قيمك الجوهرية بتظهر.' : 'Clarity is arriving - your core values are surfacing.' };
     }
 
-    if (reason) {
-      return {
-        tone: 'neutral',
-        text: lang === 'ar'
-          ? `لماذا الآن: ${circleName} تتكيّف مع هذا الدور من الحوار.`
-          : `Why now: ${reason}`,
-      };
-    }
-
-    return {
-      tone: 'neutral',
-      text: lang === 'ar'
-        ? `لماذا الآن: ${circleName} تتكيّف مع آخر دور في الحوار.`
-        : `Why now: ${circleName} is adapting to the latest turn.`,
-    };
+    // Circle-specific defaults
+    const defaults = { ar: { 1: 'مشاعرك بتتحرك - انتبه لما بيحصل جواك.', 2: 'عقلك بيتفاعل - التحليل شغال.', 3: 'قيمك بتاثر على اللحظة.' }, en: { 1: "Your feelings are shifting - notice what's happening inside.", 2: 'Your mind is responding - thinking is active.', 3: 'Your values are influencing this moment.' } };
+    return { tone: 'neutral', text: (defaults[lang] || defaults.ar)[circleId] || (lang === 'ar' ? `${circleName} بتتجاوب مع اللحظة.` : `${circleName} is responding to this moment.`) };
   }, [cognitiveMetrics.clarityDelta, cognitiveMetrics.equilibriumScore, cognitiveMetrics.overloadIndex, getWhyNowCircleName, lang]);
 
   const snapshotReplayNodes = useCallback(() => {
@@ -513,10 +658,28 @@ function App() {
     setMeasuredLatencyMs(elapsed);
   }, []);
 
+  useEffect(() => {
+    applyAppSettingsToDocument(appSettings);
+  }, [appSettings]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handleChange = (event) => setPrefersReducedMotion(event.matches);
+
+    setPrefersReducedMotion(mediaQuery.matches);
+    mediaQuery.addEventListener?.('change', handleChange);
+    mediaQuery.addListener?.(handleChange);
+
+    return () => {
+      mediaQuery.removeEventListener?.('change', handleChange);
+      mediaQuery.removeListener?.(handleChange);
+    };
+  }, []);
+
   // Update canvas node labels when language changes
   useEffect(() => {
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-    document.documentElement.lang = lang;
+    document.documentElement.lang = lang === 'ar' ? 'ar' : 'en';
   }, [lang]);
 
   useEffect(() => {
@@ -528,11 +691,6 @@ function App() {
     }
   }, [lang]);
 
-  useEffect(() => {
-    document.documentElement.lang = lang === 'ar' ? 'ar' : 'en';
-    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-  }, [lang]);
-
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [journeyStage, setJourneyStage] = useState('Overwhelmed');
@@ -540,19 +698,17 @@ function App() {
   const connectSteps = CONNECT_PROGRESS[lang];
 
   useEffect(() => {
-    if (!isConnected && !isStarting && appView === 'live') {
-      // Only show "complete" after a real started session.
-      setAppView(hasSessionStarted ? 'complete' : 'setup');
-    }
-  }, [isConnected, isStarting, appView, hasSessionStarted]);
-
-  useEffect(() => {
     if (isTranscriptVisible && transcriptEndRef.current) {
       transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [transcript, isTranscriptVisible]);
 
-  useEffect(() => () => window.clearTimeout(whyNowTimerRef.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(metricsAnnounceTimerRef.current);
+    window.clearTimeout(srAnnounceTimerRef.current);
+    window.clearTimeout(whyNowTimerRef.current);
+    window.cancelAnimationFrame(viewFocusFrameRef.current);
+  }, []);
 
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
@@ -570,11 +726,23 @@ function App() {
   const reconnectTimeoutRef = useRef(null);
   const micStartTimeoutRef = useRef(null);
   const manualCloseRef = useRef(false);
+  const viewFocusFrameRef = useRef(null);
+  const srAnnouncerRef = useRef(null);
+  const srAnnounceTimerRef = useRef(null);
+  const metricsAnnounceTimerRef = useRef(null);
+  const previousTranscriptCountRef = useRef(0);
+  const previousMetricsRef = useRef({
+    equilibriumScore: 0.6,
+    overloadIndex: 0,
+    clarityDelta: 0,
+  });
   const autoDemoRunIdRef = useRef(0);
   const autoDemoTimerRef = useRef(null);
   const autoDemoPendingStartRef = useRef(false);
+  const isAutoDemoRunningRef = useRef(isAutoDemoRunning);
   const oneClickDemoPendingRef = useRef(false);
   const autoDemoSpeechUtteranceRef = useRef(null);
+  const demoAudioRef = useRef(null);
   const autoDemoShouldRestoreMicRef = useRef(false);
   const appViewRef = useRef(appView);
   const isConnectedRef = useRef(isConnected);
@@ -593,8 +761,10 @@ function App() {
   const ttsDecisionTimeoutRef = useRef(null);
   const currentTurnModeRef = useRef('none'); // none | model | tts
   const bufferedTurnTextRef = useRef('');
+  const bufferedUserAgentTurnTextRef = useRef('');
   const bufferedUserTextRef = useRef('');
   const lastAgentContentAtRef = useRef(0);
+  const lastUserAgentContentAtRef = useRef(0);
   const vadStateRef = useRef({
     speaking: false,
     speechMs: 0,
@@ -608,6 +778,50 @@ function App() {
   });
   const bargeInStrongFramesRef = useRef(0);
   const lastBargeInAtRef = useRef(0);
+  const formatAppError = useCallback((key, detail = '') => {
+    return getLocalizedErrorMessage(t.errors, key, detail) || detail || t.statusError;
+  }, [t]);
+  const announce = useCallback((message) => {
+    if (!message || !srAnnouncerRef.current) return;
+
+    window.clearTimeout(srAnnounceTimerRef.current);
+    srAnnouncerRef.current.textContent = '';
+    srAnnounceTimerRef.current = window.setTimeout(() => {
+      if (srAnnouncerRef.current) {
+        srAnnouncerRef.current.textContent = message;
+      }
+    }, 30);
+  }, []);
+  const focusViewHeading = useCallback((viewName) => {
+    window.cancelAnimationFrame(viewFocusFrameRef.current);
+    viewFocusFrameRef.current = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const heading = document.querySelector(`[data-view-heading="${viewName}"]`);
+        if (heading instanceof HTMLElement) {
+          heading.focus();
+        }
+      });
+    });
+  }, []);
+  const goToView = useCallback((nextView) => {
+    const headingLabel = t.viewHeadings?.[nextView];
+
+    if (appViewRef.current !== nextView) {
+      setAppView(nextView);
+    }
+
+    focusViewHeading(nextView);
+
+    if (headingLabel) {
+      announce(getViewAnnouncement(lang, headingLabel));
+    }
+  }, [announce, focusViewHeading, lang, t.viewHeadings]);
+
+  useEffect(() => {
+    if (!isConnected && !isStarting && appView === 'live') {
+      goToView(hasSessionStarted ? 'complete' : 'setup');
+    }
+  }, [appView, goToView, hasSessionStarted, isConnected, isStarting]);
 
   useEffect(() => {
     isMicActiveRef.current = isMicActive;
@@ -622,15 +836,122 @@ function App() {
   }, [isConnected]);
 
   useEffect(() => {
+    isAutoDemoRunningRef.current = isAutoDemoRunning;
+  }, [isAutoDemoRunning]);
+
+  useEffect(() => {
     transcriptRef.current = transcript;
   }, [transcript]);
+
+  useEffect(() => {
+    const previousCount = previousTranscriptCountRef.current;
+    previousTranscriptCountRef.current = transcript.length;
+
+    if (appView !== 'live' || isTranscriptVisible || transcript.length <= previousCount) {
+      return;
+    }
+
+    const newEntries = transcript.slice(previousCount);
+    let latestEntry = transcript[transcript.length - 1];
+    for (let index = newEntries.length - 1; index >= 0; index -= 1) {
+      if (String(newEntries[index]?.text || '').trim()) {
+        latestEntry = newEntries[index];
+        break;
+      }
+    }
+
+    announce(getTranscriptAnnouncement(lang, latestEntry));
+  }, [announce, appView, isTranscriptVisible, lang, transcript]);
+
+  useEffect(() => {
+    if (appView !== 'live' || !isConnected) {
+      previousMetricsRef.current = cognitiveMetrics;
+      window.clearTimeout(metricsAnnounceTimerRef.current);
+      return undefined;
+    }
+
+    const previousMetrics = previousMetricsRef.current;
+    const nextMetrics = cognitiveMetrics;
+    const changed = Math.abs((nextMetrics.equilibriumScore ?? 0) - (previousMetrics.equilibriumScore ?? 0)) >= 0.03
+      || Math.abs((nextMetrics.overloadIndex ?? 0) - (previousMetrics.overloadIndex ?? 0)) >= 0.03
+      || Math.abs((nextMetrics.clarityDelta ?? 0) - (previousMetrics.clarityDelta ?? 0)) >= 0.03;
+
+    previousMetricsRef.current = nextMetrics;
+
+    if (!changed) {
+      return undefined;
+    }
+
+    window.clearTimeout(metricsAnnounceTimerRef.current);
+    metricsAnnounceTimerRef.current = window.setTimeout(() => {
+      announce(getMetricsAnnouncement(lang, nextMetrics));
+    }, 900);
+
+    return () => window.clearTimeout(metricsAnnounceTimerRef.current);
+  }, [announce, appView, cognitiveMetrics, isConnected, lang]);
+
+  const getOutputSpeaker = useCallback((speaker) => (
+    speaker === 'user_agent' ? 'user_agent' : 'dawayir'
+  ), []);
+
+  const getTranscriptSpeakerLabel = useCallback((role) => {
+    if (role === 'agent') {
+      return lang === 'ar' ? 'دواير' : 'Dawayir';
+    }
+    if (role === 'user_agent') {
+      return lang === 'ar' ? 'وكيل المستخدم' : 'User Agent';
+    }
+    if (role === 'user') {
+      return lang === 'ar' ? 'أنت' : 'You';
+    }
+    return '';
+  }, [lang]);
+
+  const upsertTranscriptBubble = useCallback((role, text, finished, options = {}) => {
+    const cleanedText = String(text ?? '').trim();
+    if (!cleanedText) return;
+    const {
+      cogColor,
+      limit = 8,
+    } = options;
+    const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    setTranscript((prev) => {
+      const next = [...prev];
+      let found = false;
+      for (let i = next.length - 1; i >= 0; i -= 1) {
+        if (next[i].role === role && !next[i].finished) {
+          next[i] = {
+            ...next[i],
+            text: cleanedText,
+            finished: !!finished,
+            cogColor: cogColor ?? next[i].cogColor,
+          };
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        next.push({
+          role,
+          text: cleanedText,
+          time: timeStr,
+          finished: !!finished,
+          cogColor,
+        });
+      }
+      return next.slice(-limit);
+    });
+  }, [lang]);
 
   const startCamera = useCallback(async () => {
     console.log("[Camera] Starting camera...");
     try {
       // Check if getUserMedia is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("getUserMedia not supported in this browser");
+        throw new Error(formatAppError('cameraBrowserUnsupported'));
       }
 
       console.log("[Camera] Requesting camera permission...");
@@ -661,31 +982,33 @@ function App() {
           console.log("[Camera] Video play() succeeded");
         } catch (playErr) {
           console.warn("[Camera] Autoplay prevented", playErr);
-          setErrorMessage("Click anywhere to start camera preview");
+          setErrorMessage(formatAppError('cameraAutoplay'));
         }
 
         setIsCameraActive(true);
         console.log("[Camera] [OK] Camera activated successfully");
       } else {
         console.error("[Camera] videoRef.current is null!");
-        setErrorMessage("Video element not ready. Please try again.");
+        setErrorMessage(formatAppError('videoElementNotReady'));
       }
     } catch (err) {
       console.error("[Camera] [ERROR] Error:", err);
       console.error("[Camera] Error name:", err.name);
       console.error("[Camera] Error message:", err.message);
 
-      if (err.name === 'NotAllowedError') {
-        setErrorMessage("Camera permission denied. Please allow camera access and try again.");
+      if (err.message === formatAppError('cameraBrowserUnsupported')) {
+        setErrorMessage(err.message);
+      } else if (err.name === 'NotAllowedError') {
+        setErrorMessage(formatAppError('cameraPermissionDenied'));
       } else if (err.name === 'NotFoundError') {
-        setErrorMessage("No camera found. Please connect a camera and try again.");
+        setErrorMessage(formatAppError('cameraNotFound'));
       } else if (err.name === 'NotReadableError') {
-        setErrorMessage("Camera is in use by another application.");
+        setErrorMessage(formatAppError('cameraInUse'));
       } else {
-        setErrorMessage(`Camera error: ${err.message}`);
+        setErrorMessage(formatAppError('cameraGeneric', err.message));
       }
     }
-  }, []);
+  }, [formatAppError]);
 
   const stopCamera = useCallback(() => {
     if (videoRef.current && videoRef.current.srcObject) {
@@ -714,7 +1037,7 @@ function App() {
 
     if (width === 0 || height === 0) {
       console.error("[Camera] Video dimensions are 0. Camera may not be ready yet.");
-      setErrorMessage("Camera not ready. Please wait a moment and try again.");
+      setErrorMessage(formatAppError('cameraNotReady'));
       return null;
     }
 
@@ -741,7 +1064,7 @@ function App() {
     stopCamera();
     console.log("[Camera] Snapshot captured successfully");
     return dataUrl.split(',')[1]; // Base64
-  }, [stopCamera]);
+  }, [formatAppError, stopCamera]);
 
   const speakerContextRef = useRef(null);
   const activeSourcesRef = useRef(new Set());
@@ -780,23 +1103,31 @@ function App() {
     return 'disconnected';
   }, [status]);
 
+  const markOnboardingPreference = useCallback(() => {
+    if (appSettings.rememberOnboarding) {
+      window.localStorage.setItem('dawayir-onboarding-seen', 'true');
+    } else {
+      window.localStorage.removeItem('dawayir-onboarding-seen');
+    }
+  }, [appSettings.rememberOnboarding]);
+
   const dismissOnboarding = useCallback(() => {
-    window.localStorage.setItem('dawayir-onboarding-seen', 'true');
+    markOnboardingPreference();
     setShowOnboarding(false);
     setOnboardingStep(0);
-  }, []);
+  }, [markOnboardingPreference]);
 
   const advanceOnboarding = useCallback(() => {
     setOnboardingStep((current) => {
       if (current >= onboardingSteps.length - 1) {
-        window.localStorage.setItem('dawayir-onboarding-seen', 'true');
+        markOnboardingPreference();
         setShowOnboarding(false);
         return current;
       }
 
       return current + 1;
     });
-  }, [onboardingSteps.length]);
+  }, [markOnboardingPreference, onboardingSteps.length]);
 
   const getAudioContextCtor = () => window.AudioContext || window.webkitAudioContext;
 
@@ -841,9 +1172,13 @@ function App() {
     clearPendingTts();
     currentTurnModeRef.current = 'none';
     bufferedTurnTextRef.current = '';
+    bufferedUserAgentTurnTextRef.current = '';
     lastAgentContentAtRef.current = 0;
+    lastUserAgentContentAtRef.current = 0;
     setIsAgentSpeaking(false);
     isAgentSpeakingRef.current = false;
+    canvasRef.current?.setAgentSpeaking?.(false);
+    ambientDroneRef.current?.stop();
 
     // We intentionally keep the transcript up to date rather than clearing it on turn end,
     // so that the conversation history stays visible until manually cleared.
@@ -889,6 +1224,7 @@ function App() {
       if (currentTurnModeRef.current === 'tts') {
         setIsAgentSpeaking(false);
         isAgentSpeakingRef.current = false;
+        canvasRef.current?.setAgentSpeaking?.(false);
         currentTurnModeRef.current = 'none';
         bufferedTurnTextRef.current = '';
       }
@@ -935,6 +1271,7 @@ function App() {
     nextPlaybackTimeRef.current = 0;
     setIsAgentSpeaking(false);
     isAgentSpeakingRef.current = false;
+    canvasRef.current?.setAgentSpeaking?.(false);
   }, [stopTextToSpeechFallback]);
 
   const ensureSpeakerContext = useCallback(async () => {
@@ -947,7 +1284,7 @@ function App() {
 
     const AudioContextCtor = getAudioContextCtor();
     if (!AudioContextCtor) {
-      throw new Error('Web Audio API is not supported in this browser.');
+      throw new Error(formatAppError('webAudioUnsupported'));
     }
 
     const ctx = new AudioContextCtor({ sampleRate: OUTPUT_SAMPLE_RATE });
@@ -958,7 +1295,7 @@ function App() {
     speakerContextRef.current = ctx;
     nextPlaybackTimeRef.current = ctx.currentTime;
     return ctx;
-  }, []);
+  }, [formatAppError]);
 
   // AudioWorklet-based streaming PCM player.
   // The worklet runs on the audio thread -- completely immune to main thread jank.
@@ -1218,12 +1555,12 @@ function App() {
     };
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('Microphone capture is not supported in this browser.');
+      throw new Error(formatAppError('microphoneUnsupported'));
     }
 
     const AudioContextCtor = getAudioContextCtor();
     if (!AudioContextCtor) {
-      throw new Error('Web Audio API is not supported in this browser.');
+      throw new Error(formatAppError('webAudioUnsupported'));
     }
 
     // Log available audio input devices to help diagnose mic issues
@@ -1307,7 +1644,7 @@ function App() {
     micSilentGainRef.current = silentGain;
     setIsMicActive(true);
     console.log('[Mic] Microphone started successfully', { workletReady, sampleRate: micContext.sampleRate });
-  }, [sendRealtimeAudioChunk, stopMicrophone, selectedMicId]);
+  }, [formatAppError, sendRealtimeAudioChunk, stopMicrophone, selectedMicId]);
 
   const handleToolCall = useCallback((toolCall) => {
     const functionCalls = Array.isArray(toolCall?.functionCalls)
@@ -1368,6 +1705,7 @@ function App() {
           canvasRef.current?.updateNode(safeId, updates);
           // Auto-pulse so the change is visually obvious
           canvasRef.current?.pulseNode(safeId);
+          announce(getCircleAnnouncement(lang, NODE_LABELS[lang]?.[safeId]));
           const whyNowPayload = buildWhyNowPayload({
             callId: call.id,
             callName: call.name,
@@ -1375,6 +1713,11 @@ function App() {
             nodeId: safeId,
           });
           pushWhyNowLine(whyNowPayload);
+          // Circle intro: show once on first ever circle shift
+          if (!circleIntroShownRef.current && !CircleFirstShiftTooltip.hasSeen()) {
+            circleIntroShownRef.current = true;
+            setShowCircleIntro(true);
+          }
           captureReplayStep('update', {
             focusId: safeId,
             reason: whyNowPayload.text,
@@ -1393,7 +1736,13 @@ function App() {
             canvasRef.current?.addSatellite?.(safeId, topic);
           } else {
             // Smart fallback: derive a topic from the last transcript user message
-            const lastUserMsg = transcript.findLast?.(t => t.role === 'user')?.text || '';
+            let lastUserMsg = '';
+            for (let index = transcript.length - 1; index >= 0; index -= 1) {
+              if (transcript[index]?.role === 'user') {
+                lastUserMsg = transcript[index]?.text || '';
+                break;
+              }
+            }
             if (lastUserMsg.length > 3) {
               const words = lastUserMsg.split(/\s+/).filter(w => w.length > 3);
               if (words.length > 0) {
@@ -1460,12 +1809,62 @@ function App() {
           }
           // ── END INSIGHT DETECTOR ───────────────────────────────────────
 
+          triggerHaptic(HAPTIC_PATTERNS.circleShift);
           if (safeId === 1) unlockAchievement('awarenessShift');
           else if (safeId === 2) unlockAchievement('knowledgeShift');
           else if (safeId === 3) unlockAchievement('truthShift');
           if (updates.color) unlockAchievement('sentimentShift');
           const callId = String(call.id || '');
           if (callId.startsWith('server_cmd_')) unlockAchievement('voiceCommand');
+
+          // ── CIRCLE STATE ANALYZER — Prompting Strategy ─────────────────
+          // Detects circle imbalance and silently guides Gemini toward the right question.
+          {
+            const stateNodes = canvasRef.current?.getNodes?.() || [];
+            const n1 = stateNodes.find(n => n.id === 1)?.radius ?? 50;
+            const n2 = stateNodes.find(n => n.id === 2)?.radius ?? 50;
+            const n3 = stateNodes.find(n => n.id === 3)?.radius ?? 50;
+            const socket = wsRef.current;
+            const canSend = socket && socket.readyState === WebSocket.OPEN;
+            let metaText = null;
+
+            if (n1 > 65 && n3 < 45) {
+              metaText = lang === 'ar'
+                ? '(إشارة داخلية: وعي المستخدم مرتفع والواقع منخفض — في دورك القادم اسأل عن الواقع الفعلي بجملة واحدة لطيفة. لا تشرح ولا تحلل.)'
+                : '(Internal signal: User awareness is high, reality is low. Next turn: ask one gentle question about what is actually happening.)';
+            } else if (n2 > 65 && n1 < 45) {
+              metaText = lang === 'ar'
+                ? '(إشارة داخلية: المعرفة مرتفعة والوعي الداخلي منخفض — في دورك القادم اسأل عن الإحساس الجواني بجملة واحدة. لا تعطي معلومات.)'
+                : '(Internal signal: Knowledge is high, awareness is low. Next turn: ask one question about their inner feeling, nothing else.)';
+            } else if (n3 > 65 && n1 < 45) {
+              metaText = lang === 'ar'
+                ? '(إشارة داخلية: الواقع واضح والوعي الذاتي منخفض — في دورك القادم اسأل عن دور المستخدم في تشكيل هذا الواقع.)'
+                : '(Internal signal: Reality is clear but self-awareness is low. Next turn: ask about their role in shaping this reality.)';
+            } else if (n1 > 55 && n2 > 55 && n3 > 55) {
+              metaText = lang === 'ar'
+                ? '(إشارة داخلية: الثلاثة دوائر مرتفعة — المستخدم قريب من الوضوح. اسأل سؤال الإمكان: لو حصل تغيير واحد صغير دلوقتي — إيه ده؟)'
+                : '(Internal signal: All three circles are high — user is near clarity. Ask the possibility question: if one small thing changed right now, what would it be?)';
+            } else if (n1 < 42 && n2 < 42 && n3 < 42) {
+              metaText = lang === 'ar'
+                ? '(إشارة داخلية: الثلاثة دوائر منخفضة — المستخدم ربما يتجنب شيئاً. افتح باب الاعتراف بلطف شديد. جملة واحدة فقط.)'
+                : '(Internal signal: All circles are low — possible avoidance. Gently open the door to acknowledgment. One sentence only.)';
+            }
+
+            if (metaText && canSend) {
+              setTimeout(() => {
+                const s = wsRef.current;
+                if (s && s.readyState === WebSocket.OPEN) {
+                  s.send(JSON.stringify({
+                    clientContent: {
+                      turns: [{ role: 'user', parts: [{ text: metaText }] }],
+                      turnComplete: false,
+                    },
+                  }));
+                }
+              }, 800);
+            }
+          }
+          // ── END CIRCLE STATE ANALYZER ────────────────────────────────────
 
 
 
@@ -1485,6 +1884,11 @@ function App() {
             nodeId: id,
           });
           pushWhyNowLine(whyNowPayload);
+          // Circle intro: show once on first ever circle shift
+          if (!circleIntroShownRef.current && !CircleFirstShiftTooltip.hasSeen()) {
+            circleIntroShownRef.current = true;
+            setShowCircleIntro(true);
+          }
           captureReplayStep('highlight', {
             focusId: id,
             reason: whyNowPayload.text,
@@ -1492,6 +1896,32 @@ function App() {
             policy: args?.policy || 'IDLE',
             metric: args?.metric || 'turn',
           });
+        } else if (call.name === 'spawn_other') {
+          // ── THE OTHER PERSON ────────────────────────────────
+          const otherName = String(args.name || '').slice(0, 8);
+          if (!otherName.trim()) { console.warn('[spawn_other] Empty name, skipping'); }
+          const otherTension = Math.max(0, Math.min(1, Number(args.tension) || 0.5));
+          const otherColor = String(args.color || '#FFD700');
+          console.log(`[App] Spawning other: ${otherName}, tension=${otherTension}`);
+          canvasRef.current?.setOtherNode?.(otherName, otherTension, otherColor);
+
+        } else if (call.name === 'spawn_topic') {
+          // ── TOPIC CIRCLE ────────────────────────────────────
+          const topicName = String(args.topic || '').slice(0, 8);
+          if (!topicName.trim()) { console.warn('[spawn_topic] Empty topic, skipping'); }
+          const topicWeight = Math.max(0.3, Math.min(1, Number(args.weight) || 0.5));
+          const topicColor = String(args.color || '#FF8C00');
+          console.log(`[App] Spawning topic: ${topicName}, weight=${topicWeight}`);
+          // Use satellite nodes for topics (orbit the dominant circle)
+          const dominantId = (() => {
+            const nodes = canvasRef.current?.getNodes?.() || [];
+            if (nodes.length === 0) return 1;
+            return nodes.reduce((a, b) => a.radius > b.radius ? a : b).id;
+          })();
+          canvasRef.current?.addSatellite?.(dominantId, topicName);
+          triggerHaptic(HAPTIC_PATTERNS.circleShift);
+          triggerHaptic(HAPTIC_PATTERNS.otherSpawn);
+
         } else if (call.name === 'update_journey') {
           const STAGE_MAP = {
             'overwhelmed': 'Overwhelmed',
@@ -1578,7 +2008,7 @@ function App() {
     }
     setToolCallsCount((prev) => prev + functionCalls.length);
     setLastEvent(`tool_call:${functionCalls.length}`);
-  }, [buildWhyNowPayload, captureReplayStep, cognitiveMetrics, lang, pushWhyNowLine, unlockAchievement]);
+  }, [announce, buildWhyNowPayload, captureReplayStep, cognitiveMetrics, lang, pushWhyNowLine, unlockAchievement]);
 
   // Handle text command submission - agent-controlled only (no local circle mutation)
   const handleTextCommand = useCallback((text) => {
@@ -1595,6 +2025,18 @@ function App() {
       setLastEvent('user_cmd_sent');
     }
   }, [startTurnLatency]);
+
+  const sendHybridControl = useCallback((action, extra = {}) => {
+    const socket = wsRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+    socket.send(JSON.stringify({
+      hybridControl: {
+        action,
+        ...extra,
+      },
+    }));
+    return true;
+  }, []);
 
   const clearAutoDemoTimer = useCallback(() => {
     if (autoDemoTimerRef.current) {
@@ -1617,7 +2059,60 @@ function App() {
     })
   ), [clearAutoDemoTimer]);
 
+  const appendSyntheticUserTranscript = useCallback((text) => {
+    const cleaned = (typeof text === 'string' ? text : '').replace(/[*_`#]/g, '').trim();
+    if (!cleaned) return;
+    const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+    setTranscript((prev) => {
+      const next = [...prev, {
+        role: 'user',
+        text: cleaned,
+        time: timeStr,
+        finished: true,
+        cogColor: dominantNodeRef.current === 2 ? '#00FF41' : dominantNodeRef.current === 3 ? '#FF00E5' : '#00F5FF',
+      }];
+      return next.slice(-6);
+    });
+  }, [lang]);
+
+  const sendSyntheticUserTextTurn = useCallback((line) => {
+    const payload = typeof line === 'string' ? { spoken: line } : (line ?? {});
+    const text = (
+      typeof payload.spoken === 'string'
+        ? payload.spoken
+        : typeof payload.prompt === 'string'
+          ? payload.prompt
+          : ''
+    ).replace(/[*_`#]/g, '').trim();
+    if (!text) return false;
+    const socket = wsRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+
+    startTurnLatency();
+    socket.send(JSON.stringify({
+      clientContent: {
+        turns: [{ role: 'user', parts: [{ text }] }],
+        turnComplete: true,
+      },
+    }));
+    setLastEvent('auto_demo_text_sent');
+    return true;
+  }, [startTurnLatency]);
+
   const stopSyntheticUserSpeech = useCallback(() => {
+    const currentAudio = demoAudioRef.current;
+    if (currentAudio) {
+      try {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      } catch {
+        // Ignore media cleanup errors.
+      }
+      if (currentAudio.dataset?.url) {
+        URL.revokeObjectURL(currentAudio.dataset.url);
+      }
+      demoAudioRef.current = null;
+    }
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
@@ -1627,63 +2122,108 @@ function App() {
     autoDemoSpeechUtteranceRef.current = null;
   }, []);
 
-  const speakSyntheticUserLine = useCallback((text, runId) => (
-    new Promise((resolve) => {
+  const speakSyntheticUserLine = useCallback((line, runId) => (
+    new Promise(async (resolve) => {
       if (autoDemoRunIdRef.current !== runId) {
-        resolve(false);
+        resolve({ ok: false, delivered: false });
         return;
       }
 
-      const cleaned = (typeof text === 'string' ? text : '').replace(/[*_`#]/g, '').trim();
+      const payload = typeof line === 'string' ? { spoken: line } : (line ?? {});
+      const cleaned = (typeof payload.spoken === 'string' ? payload.spoken : '').replace(/[*_`#]/g, '').trim();
       if (!cleaned) {
-        resolve(true);
-        return;
-      }
-      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-        resolve(true);
+        resolve({ ok: true, delivered: false });
         return;
       }
 
       stopSyntheticUserSpeech();
+      appendSyntheticUserTranscript(cleaned);
 
-      const utterance = new SpeechSynthesisUtterance(cleaned);
+      const staticAudioPath = typeof payload.audioPath === 'string' ? payload.audioPath.trim() : '';
       const isArabic = /[\u0600-\u06FF]/.test(cleaned);
-      utterance.lang = isArabic ? 'ar-EG' : 'en-US';
-      utterance.rate = isArabic ? 0.98 : 1.02;
-      utterance.pitch = 0.86;
-      utterance.volume = 1;
-
-      const voices = window.speechSynthesis.getVoices?.() ?? [];
-      const langPrefix = isArabic ? 'ar' : 'en';
-      const matchingVoices = voices.filter((voice) =>
-        String(voice.lang || '').toLowerCase().startsWith(langPrefix)
+      const tts = payload.tts && typeof payload.tts === 'object' ? payload.tts : {};
+      const langCode = isArabic ? 'ar' : 'en';
+      const playbackRate = Number(payload.playbackRate);
+      const deliverSyntheticTurn = () => (
+        autoDemoRunIdRef.current === runId
+          ? sendSyntheticUserTextTurn(payload)
+          : false
       );
-      const chosenVoice = matchingVoices.find((voice) => !voice.default) || matchingVoices[0];
-      if (chosenVoice) {
-        utterance.voice = chosenVoice;
-      }
 
-      let settled = false;
-      const finish = (ok) => {
-        if (settled) return;
-        settled = true;
-        if (autoDemoSpeechUtteranceRef.current === utterance) {
-          autoDemoSpeechUtteranceRef.current = null;
-        }
-        resolve(ok && autoDemoRunIdRef.current === runId);
+      const playSyntheticAudio = async (src, { revokeOnFinish = false } = {}) => {
+        const audio = new Audio(src);
+        audio.preload = 'auto';
+        audio.volume = 1;
+        audio.playbackRate = Number.isFinite(playbackRate) && playbackRate > 0 ? playbackRate : 1.02;
+        demoAudioRef.current = audio;
+
+        const cleanup = () => {
+          if (demoAudioRef.current === audio) {
+            demoAudioRef.current = null;
+          }
+          if (revokeOnFinish) {
+            URL.revokeObjectURL(src);
+          }
+        };
+
+        await new Promise((playResolve, playReject) => {
+          audio.onended = () => {
+            cleanup();
+            playResolve();
+          };
+          audio.onerror = () => {
+            cleanup();
+            playReject(new Error('Synthetic demo audio failed to play.'));
+          };
+          audio.play().catch((error) => {
+            cleanup();
+            playReject(error);
+          });
+        });
+
+        const delivered = deliverSyntheticTurn();
+        return { ok: autoDemoRunIdRef.current === runId, delivered };
       };
 
-      utterance.onend = () => finish(true);
-      utterance.onerror = () => finish(false);
-      autoDemoSpeechUtteranceRef.current = utterance;
+      if (staticAudioPath) {
+        try {
+          const result = await playSyntheticAudio(staticAudioPath);
+          resolve(result);
+          return;
+        } catch (error) {
+          console.warn('Static synthetic demo audio failed:', error);
+        }
+      }
 
       try {
-        window.speechSynthesis.speak(utterance);
-      } catch {
-        finish(false);
+        const response = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: cleaned,
+            lang: langCode,
+            speaker: payload.speaker ?? 'synthetic_user_male',
+            rate: tts.rate,
+            pitch: tts.pitch,
+            volume: tts.volume,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const result = await playSyntheticAudio(audioUrl, { revokeOnFinish: true });
+        resolve(result);
+      } catch (error) {
+        console.error('Synthetic user TTS failed:', error);
+        const delivered = deliverSyntheticTurn();
+        resolve({ ok: autoDemoRunIdRef.current === runId, delivered });
       }
     })
-  ), [stopSyntheticUserSpeech]);
+  ), [appendSyntheticUserTranscript, sendSyntheticUserTextTurn, stopSyntheticUserSpeech]);
 
   const waitForAutoDemoReady = useCallback(async (runId, timeoutMs = 25000) => {
     const startedAt = Date.now();
@@ -1702,23 +2242,43 @@ function App() {
     return false;
   }, [sleepForAutoDemo]);
 
-  const waitForAgentToSettle = useCallback(async (runId, timeoutMs = 14000) => {
+  const waitForAgentToSettle = useCallback(async (runId, options = {}) => {
+    const {
+      timeoutMs = 15000,
+      initialAgentEntries = transcriptRef.current.filter(
+        (entry) => entry.role === 'agent' && String(entry.text ?? '').trim().length > 0
+      ).length,
+      requireNewAgentEntry = false,
+    } = typeof options === 'number' ? { timeoutMs: options } : options;
     const startedAt = Date.now();
     let quietMs = 0;
+    let sawNewAgentText = false;
     while ((Date.now() - startedAt) < timeoutMs) {
       if (autoDemoRunIdRef.current !== runId) return false;
-      if (isAgentSpeakingRef.current) {
+      const committedAgentEntries = transcriptRef.current.filter(
+        (entry) => entry.role === 'agent' && String(entry.text ?? '').trim().length > 0
+      ).length;
+      const hasPendingAgentText = Boolean(String(bufferedTurnTextRef.current ?? '').trim());
+      const agentContentAgeMs = lastAgentContentAtRef.current
+        ? Date.now() - lastAgentContentAtRef.current
+        : Number.POSITIVE_INFINITY;
+      const hasFreshAgentText = hasPendingAgentText && agentContentAgeMs < 1200;
+      const hasNewAgentEntry = committedAgentEntries > initialAgentEntries;
+      if (hasNewAgentEntry || hasPendingAgentText) {
+        sawNewAgentText = true;
+      }
+      if (isAgentSpeakingRef.current || hasFreshAgentText) {
         quietMs = 0;
       } else {
         quietMs += 180;
-        if (quietMs >= 720) {
+        if (quietMs >= 540 && (!requireNewAgentEntry || sawNewAgentText)) {
           return true;
         }
       }
       const keepGoing = await sleepForAutoDemo(180, runId);
       if (!keepGoing) return false;
     }
-    return true;
+    return false;
   }, [sleepForAutoDemo]);
 
   const waitForManualUserTurn = useCallback(async (runId, timeoutMs = 9000) => {
@@ -1779,6 +2339,7 @@ function App() {
   }, [clearAutoDemoTimer, isAutoDemoRunning, restoreMicAfterSyntheticDemo, stopSyntheticUserSpeech]);
 
   const handleBioStateChange = useCallback((level) => {
+    if (isAutoDemoRunningRef.current || autoDemoPendingStartRef.current) return;
     if (appView !== 'live' || !isConnected) return;
     const socket = wsRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
@@ -1870,12 +2431,12 @@ function App() {
     if (isTransitioningToSetup) return;
     setIsTransitioningToSetup(true);
     window.setTimeout(() => {
-      setAppView('setup');
+      goToView('setup');
       setIsSetupIntro(true);
       setIsTransitioningToSetup(false);
       window.setTimeout(() => setIsSetupIntro(false), 520);
     }, 280);
-  }, [isTransitioningToSetup]);
+  }, [goToView, isTransitioningToSetup]);
 
   const handleSandMandala = useCallback(() => {
     setIsSandMandalaActive(true);
@@ -1891,10 +2452,10 @@ function App() {
     // Play release animation, then go to welcome
     window.setTimeout(() => {
       setIsSandMandalaActive(false);
-      setAppView('welcome');
+      goToView('welcome');
       setHasSessionStarted(false);
     }, 3800);
-  }, []);
+  }, [goToView]);
 
   const disconnect = useCallback(async () => {
     stopAutoDemo('auto_demo_stopped_disconnect', '', { restoreMic: false });
@@ -1934,6 +2495,11 @@ function App() {
       }
       socket.close();
     }
+
+    // Save circle progress for cross-session tracking
+    const finalNodes = canvasRef.current?.getNodes?.() || [];
+    const timeline = canvasRef.current?.getTimeline?.() || [];
+    if (finalNodes.length > 0) saveSessionProgress(finalNodes);
 
     setStatus('Disconnected');
     setLastEvent('manual_disconnect');
@@ -1976,10 +2542,13 @@ function App() {
       return;
     }
     manualCloseRef.current = false;
+    const isSessionReconnect = appView === 'live' && hasSessionStarted;
 
     setErrorMessage('');
     setIsStarting(true);
-    setHasSessionStarted(false);
+    if (!isSessionReconnect) {
+      setHasSessionStarted(false);
+    }
     setStatus('Connecting...');
     setConnectStage(0);
     setLastEvent('connecting');
@@ -1997,12 +2566,19 @@ function App() {
     }
 
     const token = import.meta.env.VITE_DAWAYIR_AUTH_TOKEN || '';
-    let wsUrlString = backendUrl;
+    const wsUrl = new URL(backendUrl);
     if (token) {
-      const wsUrl = new URL(backendUrl);
       wsUrl.searchParams.set('token', token);
-      wsUrlString = wsUrl.toString();
     }
+    const shouldPreferHybridSocket = (
+      autoDemoPendingStartRef.current
+      || isAutoDemoRunningRef.current
+      || oneClickDemoPendingRef.current
+    );
+    if (shouldPreferHybridSocket) {
+      wsUrl.searchParams.set('mode', 'hybrid');
+    }
+    const wsUrlString = wsUrl.toString();
     // console.log('[Connect] Opening WebSocket to', wsUrlString);
     const socket = new WebSocket(wsUrlString);
     socket.binaryType = 'arraybuffer';
@@ -2025,14 +2601,16 @@ function App() {
       setIsStarting(false);
       setStatus('Connected (waiting setupComplete)');
       setLastEvent('ws_open');
-      // ── Feature ⑬⑭⑮: Reset session tracking on new connection ──
-      setSessionStartTime(Date.now());
-      resetSessionReplay();
-      setTransitionCount(0);
-      journeyPathRef.current = [1];
-      setJourneyPath([1]);
-      dominantNodeRef.current = 1;
-      prevInsightRadiusRef.current = null;
+      if (!isSessionReconnect) {
+        // ── Feature ⑬⑭⑮: Reset session tracking on brand-new sessions only ──
+        setSessionStartTime(Date.now());
+        resetSessionReplay();
+        setTransitionCount(0);
+        journeyPathRef.current = [1];
+        setJourneyPath([1]);
+        dominantNodeRef.current = 1;
+        prevInsightRadiusRef.current = null;
+      }
 
     };
 
@@ -2129,45 +2707,43 @@ function App() {
             });
           }
 
-          if (dt.finished) {
-            resetUserSpeaking();
+        if (dt.finished) {
+          resetUserSpeaking();
+        }
+      } else if (dt.type === 'output') {
+          const speaker = getOutputSpeaker(dt.speaker ?? message?.speaker);
+          const role = speaker === 'user_agent' ? 'user_agent' : 'agent';
+          const outputBufferRef = speaker === 'user_agent'
+            ? bufferedUserAgentTurnTextRef
+            : bufferedTurnTextRef;
+          const outputLastAtRef = speaker === 'user_agent'
+            ? lastUserAgentContentAtRef
+            : lastAgentContentAtRef;
+          const throttleKey = role === 'user_agent' ? 'user_agent' : 'agent';
+
+          if (speaker === 'dawayir') {
+            resolveTurnLatency();
           }
-        } else if (dt.type === 'output') {
-          resolveTurnLatency();
+
           // Keep output transcript visible, but throttled to avoid UI jank.
           setIsAgentSpeaking(true);
           isAgentSpeakingRef.current = true;
 
-          const isNewTurn = bufferedTurnTextRef.current.trim() === '';
-          bufferedTurnTextRef.current = `${bufferedTurnTextRef.current} ${dt.text}`.trim();
-          if (isNewTurn) unlockAchievement('firstReply');
+          const isNewTurn = outputBufferRef.current.trim() === '';
+          outputBufferRef.current = `${outputBufferRef.current} ${dt.text}`.trim();
+          if (isNewTurn && speaker === 'dawayir') unlockAchievement('firstReply');
 
           const now = Date.now();
-          const shouldUpdateAgentTranscript = Boolean(dt.finished) || (now - transcriptThrottleRef.current.agent) > 120;
+          outputLastAtRef.current = now;
+          const shouldUpdateAgentTranscript = Boolean(dt.finished) || (now - (transcriptThrottleRef.current[throttleKey] ?? 0)) > 90;
           if (shouldUpdateAgentTranscript) {
-            transcriptThrottleRef.current.agent = now;
-            setTranscript((prev) => {
-              const next = [...prev];
-              if (isNewTurn) {
-                const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-                // ── Feature ③: Agent responses also get cognitive color ──
-                next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false, cogColor: dominantNodeRef.current === 2 ? '#00FF41' : dominantNodeRef.current === 3 ? '#FF00E5' : '#00F5FF' });
-              } else {
-                let found = false;
-                for (let i = next.length - 1; i >= 0; i--) {
-                  if (next[i].role === 'agent' && !next[i].finished) {
-                    next[i] = { ...next[i], text: bufferedTurnTextRef.current };
-                    found = true;
-                    break;
-                  }
-                }
-                if (!found) {
-                  const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-                  next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
-                }
-              }
-              return next.slice(-6);
+            transcriptThrottleRef.current[throttleKey] = now;
+            upsertTranscriptBubble(role, outputBufferRef.current, !!dt.finished, {
+              cogColor: dominantNodeRef.current === 2 ? '#00FF41' : dominantNodeRef.current === 3 ? '#FF00E5' : '#00F5FF',
             });
+          }
+          if (dt.finished) {
+            outputBufferRef.current = '';
           }
         }
         return;
@@ -2194,15 +2770,112 @@ function App() {
         setLastEvent('gemini_recovered');
         return;
       }
+      if (serverStatus?.state === 'gemini_unavailable') {
+        const cooldownSeconds = Math.max(1, Math.ceil(Number(serverStatus.cooldownMs || RECONNECT_DELAY_MS) / 1000));
+        setStatus(
+          lang === 'ar'
+            ? `Gemini غير متاح مؤقتًا. بنحاول تاني بعد ${cooldownSeconds} ثواني...`
+            : `Gemini is temporarily unavailable. Retrying in ${cooldownSeconds}s...`
+        );
+        setErrorMessage(
+          lang === 'ar'
+            ? 'الجلسة ما انتهتش، لكن الخادم بيحاول يرجّع اتصال Gemini.'
+            : 'The session has not ended, but the server is recovering the Gemini connection.'
+        );
+        setLastEvent('gemini_unavailable');
+        if (isAutoDemoRunning || autoDemoPendingStartRef.current) {
+          sendHybridControl('stop');
+          stopAutoDemo(
+            'auto_demo_gemini_unavailable',
+            lang === 'ar'
+              ? 'اتصال Gemini وقع مؤقتًا، فوقفنا الديمو لحد ما يرجع.'
+              : 'Gemini dropped temporarily, so the demo was paused until it recovers.'
+          );
+        }
+        return;
+      }
+
+      const hybridStatus = message?.hybridStatus ?? message?.hybrid_status;
+      if (hybridStatus?.state) {
+        const maxTurns = Math.max(1, Number(hybridStatus.maxTurns || (AUTO_DEMO_SCRIPT[lang] ?? AUTO_DEMO_SCRIPT.en).length || 1));
+        const currentTurn = Math.max(1, Number(hybridStatus.turn || 1));
+        if (hybridStatus.state === 'starting') {
+          setAutoDemoStatus(
+            lang === 'ar'
+              ? 'جاري فتح وكيل المستخدم الحي...'
+              : 'Opening the live user agent...'
+          );
+          setLastEvent('hybrid_starting');
+          return;
+        }
+        if (hybridStatus.state === 'ready') {
+          setAutoDemoStatus(
+            lang === 'ar'
+              ? 'وكيل المستخدم الحي جاهز.'
+              : 'The live user agent is ready.'
+          );
+          setLastEvent('hybrid_ready');
+          return;
+        }
+        if (hybridStatus.state === 'waiting_opening') {
+          setAutoDemoStatus(autoDemoCopy.opening);
+          setLastEvent('hybrid_waiting_opening');
+          return;
+        }
+        if (hybridStatus.state === 'running') {
+          const activeSpeaker = hybridStatus.speaker === 'user_agent'
+            ? (lang === 'ar' ? 'وكيل المستخدم بيرد' : 'User agent responding')
+            : (lang === 'ar' ? 'دواير بيرد' : 'Dawayir responding');
+          setAutoDemoStatus(`${activeSpeaker} ${currentTurn}/${maxTurns}`);
+          setLastEvent(`hybrid_running:${hybridStatus.speaker || 'dawayir'}`);
+          return;
+        }
+        if (hybridStatus.state === 'repairing') {
+          setAutoDemoStatus(
+            typeof hybridStatus.message === 'string' && hybridStatus.message.trim()
+              ? hybridStatus.message
+              : (hybridStatus.speaker === 'user_agent'
+                ? (lang === 'ar' ? 'وكيل المستخدم بيظبط رده...' : 'The user agent is refining the turn...')
+                : (lang === 'ar' ? 'دواير بيظبط رده...' : 'Dawayir is refining the reply...'))
+          );
+          setLastEvent(`hybrid_repairing:${hybridStatus.speaker || 'dawayir'}`);
+          return;
+        }
+        if (hybridStatus.state === 'recovering') {
+          setAutoDemoStatus(
+            typeof hybridStatus.message === 'string' && hybridStatus.message.trim()
+              ? hybridStatus.message
+              : (lang === 'ar'
+                ? 'جلسة دواير بترجع دلوقتي...'
+                : 'Dawayir is recovering now...')
+          );
+          setLastEvent('hybrid_recovering');
+          return;
+        }
+        if (hybridStatus.state === 'completed') {
+          stopAutoDemo('auto_demo_completed', autoDemoCopy.completed);
+          return;
+        }
+        if (hybridStatus.state === 'stopped') {
+          stopAutoDemo('auto_demo_server_stopped', autoDemoCopy.canceled);
+          return;
+        }
+        if (hybridStatus.state === 'failed') {
+          stopAutoDemo(
+            'auto_demo_server_failed',
+            typeof hybridStatus.message === 'string' && hybridStatus.message.trim()
+              ? hybridStatus.message
+              : autoDemoCopy.failed
+          );
+          return;
+        }
+      }
 
       const serverError = getServerErrorMessage(message);
       if (serverError) {
         setStatus('Error');
         setErrorMessage(serverError);
         setLastEvent('server_error');
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.close();
-        }
         return;
       }
 
@@ -2210,7 +2883,7 @@ function App() {
         setupCompleteRef.current = true;
         setHasSessionStarted(true);
         if (appView === 'setup') {
-          setAppView('live');
+          goToView('live');
           setIsBreathingRoom(true);
         }
         setStatus('Connected to Gemini Live');
@@ -2251,13 +2924,21 @@ function App() {
                 }
               }
 
-              const bootstrapText = lang === 'ar'
-                ? (capturedImage
-                  ? 'دي صورتي دلوقتي. اقرأ حالتي النفسية من الصورة ونادي update_node عشان تغيّر radius وcolor لكل دايرة على حسب قرايتك. استخدم id وradius وcolor بس.'
-                  : 'يا صاحبي، ازيك؟')
-                : (capturedImage
-                  ? 'This is my photo. Read my emotional state from the image and call update_node to change radius and color for each circle based on your reading. Use only id, radius, and color.'
-                  : 'Hey, how are you?');
+              const bootstrapText = autoDemoPendingStartRef.current
+                ? (lang === 'ar'
+                  ? (capturedImage
+                    ? 'دي صورتي دلوقتي كمرجع بصري. افتح الجلسة بترحيب مصري حقيقي من 6 إلى 10 كلمات فيه طمأنة خفيفة وإحساس إنك معايا، من غير سؤال أو علامة استفهام.'
+                    : 'ابدأ الجلسة بترحيب مصري حقيقي من 6 إلى 10 كلمات فيه طمأنة خفيفة وإحساس إنك معايا، من غير سؤال أو علامة استفهام.')
+                  : (capturedImage
+                    ? 'This is my photo as visual context. Open the session with a real warm welcome of about 6 to 10 words, calm and human, with no question mark.'
+                    : 'Open the session with a real warm welcome of about 6 to 10 words, calm and human, with no question mark.'))
+                : (lang === 'ar'
+                  ? (capturedImage
+                    ? 'دي صورتي دلوقتي. اقرأ حالتي النفسية من الصورة ونادي update_node عشان تغيّر radius وcolor لكل دايرة على حسب قرايتك. استخدم id وradius وcolor بس.'
+                    : 'ابدأ معايا بترحيب مصري قصير وبعدين خيط واضح.')
+                  : (capturedImage
+                    ? 'This is my photo. Read my emotional state from the image and call update_node to change radius and color for each circle based on your reading. Use only id, radius, and color.'
+                    : 'Start with a warm welcome, then a grounded first line.'));
               parts.push({ text: bootstrapText });
 
               wsRef.current.send(JSON.stringify({
@@ -2273,12 +2954,37 @@ function App() {
               lastRestorePromptAtRef.current = now;
               // Send a minimal, invisible context restore -- no "reconnection" language.
               // The model should just continue naturally without acknowledging the gap.
+              const isHybridReconnect = isAutoDemoRunningRef.current || autoDemoPendingStartRef.current;
+              const lastHybridUserEntry = [...transcriptRef.current]
+                .reverse()
+                .find((entry) => entry?.role === 'user_agent' || entry?.role === 'user');
               const lastConv = sessionContextRef.current.length > 0
                 ? sessionContextRef.current.slice(-3).join(' ... ')
                 : '';
-              const promptText = lastConv
-                ? `(كمّل من هنا بالظبط: "${lastConv}")`
-                : '(كمّل الحوار.)';
+              const promptText = isHybridReconnect
+                ? (() => {
+                  const lastUserLine = String(lastHybridUserEntry?.text ?? '').trim();
+                  if (lastUserLine) {
+                    return lang === 'ar'
+                      ? `(كمّل الحوار من غير ما تذكر انقطاع. آخر كلام من المستخدم كان: "${lastUserLine}". رد بجملة مصرية واحدة تكمل الخيط.)`
+                      : `(Continue naturally with no mention of interruption. The user's last line was: "${lastUserLine}". Reply with one short line that continues the thread.)`;
+                  }
+                  return lang === 'ar'
+                    ? '(كمّل الحوار الطبيعي مع المستخدم من غير ما تذكر انقطاع.)'
+                    : '(Continue the natural conversation with the user without mentioning any interruption.)';
+                })()
+                : (lastConv
+                  ? `(كمّل من هنا بالظبط: "${lastConv}")`
+                  : '(كمّل الحوار.)');
+              if (isHybridReconnect) {
+                setAutoDemoStatus(
+                  lang === 'ar'
+                    ? 'رجع الاتصال وبنكمل من نفس الخيط...'
+                    : 'The connection is back and the demo is resuming...'
+                );
+                restoreAfterGeminiReconnectRef.current = false;
+                return;
+              }
               wsRef.current.send(JSON.stringify({
                 clientContent: { turns: [{ role: 'user', parts: [{ text: promptText }] }], turnComplete: true }
               }));
@@ -2291,7 +2997,13 @@ function App() {
               micStartTimeoutRef.current = null;
               return;
             }
-            if (!setupCompleteRef.current || isMicActiveRef.current || !deferMicStartUntilFirstAgentReplyRef.current) {
+            if (
+              !setupCompleteRef.current
+              || isMicActiveRef.current
+              || !deferMicStartUntilFirstAgentReplyRef.current
+              || isAutoDemoRunningRef.current
+              || autoDemoPendingStartRef.current
+            ) {
               micStartTimeoutRef.current = null;
               return;
             }
@@ -2328,13 +3040,39 @@ function App() {
         setLastEvent('server_interrupted');
       }
 
+      const speaker = getOutputSpeaker(message?.speaker);
+      const outputRole = speaker === 'user_agent' ? 'user_agent' : 'agent';
+      const outputBufferRef = speaker === 'user_agent'
+        ? bufferedUserAgentTurnTextRef
+        : bufferedTurnTextRef;
+      const outputLastAtRef = speaker === 'user_agent'
+        ? lastUserAgentContentAtRef
+        : lastAgentContentAtRef;
+      const serverContent = getServerContent(message);
+      const liveOutputTranscription = serverContent?.outputTranscription ?? serverContent?.output_transcription;
+      const hasLiveOutputTranscription = Boolean(liveOutputTranscription?.text);
+      const shouldSkipLocalTranscriptFallback = (
+        (speaker === 'dawayir' || speaker === 'user_agent')
+        && (isAutoDemoRunningRef.current || autoDemoPendingStartRef.current)
+        && !hasLiveOutputTranscription
+      );
+      const outputTurnComplete = Boolean(
+        serverContent?.turnComplete
+        || serverContent?.turn_complete
+        || serverContent?.generationComplete
+        || serverContent?.generation_complete
+      );
+      if (!shouldSkipLocalTranscriptFallback && outputTurnComplete && outputBufferRef.current.trim().length > 0) {
+        upsertTranscriptBubble(outputRole, outputBufferRef.current, true);
+        outputBufferRef.current = '';
+      }
       const parts = getParts(message);
       if (parts.length > 0) {
         const now = Date.now();
-        if (now - lastAgentContentAtRef.current > 1800) {
-          resetAgentTurnState();
+        if (now - outputLastAtRef.current > 1800) {
+          outputBufferRef.current = '';
         }
-        lastAgentContentAtRef.current = now;
+        outputLastAtRef.current = now;
       }
       // Mic start is handled by the MIC_DEFER_TIMEOUT_MS timeout set in setupComplete.
       // Do NOT start mic here during first response -- getUserMedia blocks the main thread
@@ -2361,38 +3099,25 @@ function App() {
       // Capture text for context preservation and live transcript
       const textParts = Array.isArray(parts) ? parts.filter(p => p.text).map(p => p.text) : [];
       if (textParts.length > 0) {
-        sessionContextRef.current = [...sessionContextRef.current, ...textParts].slice(-5);
+        const contextualText = textParts.join(' ');
+        sessionContextRef.current = [
+          ...sessionContextRef.current,
+          speaker === 'user_agent'
+            ? `${lang === 'ar' ? 'وكيل المستخدم' : 'User agent'}: ${contextualText}`
+            : contextualText,
+        ].slice(-6);
         setIsAgentSpeaking(true);
         isAgentSpeakingRef.current = true;
+        canvasRef.current?.setAgentSpeaking?.(true);
+    ambientDroneRef.current?.start();
 
-        const appendedText = textParts.join(' ');
-        const isNewTurn = bufferedTurnTextRef.current.trim() === '';
-        bufferedTurnTextRef.current = `${bufferedTurnTextRef.current} ${appendedText}`.trim();
+        if (!hasLiveOutputTranscription && !shouldSkipLocalTranscriptFallback) {
+          const appendedText = textParts.join(' ');
+          outputBufferRef.current = `${outputBufferRef.current} ${appendedText}`.trim();
+          upsertTranscriptBubble(outputRole, outputBufferRef.current, false);
+        }
 
-        // Update live transcript with latest agent text accumulation
-        setTranscript((prev) => {
-          const next = [...prev];
-          if (isNewTurn) {
-            const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-            next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
-          } else {
-            // Update the last agent bubble
-            let found = false;
-            for (let i = next.length - 1; i >= 0; i--) {
-              if (next[i].role === 'agent' && !next[i].finished) {
-                next[i] = { ...next[i], text: bufferedTurnTextRef.current };
-                found = true;
-                break;
-              }
-            }
-            if (!found) {
-              const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-              next.push({ role: 'agent', text: bufferedTurnTextRef.current, time: timeStr, finished: false });
-            }
-          }
-          return next.slice(-6);
-        });
-        if (currentTurnModeRef.current === 'none' && ttsFallbackEnabledRef.current) {
+        if (speaker === 'dawayir' && currentTurnModeRef.current === 'none' && ttsFallbackEnabledRef.current) {
           if (ttsDecisionTimeoutRef.current) {
             window.clearTimeout(ttsDecisionTimeoutRef.current);
           }
@@ -2403,7 +3128,7 @@ function App() {
             }
             ttsDecisionTimeoutRef.current = null;
           }, 900);
-        } else if (currentTurnModeRef.current === 'none' && !ttsFallbackEnabledRef.current) {
+        } else if (speaker === 'dawayir' && currentTurnModeRef.current === 'none' && !ttsFallbackEnabledRef.current) {
           // TTS disabled and no audio yet -- release mic after a short wait
           // so conversation doesn't get stuck on text-only responses.
           if (ttsDecisionTimeoutRef.current) {
@@ -2422,9 +3147,12 @@ function App() {
       const turnAudioBlobs = getTurnDataAudioBlobs(message);
       const selectedAudioBlobs = directAudioBlobs.length > 0 ? directAudioBlobs : turnAudioBlobs;
       if (selectedAudioBlobs.length > 0) {
-        resolveTurnLatency();
+        if (speaker === 'dawayir') {
+          resolveTurnLatency();
+        }
         setIsAgentSpeaking(true);
         isAgentSpeakingRef.current = true;
+        canvasRef.current?.setAgentSpeaking?.(true);
         // If TTS already started for this turn, ignore late model audio to avoid overlap.
         if (currentTurnModeRef.current !== 'tts') {
           currentTurnModeRef.current = 'model';
@@ -2432,7 +3160,7 @@ function App() {
           for (const blob of selectedAudioBlobs) {
             if (blob?.data) {
               await playPcmChunk(base64ToArrayBuffer(blob.data), parsePcmSampleRate(blob.mimeType));
-              setLastEvent('audio_chunk');
+              setLastEvent(speaker === 'user_agent' ? 'audio_chunk_user_agent' : 'audio_chunk');
             }
           }
         }
@@ -2444,7 +3172,7 @@ function App() {
       if (wsRef.current !== socket) return;
       console.error('[Connect] WebSocket error');
       setStatus('Error');
-      setErrorMessage('WebSocket error. Retrying if possible.');
+      setErrorMessage(formatAppError('websocketRetrying'));
       setIsStarting(false);
       setLastEvent('ws_error');
     };
@@ -2468,7 +3196,7 @@ function App() {
 
       if (manualCloseRef.current) {
         setStatus((prev) => (prev === 'Error' ? prev : 'Disconnected'));
-        setAppView('complete'); // Transition to complete screen when manually closing
+        goToView('complete');
         setLastEvent('ws_closed_manual');
         return;
       }
@@ -2493,7 +3221,10 @@ function App() {
       }
 
       setStatus((prev) => (prev === 'Error' ? prev : 'Disconnected'));
-      setErrorMessage('Connection closed after retry attempts. Please reconnect manually.');
+      setErrorMessage(formatAppError('connectionClosed'));
+      if (appViewRef.current === 'live') {
+        goToView('setup');
+      }
       setLastEvent('ws_closed_giveup');
     };
   }, [
@@ -2501,8 +3232,12 @@ function App() {
     backendUrl,
     capturedImage,
     clearPendingTts,
+    formatAppError,
     ensureSpeakerContext,
     ensurePcmWorklet,
+    getOutputSpeaker,
+    goToView,
+    hasSessionStarted,
     handleToolCall,
     isConnected,
     isStarting,
@@ -2517,10 +3252,14 @@ function App() {
     resetUserSpeaking,
     resetSessionReplay,
     resolveTurnLatency,
+    sendHybridControl,
+    stopAutoDemo,
+    upsertTranscriptBubble,
   ]);
 
   const handleAutoDemoToggle = useCallback(async () => {
     if (isAutoDemoRunning) {
+      sendHybridControl('stop');
       stopAutoDemo('auto_demo_user_stop', autoDemoCopy.canceled);
       return;
     }
@@ -2531,6 +3270,9 @@ function App() {
     setIsAutoDemoRunning(true);
     setAutoDemoStatus(autoDemoCopy.booting);
     setLastEvent('auto_demo_booting');
+
+    await pauseMicForSyntheticDemo();
+    if (autoDemoRunIdRef.current !== runId) return;
 
     if (!isConnectedRef.current && !isStarting) {
       connect();
@@ -2554,100 +3296,27 @@ function App() {
     }
 
     autoDemoPendingStartRef.current = false;
-    const steps = AUTO_DEMO_SCRIPT[lang] ?? AUTO_DEMO_SCRIPT.en;
-    let scriptedStartIndex = 0;
-
-    setAutoDemoStatus(autoDemoCopy.manualCue);
-    setLastEvent('auto_demo_manual_stage');
-    const manualCaptured = await waitForManualUserTurn(runId, 9000);
-    if (autoDemoRunIdRef.current !== runId) return;
-
-    if (manualCaptured) {
-      setAutoDemoStatus(autoDemoCopy.manualDetected);
-      setLastEvent('auto_demo_manual_detected');
-      scriptedStartIndex = 1;
-
-      const settledAfterManual = await waitForAgentToSettle(runId, 16000);
-      if (!settledAfterManual) return;
-    } else {
-      setAutoDemoStatus(autoDemoCopy.manualFallback);
-      setLastEvent('auto_demo_manual_timeout');
-    }
-
-    await pauseMicForSyntheticDemo();
-    if (autoDemoRunIdRef.current !== runId) return;
-    const pauseGapOk = await sleepForAutoDemo(300, runId);
-    if (!pauseGapOk) return;
-
-    for (let i = scriptedStartIndex; i < steps.length; i += 1) {
-      if (autoDemoRunIdRef.current !== runId) return;
-
-      if (!isConnectedRef.current || !setupCompleteRef.current || appViewRef.current !== 'live') {
-        setAutoDemoStatus(autoDemoCopy.waitingSession);
-        const restored = await waitForAutoDemoReady(runId, 20000);
-        if (!restored) {
-          if (autoDemoRunIdRef.current === runId) {
-            clearAutoDemoTimer();
-            restoreMicAfterSyntheticDemo();
-            setIsAutoDemoRunning(false);
-            setAutoDemoStatus(autoDemoCopy.failed);
-            setLastEvent('auto_demo_lost_connection');
-          }
-          return;
-        }
-      }
-
-      const currentStep = steps[i];
-      setAutoDemoStatus(`${autoDemoCopy.running} ${i + 1}/${steps.length}`);
-
-      const spokenText = currentStep?.spoken || currentStep?.prompt || '';
-      const promptText = currentStep?.prompt || spokenText;
-
-      const syntheticSpeechOk = await speakSyntheticUserLine(spokenText, runId);
-      if (!syntheticSpeechOk && autoDemoRunIdRef.current !== runId) return;
-
-      if (autoDemoRunIdRef.current !== runId) return;
-      handleTextCommand(promptText);
-
-      const keptOpen = await sleepForAutoDemo(750, runId);
-      if (!keptOpen) return;
-
-      const settled = await waitForAgentToSettle(runId, currentStep.maxWaitMs || 14000);
-      if (!settled) return;
-
-      const keepGap = await sleepForAutoDemo(500, runId);
-      if (!keepGap) return;
-    }
-
-    if (autoDemoRunIdRef.current !== runId) return;
-    clearAutoDemoTimer();
-    restoreMicAfterSyntheticDemo();
-    setIsAutoDemoRunning(false);
-    setAutoDemoStatus(autoDemoCopy.completed);
-    setLastEvent('auto_demo_completed');
+    setAutoDemoStatus(autoDemoCopy.opening);
+    setLastEvent('auto_demo_dual_live_starting');
+    sendHybridControl('start', {
+      mode: 'dual_live',
+      lang,
+      maxTurns: (AUTO_DEMO_SCRIPT[lang] ?? AUTO_DEMO_SCRIPT.en).length,
+    });
   }, [
     autoDemoCopy.booting,
     autoDemoCopy.canceled,
-    autoDemoCopy.completed,
     autoDemoCopy.failed,
-    autoDemoCopy.manualCue,
-    autoDemoCopy.manualDetected,
-    autoDemoCopy.manualFallback,
-    autoDemoCopy.running,
+    autoDemoCopy.opening,
     autoDemoCopy.waitingSession,
     clearAutoDemoTimer,
     connect,
-    handleTextCommand,
     isAutoDemoRunning,
     isStarting,
     lang,
     pauseMicForSyntheticDemo,
-    restoreMicAfterSyntheticDemo,
-    sleepForAutoDemo,
-    speakSyntheticUserLine,
+    sendHybridControl,
     stopAutoDemo,
-    waitForManualUserTurn,
-    waitForAgentToSettle,
     waitForAutoDemoReady,
   ]);
 
@@ -2708,6 +3377,9 @@ function App() {
 
       {appView === 'welcome' && (
         <div className={`welcome-screen ${isTransitioningToSetup ? 'exiting' : ''}`}>
+          <h2 className="visually-hidden" data-view-heading="welcome" tabIndex={-1}>
+            {t.viewHeadings.welcome}
+          </h2>
           {/* Animated background orbs */}
           <div className="welcome-orbs" aria-hidden="true">
             <div className="welcome-orb welcome-orb-1" />
@@ -2781,10 +3453,22 @@ function App() {
             <DashboardView
               lang={lang}
               emptyLogoSrc={logoCognitiveTrinity}
-              onBack={() => setAppView('welcome')}
+              onBack={() => goToView('welcome')}
+              reducedMotion={effectiveReducedMotion}
+              viewHeadingProps={{ 'data-view-heading': 'dashboard', tabIndex: -1 }}
             />
           ) : (
             <>
+              {appView === 'setup' && (
+                <h2 className="visually-hidden" data-view-heading="setup" tabIndex={-1}>
+                  {t.viewHeadings.setup}
+                </h2>
+              )}
+              {appView === 'live' && (
+                <h2 className="visually-hidden" data-view-heading="live" tabIndex={-1}>
+                  {t.viewHeadings.live}
+                </h2>
+              )}
               {/* Brand Header */}
               <div className="brand-header">
                 <div className="brand-logo-row">
@@ -2812,7 +3496,7 @@ function App() {
                         <button aria-label={lang === 'ar' ? 'الإعدادات' : 'Settings'} className="icon-btn" onClick={() => setShowSettings((current) => !current)} title={lang === 'ar' ? 'الإعدادات' : 'Settings'}>
                           {'\u2699'}
                         </button>
-                        <button aria-label={t.memoryBank} className="icon-btn" onClick={() => setAppView('dashboard')} title={t.memoryBank}>
+                        <button aria-label={t.memoryBank} className="icon-btn" onClick={() => goToView('dashboard')} title={t.memoryBank}>
                           {t.dashboardBtn}
                         </button>
                       </>
@@ -2858,7 +3542,7 @@ function App() {
                       <>
                         <div className="setup-actions-row">
                           <button className="primary-btn outline-btn flex-center setup-action-btn" onClick={startCamera}>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
                             {t.captureBtn}
                           </button>
                           <button className="primary-btn flex-center setup-action-btn" onClick={connect} disabled={isConnected || isStarting}>
@@ -2869,7 +3553,7 @@ function App() {
                               </div>
                             ) : (
                               <>
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"></path><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"></path></svg>
+                                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"></path><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"></path></svg>
                                 {t.enterSpace}
                               </>
                             )}
@@ -2921,7 +3605,7 @@ function App() {
                         </div>
                       ) : (
                         <>
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"></path><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"></path></svg>
+                          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"></path><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"></path></svg>
                           {capturedImage ? t.enterSpaceVision : t.enterSpace}
                         </>
                       )}
@@ -2996,6 +3680,7 @@ function App() {
                       lang={lang}
                       onStressLevelChange={handleBioStateChange}
                       dominantColor={dominantColor}
+                      reducedMotion={effectiveReducedMotion}
                     />
 
                     {/* ── Feature ┄: COGNITIVE VELOCITY ── */}
@@ -3045,7 +3730,15 @@ function App() {
                       isConnected={isConnected}
                       lang={lang}
                       isAgentSpeaking={isAgentSpeaking}
+                      reducedMotion={effectiveReducedMotion}
                       onPauseTriggered={() => {
+                        if (
+                          isAutoDemoRunningRef.current
+                          || autoDemoPendingStartRef.current
+                          || oneClickDemoPendingRef.current
+                        ) {
+                          return;
+                        }
                         // Secret instruction to Gemini when sacred pause starts
                         const socket = wsRef.current;
                         if (socket && socket.readyState === WebSocket.OPEN) {
@@ -3079,6 +3772,15 @@ function App() {
                       </div>
                     </div>
 
+                    {/* Circle Meaning Panel: Real-time personal interpretation */}
+                    <CircleMeaningPanel
+                      nodes={canvasRef.current?.getNodes?.() || []}
+                      dominantNodeId={dominantNodeRef.current}
+                      lang={lang}
+                      isConnected={isConnected}
+                      sessionTurnCount={transcript.length}
+                    />
+
                     {capturedImage && (
                       <div className="snapshot-preview">
                         <img src={capturedImage} alt="Pulse Snapshot" />
@@ -3091,7 +3793,7 @@ function App() {
                     {!isCameraActive ? (
                       <div style={{ display: "flex", gap: "8px" }}>
                         <button className="retake-live-btn flex-center" onClick={handleLookAtMe} style={{ flex: 1, gap: '6px', background: "rgba(255, 209, 102, 0.15)", color: "#FFD700", borderColor: "rgba(255, 209, 102, 0.4)" }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                           {capturedImage ? t.updateVisual : t.lookAtMe}
                         </button>
                       </div>
@@ -3116,7 +3818,7 @@ function App() {
                       {isAutoDemoRunning ? autoDemoCopy.stop : autoDemoCopy.start}
                     </button>
                     <button className="secondary disconnect-btn flex-center" onClick={() => setShowEndSessionConfirm(true)}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
+                      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
                       {t.endSession}
                     </button>
                   </div>
@@ -3172,12 +3874,12 @@ function App() {
           )}
           <div className={`complete-card ${isSandMandalaActive ? 'sand-mandala-active' : ''}`}>
             <div className="success-icon-container">
-              <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 10px rgba(0, 255, 65, 0.4))' }}>
+              <svg aria-hidden="true" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 10px rgba(0, 255, 65, 0.4))' }}>
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                 <polyline points="22 4 12 14.01 9 11.01"></polyline>
               </svg>
             </div>
-            <h2 className="complete-title">
+            <h2 className="complete-title" data-view-heading="complete" tabIndex={-1}>
               {lang === 'ar' ? 'رحلة اكتملت' : 'Journey Complete'}
             </h2>
 
@@ -3215,11 +3917,56 @@ function App() {
                 </span>
               </div>
             </div>
+
+            {/* Session Action Card */}
+            {(() => {
+              const dominant = dominantNodeRef.current;
+              const clarity = cognitiveMetrics.clarityDelta;
+              const overload = cognitiveMetrics.overloadIndex;
+              let action = '';
+              let meaning = '';
+              if (lang === 'ar') {
+                if (dominant === 3 || clarity > 0.05) {
+                  action = 'خد قرار واحد صغير دلوقتي — اكتبه أو قوله لحد تاني.';
+                  meaning = 'دايرة الواقع كانت نشطة — اللي بيحصل فعلاً واضح ليك.';
+                } else if (dominant === 1 || overload > 0.5) {
+                  action = 'قبل ما تعمل أي حاجة — خد 5 دقايق تحس بنفسك.';
+                  meaning = 'مشاعرك كانت واخدة مساحة — خليها تستقر الأول.';
+                } else {
+                  action = 'اكتب جملة واحدة عن أكتر حاجة اتوضحت ليك النهارده.';
+                  meaning = 'عقلك التحليلي كان شغال — الورقة والقلم بيساعدوك تكمل.';
+                }
+              } else {
+                if (dominant === 3 || clarity > 0.05) {
+                  action = 'Make one small decision right now — write it or say it to someone.';
+                  meaning = 'Your Reality circle was active — what is actually happening is clear to you.';
+                } else if (dominant === 1 || overload > 0.5) {
+                  action = 'Before doing anything — give yourself 5 minutes to just feel.';
+                  meaning = 'Your feelings took up space — let them settle first.';
+                } else {
+                  action = 'Write one sentence about the clearest thing from today.';
+                  meaning = 'Your analytical mind was active — paper and pen will help.';
+                }
+              }
+              return (
+                <div className="session-action-card">
+                  <div className="sac-header">
+                    <span className="sac-icon">✅</span>
+                    <span className="sac-title">
+                      {lang === 'ar' ? 'اعمل حاجة واحدة دلوقتي' : 'One action right now'}
+                    </span>
+                  </div>
+                  <p className="sac-body">{action}</p>
+                  <p className="sac-meaning">{meaning}</p>
+                </div>
+              );
+            })()}
+
             <div className="complete-actions-row">
-              <button className="primary-btn complete-action-btn" onClick={() => setAppView('setup')}>
+              <button className="primary-btn complete-action-btn" onClick={() => goToView('setup')}>
                 {lang === 'ar' ? 'جلسة جديدة' : 'New Session'}
               </button>
-              <button className="primary-btn complete-action-btn complete-action-secondary" onClick={() => setAppView('dashboard')}>
+              <button className="primary-btn complete-action-btn complete-action-secondary" onClick={() => goToView('dashboard')}>
                 {lang === 'ar' ? 'بنك الذاكرة' : 'Memory Bank'}
               </button>
               {/* DNA Card share button */}
@@ -3248,8 +3995,10 @@ function App() {
       {showSettings && !isConnected && (
         <SettingsModal
           lang={lang}
+          settings={appSettings}
           onClose={() => setShowSettings(false)}
           onLanguageChange={setLang}
+          onSettingsChange={updateAppSettings}
           selectedMicId={selectedMicId}
           onMicChange={setSelectedMicId}
         />
@@ -3283,24 +4032,35 @@ function App() {
           <button
             className="transcript-toggle-btn"
             onClick={() => setIsTranscriptVisible(!isTranscriptVisible)}
-            title={isTranscriptVisible ? 'Hide Transcript' : 'Show Transcript'}
+            aria-expanded={isTranscriptVisible}
+            aria-controls="live-transcript"
+            title={isTranscriptVisible
+              ? (lang === 'ar' ? 'إخفاء المحادثة' : 'Hide transcript')
+              : (lang === 'ar' ? 'إظهار المحادثة' : 'Show transcript')}
           >
             {isTranscriptVisible ? '▼ ' + t.liveChat : '💬 ' + t.liveChat}
           </button>
 
           <div className="transcript-overlay" style={{ display: isTranscriptVisible ? 'flex' : 'none' }}>
-            <div className="transcript-messages">
+            <div
+              className="transcript-messages"
+              id="live-transcript"
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions text"
+            >
               {transcript.map((entry, idx) => (
                 <div
                   key={idx}
                   className={`transcript-entry transcript-${entry.role}`}
                   style={entry.cogColor ? {
                     /* ── Feature ③: COGNITIVE TRANSCRIPT COLORING ── */
-                    borderLeft: entry.role === 'user' ? `2px solid ${entry.cogColor}` : undefined,
-                    borderRight: entry.role === 'model' ? `2px solid ${entry.cogColor}` : undefined,
+                    borderLeft: entry.role === 'user' || entry.role === 'user_agent' ? `2px solid ${entry.cogColor}` : undefined,
+                    borderRight: entry.role === 'agent' ? `2px solid ${entry.cogColor}` : undefined,
                     background: `${entry.cogColor}08`,
                   } : undefined}
                 >
+                  <span className="transcript-speaker">{getTranscriptSpeakerLabel(entry.role)}</span>
                   <span className="transcript-time">{entry.time}</span>
                   <span className="transcript-text">{entry.text}</span>
                 </div>
@@ -3339,18 +4099,16 @@ function App() {
       <BreathingGuide
         active={showBreathing}
         lang={lang}
+        reducedMotion={effectiveReducedMotion}
         onComplete={() => setShowBreathing(false)}
       />
 
-      {/* ── Feature ②: SACRED PAUSE ── */}
-      {appView === 'live' && isConnected && (
-        <SacredPause tone={voiceTone} isConnected={isConnected} lang={lang} />
-      )}
-
       <main id="main-canvas-content" className="app-canvas-main" role="main" aria-label={lang === 'ar' ? 'مساحة الدوائر' : 'Circle canvas'}>
         <h1 className="visually-hidden">{lang === 'ar' ? 'تطبيق دواير للجلسات الصوتية' : 'Dawayir live voice session app'}</h1>
-        <DawayirCanvas ref={canvasRef} lang={lang} />
+        <DawayirCanvas ref={canvasRef} lang={lang} reducedMotion={effectiveReducedMotion} />
       </main>
+
+      <div className="visually-hidden" ref={srAnnouncerRef} role="status" aria-live="polite" aria-atomic="true" />
 
       {/* ── DNA CARD MODAL ── */}
       {showDNACard && (
@@ -3365,6 +4123,13 @@ function App() {
           onClose={() => setShowDNACard(false)}
         />
       )}
+
+      {/* Circle First Shift Tooltip - one-time onboarding on first circle move */}
+      <CircleFirstShiftTooltip
+        lang={lang}
+        show={showCircleIntro}
+        onDismiss={() => setShowCircleIntro(false)}
+      />
     </div>
   );
 

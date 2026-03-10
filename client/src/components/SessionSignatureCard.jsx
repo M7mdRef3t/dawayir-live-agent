@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const NODE_COLORS = {
   1: '#00F5FF',
@@ -61,15 +61,15 @@ const buildHeadline = ({ lang, focusId, clarityDelta }) => {
 
   if (lang === 'ar') {
     if (focusId === 3 && clarityDelta > 0) {
-      return `هنا بدأت ${circle} تكسب.`;
+      return `هنا ${circle} بدأت توضح أكتر.`;
     }
     if (focusId === 1) {
-      return `هنا هدأ ${circle} وأصبح قابلًا للفهم.`;
+      return `هنا ${circle} هدِيت وبقت مفهومة.`;
     }
     if (focusId === 2) {
-      return `هنا تحولت الفوضى إلى ${circle} قابل للبناء.`;
+      return `هنا ${circle} بدأت ترتب الفوضى.`;
     }
-    return 'هذه كانت لحظة التحول الأوضح في الجلسة.';
+    return 'دي كانت أوضح نقطة تحول في الجلسة.';
   }
 
   if (focusId === 3 && clarityDelta > 0) {
@@ -92,7 +92,7 @@ const buildSupportLine = ({ lang, reason, compareDeltas, currentSnapshot }) => {
     if (clarityDiff > 0) {
       return `ارتفع الوضوح ${metricDeltaLabel(clarityDiff)} مقارنةً بالجلسة السابقة، بينما وصل التوازن إلى ${equilibrium}.`;
     }
-    return reason || 'هذه اللحظة تمثل أعلى اتساق وصل إليه العقل داخل الجلسة الحالية.';
+    return reason || 'اللحظة دي كانت أكتر لحظة متماسكة في الجلسة.';
   }
 
   if (clarityDiff > 0) {
@@ -556,7 +556,7 @@ function SessionSignatureCard({
 
   const handleVoiceQuote = () => {
     if (!voiceQuote || !('speechSynthesis' in window)) {
-      window.alert(lang === 'ar' ? 'المتصفح الحالي لا يدعم النطق المحلي.' : 'This browser does not support local speech playback.');
+      window.alert(lang === 'ar' ? 'المتصفح الحالي مش بيدعم تشغيل الصوت المحلي.' : 'This browser does not support local speech playback.');
       return;
     }
 
@@ -619,12 +619,10 @@ function SessionSignatureCard({
         </div>
         <div className="signature-actions">
           <button className="signature-action-btn voice" onClick={handleVoiceQuote}>
-            {isSpeaking
-              ? (lang === 'ar' ? 'إيقاف النطق' : 'Stop Voice Quote')
-              : (lang === 'ar' ? 'اسمع اللحظة' : 'Hear the Moment')}
+            {isSpeaking ? (lang === 'ar' ? 'أوقف الصوت' : 'Stop Voice Quote') : (lang === 'ar' ? 'اسمع اللحظة' : 'Hear the Moment')}
           </button>
           <button className="signature-action-btn" onClick={handleTrustedShare}>
-            {lang === 'ar' ? 'شاركها مع شخص تثق به' : 'Share with someone you trust'}
+            {lang === 'ar' ? 'شاركها مع حد تثق فيه' : 'Share with someone you trust'}
           </button>
           <button className="signature-action-btn export" onClick={handleExportPoster}>
             {lang === 'ar' ? 'احفظها كصورة' : 'Save as Poster'}
@@ -634,7 +632,7 @@ function SessionSignatureCard({
 
       <div className="signature-moment-body">
         <div className="signature-reason-block">
-          <span>{lang === 'ar' ? 'لماذا هذه اللحظة؟' : 'Why this moment?'}</span>
+          <span>{lang === 'ar' ? 'ليه اللحظة دي؟' : 'Why this moment?'}</span>
           <strong>{signatureStep.reason}</strong>
           <div className="signature-metrics-row">
             <div>
@@ -680,7 +678,7 @@ function SessionSignatureCard({
           <div className="signature-compare-header">
             <div>
               <span>{lang === 'ar' ? 'قبل / بعد' : 'Before / After'}</span>
-              <strong>{lang === 'ar' ? 'مقارنة جاهزة للنشر بين جلستين' : 'Share-ready comparison between two sessions'}</strong>
+              <strong>{lang === 'ar' ? 'مقارنة جاهزة للمشاركة بين جلستين' : 'Share-ready comparison between two sessions'}</strong>
             </div>
             <button className="signature-action-btn compare" onClick={handleExportBeforeAfterPoster}>
               {lang === 'ar' ? 'احفظ قبل / بعد' : 'Save Before / After'}

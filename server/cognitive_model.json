@@ -11,30 +11,30 @@
     "metrics": {
         "equilibrium_score": "Ratio of Awareness/Truth/Knowledge balance (0.0 - 1.0)",
         "overload_index": "Calculated based on speed of input vs stability of Awareness",
-        "clarity_delta": "The difference in Truth alignment from session start to current moment"
+        "clarity_delta": "The alignment between Awareness, Science and Reality from session start to now"
     },
     "kernel": {
         "layers": {
             "cognitive_schema": {
                 "nodes": {
                     "1": {
-                        "label_ar": "الوعي",
-                        "label_en": "Awareness",
-                        "definition": "Processing Capacity",
+                        "label_ar": "أنت",
+                        "label_en": "You",
+                        "definition": "User Awareness — how they perceive their situation",
                         "default_weight": 0.6,
                         "math_property": "bandwidth"
                     },
                     "2": {
                         "label_ar": "العلم",
-                        "label_en": "Knowledge",
-                        "definition": "Structural Logic",
+                        "label_en": "Science",
+                        "definition": "What Science knows — evidence-based knowledge",
                         "default_weight": 0.5,
                         "math_property": "entropy_reduction"
                     },
                     "3": {
-                        "label_ar": "الحقيقة",
-                        "label_en": "Truth",
-                        "definition": "Objective Alignment",
+                        "label_ar": "الواقع",
+                        "label_en": "Reality",
+                        "definition": "Reality — what actually exists in the user's life",
                         "default_weight": 0.4,
                         "math_property": "vector_alignment"
                     }

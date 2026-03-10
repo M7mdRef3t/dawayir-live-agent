@@ -1,17 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 const ACHIEVEMENTS = [
-  { key: 'firstWord', icon: '\uD83C\uDFA4', ar: 'أول كلمة — بدأت المحادثة', en: 'First Word — Conversation started' },
-  { key: 'firstReply', icon: '\uD83D\uDDE3\uFE0F', ar: 'أول رد — الوكيل استجاب', en: 'First Reply — Agent responded' },
-  { key: 'awarenessShift', icon: '\uD83D\uDD35', ar: 'الوعي تحرك — دايرة الوعي اتغيرت', en: 'Awareness Shifted — Circle updated' },
-  { key: 'knowledgeShift', icon: '\uD83D\uDFE2', ar: 'العلم تحرك — دايرة العلم اتغيرت', en: 'Knowledge Shifted — Circle updated' },
-  { key: 'truthShift', icon: '\uD83D\uDFE3', ar: 'الحقيقة تحركت — دايرة الحقيقة اتغيرت', en: 'Truth Shifted — Circle updated' },
-  { key: 'deepConvo', icon: '\uD83D\uDCAC', ar: 'محادثة عميقة — ٥+ رسائل متبادلة', en: 'Deep Conversation — 5+ messages exchanged' },
-  { key: 'sentimentShift', icon: '\uD83D\uDCA1', ar: 'تحليل مشاعر — الألوان تغيرت حسب حالتك', en: 'Sentiment Shift — Colors changed with mood' },
-  { key: 'bargeIn', icon: '\u270B', ar: 'مقاطعة ناجحة — قاطعت الوكيل وسكت فوراً', en: 'Barge-in — Interrupted agent successfully' },
-  { key: 'visionUsed', icon: '\uD83D\uDC41\uFE0F', ar: 'الرؤية — الوكيل شاف صورتك وحللها', en: 'Vision Used — Agent analyzed your photo' },
-  { key: 'voiceCommand', icon: '\uD83C\uDFAF', ar: 'أمر صوتي — تحكمت في الدواير بصوتك', en: 'Voice Command — Controlled circles by voice' },
-  { key: 'reconnected', icon: '\uD83D\uDD04', ar: 'إعادة اتصال — النظام استعاد الجلسة تلقائياً', en: 'Reconnected — Session restored automatically' },
+  { key: 'firstWord', icon: '\uD83C\uDFA4', ar: 'أول كلمة — بدأت الجلسة', en: 'First Word — Conversation started' },
+  { key: 'firstReply', icon: '\uD83D\uDDE3\uFE0F', ar: 'أول رد — دواير جاوبت', en: 'First Reply — Agent responded' },
+  { key: 'awarenessShift', icon: '\uD83D\uDD35', ar: 'الوعي اتحرك — دايرة الوعي اتبدلت', en: 'Awareness Shifted — Circle updated' },
+  { key: 'knowledgeShift', icon: '\uD83D\uDFE2', ar: 'العلم اتحرك — دايرة العلم اتبدلت', en: 'Knowledge Shifted — Circle updated' },
+  { key: 'truthShift', icon: '\uD83D\uDFE3', ar: 'الحقيقة اتحركت — دايرة الحقيقة اتبدلت', en: 'Truth Shifted — Circle updated' },
+  { key: 'deepConvo', icon: '\uD83D\uDCAC', ar: 'محادثة عميقة — أكتر من ٥ ردود', en: 'Deep Conversation — 5+ messages exchanged' },
+  { key: 'sentimentShift', icon: '\uD83D\uDCA1', ar: 'تحول في الإحساس — الألوان اتغيرت مع حالتك', en: 'Sentiment Shift — Colors changed with mood' },
+  { key: 'bargeIn', icon: '\u270B', ar: 'مقاطعة ناجحة — وقفت دواير في وقتها', en: 'Barge-in — Interrupted agent successfully' },
+  { key: 'visionUsed', icon: '\uD83D\uDC41\uFE0F', ar: 'قراءة بالصورة — دواير قرأت حالتك من الصورة', en: 'Vision Used — Agent analyzed your photo' },
+  { key: 'voiceCommand', icon: '\uD83C\uDFAF', ar: 'أمر صوتي — حرّكت الدواير بصوتك', en: 'Voice Command — Controlled circles by voice' },
+  { key: 'reconnected', icon: '\uD83D\uDD04', ar: 'رجع الاتصال — الجلسة كملت تلقائي', en: 'Reconnected — Session restored automatically' },
 ];
 
 function AchievementBar({ achievements, lang }) {
@@ -62,18 +62,22 @@ function AchievementBar({ achievements, lang }) {
       {unlockedCount > 0 && (
         <div className="achievement-bar" role="status" aria-label={lang === 'ar' ? '\u0627\u0644\u0625\u0646\u062C\u0627\u0632\u0627\u062A' : 'Achievements'}>
           <span className="achievement-counter">{unlockedCount}/{ACHIEVEMENTS.length}</span>
-          {ACHIEVEMENTS.map((a) => {
-            const unlocked = achievements[a.key];
-            return (
-              <div
-                key={a.key}
-                className={`achievement-dot ${unlocked ? 'unlocked' : ''}`}
-                title={lang === 'ar' ? a.ar : a.en}
-              >
-                <span className="achievement-icon">{a.icon}</span>
-              </div>
-            );
-          })}
+          <ul className="achievement-dots-list">
+            {ACHIEVEMENTS.map((a) => {
+              const unlocked = achievements[a.key];
+              const label = lang === 'ar' ? a.ar : a.en;
+              return (
+                <li
+                  key={a.key}
+                  className={`achievement-dot ${unlocked ? 'unlocked' : ''}`}
+                  aria-label={label}
+                  title={label}
+                >
+                  <span className="achievement-icon" aria-hidden="true">{a.icon}</span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
     </>

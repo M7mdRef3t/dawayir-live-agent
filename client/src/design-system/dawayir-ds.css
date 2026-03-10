@@ -1,11 +1,8 @@
 /* ============================================================
-   DAWAYIR DESIGN SYSTEM v1.0.0
+   DAWAYIR DESIGN SYSTEM v2.0
    Comprehensive CSS Custom Properties (Design Tokens)
    ============================================================ */
 
-/* ============================================================
-   1. COLOR PRIMITIVES
-   ============================================================ */
 :root {
   /* ── Cyan Scale ── */
   --ds-cyan-50: #e0fcff;
@@ -67,7 +64,7 @@
   --ds-red-800: #992e2e;
   --ds-red-900: #661f1f;
 
-  /* ── Neutral Scale ── */
+  /* ── Neutral Scale (Blue-tinted Grays) ── */
   --ds-neutral-0: #ffffff;
   --ds-neutral-50: #f0f4ff;
   --ds-neutral-100: #c8d2f0;
@@ -92,7 +89,7 @@
   --ds-brand-accent: var(--ds-gold-400);
 
   /* ── Backgrounds ── */
-  --ds-bg-deep: var(--ds-neutral-900);
+  --ds-bg-deep: #020508;
   --ds-bg-mid: var(--ds-neutral-800);
   --ds-bg-surface: rgba(8, 8, 28, 0.82);
   --ds-bg-elevated: rgba(255, 255, 255, 0.04);
@@ -102,8 +99,8 @@
 
   /* ── Text ── */
   --ds-text-primary: var(--ds-neutral-50);
-  --ds-text-secondary: rgba(200, 210, 240, 0.55);
-  --ds-text-disabled: rgba(200, 210, 240, 0.3);
+  --ds-text-secondary: rgba(200, 210, 240, 0.65);
+  --ds-text-disabled: rgba(200, 210, 240, 0.45);
   --ds-text-inverse: #030814;
   --ds-text-link: var(--ds-cyan-500);
 
@@ -155,8 +152,8 @@
 
   /* ── Font Families ── */
   --ds-font-display: 'Outfit', sans-serif;
-  --ds-font-body: 'Inter', sans-serif;
-  --ds-font-arabic: 'Noto Kufi Arabic', 'Inter', sans-serif;
+  --ds-font-body: 'Outfit', sans-serif;
+  --ds-font-arabic: 'Noto Kufi Arabic', 'Outfit', sans-serif;
   --ds-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
   /* ── Font Weights ── */
@@ -168,54 +165,54 @@
   --ds-weight-extrabold: 800;
   --ds-weight-black: 900;
 
-  /* ── Type Scale ── */
-  /* Level 1: Nano */
+  /* ── Main Type Scale ── */
+  /* xs (Nano) */
   --ds-text-nano: 11px;
   --ds-text-nano-lh: 16px;
   --ds-text-nano-ls: 0.4px;
 
-  /* Level 2: Micro */
+  /* 2xs (Micro) */
   --ds-text-micro: 10px;
   --ds-text-micro-lh: 14px;
   --ds-text-micro-ls: 0.5px;
 
-  /* Level 3: Caption */
+  /* sm (Caption) */
   --ds-text-caption: 11px;
   --ds-text-caption-lh: 16px;
   --ds-text-caption-ls: 0.3px;
 
-  /* Level 4: Small */
+  /* base (Small) */
   --ds-text-small: 12px;
   --ds-text-small-lh: 18px;
   --ds-text-small-ls: 0.2px;
 
-  /* Level 5: Body */
+  /* md (Body) */
   --ds-text-body: 14px;
   --ds-text-body-lh: 22px;
   --ds-text-body-ls: 0px;
 
-  /* Level 6: Lead */
+  /* lg (Lead) */
   --ds-text-lead: 16px;
   --ds-text-lead-lh: 24px;
   --ds-text-lead-ls: -0.1px;
 
-  /* Level 7: Title */
+  /* xl (Title) */
   --ds-text-title: 20px;
   --ds-text-title-lh: 28px;
   --ds-text-title-ls: -0.3px;
 
-  /* Level 8: Heading */
+  /* 2xl (Heading) */
   --ds-text-heading: 26px;
   --ds-text-heading-lh: 34px;
   --ds-text-heading-ls: -0.5px;
 
-  /* Level 9: Display */
+  /* 3xl (Display) */
   --ds-text-display: 36px;
   --ds-text-display-lh: 44px;
   --ds-text-display-ls: -0.8px;
 
   /* ============================================================
-     4. SPACING (8px base)
+     4. SPACING
      ============================================================ */
   --ds-space-0: 0px;
   --ds-space-1: 4px;
@@ -232,8 +229,10 @@
   --ds-space-20: 80px;
 
   /* ============================================================
-     5. BORDER RADIUS
+     5. EFFECTS
      ============================================================ */
+
+  /* ── Border Radius ── */
   --ds-radius-none: 0px;
   --ds-radius-xs: 4px;
   --ds-radius-sm: 8px;
@@ -245,32 +244,30 @@
   --ds-radius-full: 100px;
   --ds-radius-circle: 50%;
 
-  /* ============================================================
-     6. SHADOWS & GLOWS
-     ============================================================ */
+  /* ── Shadows & Glows ── */
   --ds-shadow-none: none;
   --ds-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
   --ds-shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
   --ds-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
   --ds-shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.7);
   --ds-shadow-panel: 0 0 60px rgba(0, 245, 255, 0.04), 0 24px 48px rgba(0, 0, 0, 0.7);
+  --ds-shadow-inset: inset 0 0 20px rgba(0, 0, 0, 0.5);
   --ds-glow-cyan: 0 0 20px rgba(0, 245, 255, 0.3);
   --ds-glow-cyan-strong: 0 4px 20px rgba(0, 245, 255, 0.4);
   --ds-glow-green: 0 0 10px rgba(0, 255, 148, 0.3);
   --ds-glow-red: 0 0 10px rgba(255, 95, 109, 0.3);
-  --ds-shadow-inset: inset 0 0 20px rgba(0, 0, 0, 0.5);
 
-  /* ============================================================
-     7. BLUR
-     ============================================================ */
+  /* ── Blurs (Glassmorphism) ── */
   --ds-blur-sm: 8px;
   --ds-blur-md: 10px;
   --ds-blur-lg: 16px;
   --ds-blur-xl: 28px;
 
   /* ============================================================
-     8. MOTION
+     6. MOTION & ANIMATION
      ============================================================ */
+
+  /* ── Durations ── */
   --ds-duration-instant: 0ms;
   --ds-duration-fast: 120ms;
   --ds-duration-normal: 200ms;
@@ -279,6 +276,7 @@
   --ds-duration-slower: 600ms;
   --ds-duration-deliberate: 800ms;
 
+  /* ── Easing ── */
   --ds-ease-default: ease;
   --ds-ease-in: ease-in;
   --ds-ease-out: ease-out;
@@ -287,15 +285,7 @@
   --ds-ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* ============================================================
-     9. GRID
-     ============================================================ */
-  --ds-grid-columns: 12;
-  --ds-grid-gutter: 16px;
-  --ds-grid-margin: 32px;
-  --ds-grid-max-width: 1440px;
-
-  /* ============================================================
-     10. Z-INDEX
+     7. Z-INDEX
      ============================================================ */
   --ds-z-base: 0;
   --ds-z-raised: 1;
@@ -310,342 +300,15 @@
 }
 
 /* ============================================================
-   RESPONSIVE OVERRIDES
+   8. KEYFRAMES
    ============================================================ */
-@media (max-width: 768px) {
-  :root {
-    --ds-grid-margin: 24px;
-    --ds-grid-gutter: 12px;
-  }
-}
 
-@media (max-width: 480px) {
-  :root {
-    --ds-text-heading: 22px;
-    --ds-text-heading-lh: 28px;
-    --ds-text-display: 28px;
-    --ds-text-display-lh: 36px;
-    --ds-text-lead: 14px;
-    --ds-text-lead-lh: 22px;
-    --ds-grid-margin: 16px;
-  }
-}
-
-/* ============================================================
-   HIGH CONTRAST MODE
-   ============================================================ */
-@media (prefers-contrast: high) {
-  :root {
-    --ds-text-secondary: rgba(200, 210, 240, 0.85);
-    --ds-text-disabled: rgba(200, 210, 240, 0.6);
-    --ds-border-default: rgba(0, 245, 255, 0.4);
-    --ds-border-subtle: rgba(255, 255, 255, 0.2);
-    --ds-bg-elevated: rgba(255, 255, 255, 0.1);
-  }
-}
-
-/* ============================================================
-   REDUCED MOTION
-   ============================================================ */
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --ds-duration-fast: 0ms;
-    --ds-duration-normal: 0ms;
-    --ds-duration-moderate: 0ms;
-    --ds-duration-slow: 0ms;
-    --ds-duration-slower: 0ms;
-    --ds-duration-deliberate: 0ms;
-  }
-}
-
-/* ============================================================
-   GRID UTILITIES
-   ============================================================ */
-.ds-grid {
-  display: grid;
-  grid-template-columns: repeat(var(--ds-grid-columns), 1fr);
-  gap: var(--ds-grid-gutter);
-  max-width: var(--ds-grid-max-width);
-  margin-inline: auto;
-  padding-inline: var(--ds-grid-margin);
-}
-
-.ds-col-1 {
-  grid-column: span 1;
-}
-
-.ds-col-2 {
-  grid-column: span 2;
-}
-
-.ds-col-3 {
-  grid-column: span 3;
-}
-
-.ds-col-4 {
-  grid-column: span 4;
-}
-
-.ds-col-5 {
-  grid-column: span 5;
-}
-
-.ds-col-6 {
-  grid-column: span 6;
-}
-
-.ds-col-7 {
-  grid-column: span 7;
-}
-
-.ds-col-8 {
-  grid-column: span 8;
-}
-
-.ds-col-9 {
-  grid-column: span 9;
-}
-
-.ds-col-10 {
-  grid-column: span 10;
-}
-
-.ds-col-11 {
-  grid-column: span 11;
-}
-
-.ds-col-12 {
-  grid-column: span 12;
-}
-
-@media (max-width: 768px) {
-  .ds-col-md-6 {
-    grid-column: span 6;
+@keyframes ds-fade-in {
+  from {
+    opacity: 0;
   }
 
-  .ds-col-md-12 {
-    grid-column: span 12;
-  }
-}
-
-@media (max-width: 480px) {
-  .ds-col-sm-12 {
-    grid-column: span 12;
-  }
-}
-
-/* ============================================================
-   TYPOGRAPHY UTILITIES
-   ============================================================ */
-.ds-text-nano {
-  font-size: var(--ds-text-nano);
-  line-height: var(--ds-text-nano-lh);
-  letter-spacing: var(--ds-text-nano-ls);
-}
-
-.ds-text-micro {
-  font-size: var(--ds-text-micro);
-  line-height: var(--ds-text-micro-lh);
-  letter-spacing: var(--ds-text-micro-ls);
-}
-
-.ds-text-caption {
-  font-size: var(--ds-text-caption);
-  line-height: var(--ds-text-caption-lh);
-  letter-spacing: var(--ds-text-caption-ls);
-}
-
-.ds-text-small {
-  font-size: var(--ds-text-small);
-  line-height: var(--ds-text-small-lh);
-  letter-spacing: var(--ds-text-small-ls);
-}
-
-.ds-text-body {
-  font-size: var(--ds-text-body);
-  line-height: var(--ds-text-body-lh);
-  letter-spacing: var(--ds-text-body-ls);
-}
-
-.ds-text-lead {
-  font-size: var(--ds-text-lead);
-  line-height: var(--ds-text-lead-lh);
-  letter-spacing: var(--ds-text-lead-ls);
-}
-
-.ds-text-title {
-  font-size: var(--ds-text-title);
-  line-height: var(--ds-text-title-lh);
-  letter-spacing: var(--ds-text-title-ls);
-}
-
-.ds-text-heading {
-  font-size: var(--ds-text-heading);
-  line-height: var(--ds-text-heading-lh);
-  letter-spacing: var(--ds-text-heading-ls);
-}
-
-.ds-text-display {
-  font-size: var(--ds-text-display);
-  line-height: var(--ds-text-display-lh);
-  letter-spacing: var(--ds-text-display-ls);
-}
-
-.ds-font-display {
-  font-family: var(--ds-font-display);
-}
-
-.ds-font-body {
-  font-family: var(--ds-font-body);
-}
-
-.ds-font-arabic {
-  font-family: var(--ds-font-arabic);
-  direction: rtl;
-}
-
-.ds-font-mono {
-  font-family: var(--ds-font-mono);
-}
-
-.ds-weight-light {
-  font-weight: var(--ds-weight-light);
-}
-
-.ds-weight-regular {
-  font-weight: var(--ds-weight-regular);
-}
-
-.ds-weight-medium {
-  font-weight: var(--ds-weight-medium);
-}
-
-.ds-weight-semibold {
-  font-weight: var(--ds-weight-semibold);
-}
-
-.ds-weight-bold {
-  font-weight: var(--ds-weight-bold);
-}
-
-.ds-weight-extrabold {
-  font-weight: var(--ds-weight-extrabold);
-}
-
-.ds-weight-black {
-  font-weight: var(--ds-weight-black);
-}
-
-/* ============================================================
-   SPACING UTILITIES
-   ============================================================ */
-.ds-gap-0 {
-  gap: var(--ds-space-0);
-}
-
-.ds-gap-1 {
-  gap: var(--ds-space-1);
-}
-
-.ds-gap-2 {
-  gap: var(--ds-space-2);
-}
-
-.ds-gap-3 {
-  gap: var(--ds-space-3);
-}
-
-.ds-gap-4 {
-  gap: var(--ds-space-4);
-}
-
-.ds-gap-5 {
-  gap: var(--ds-space-5);
-}
-
-.ds-gap-6 {
-  gap: var(--ds-space-6);
-}
-
-.ds-gap-8 {
-  gap: var(--ds-space-8);
-}
-
-.ds-p-0 {
-  padding: var(--ds-space-0);
-}
-
-.ds-p-1 {
-  padding: var(--ds-space-1);
-}
-
-.ds-p-2 {
-  padding: var(--ds-space-2);
-}
-
-.ds-p-3 {
-  padding: var(--ds-space-3);
-}
-
-.ds-p-4 {
-  padding: var(--ds-space-4);
-}
-
-.ds-p-5 {
-  padding: var(--ds-space-5);
-}
-
-.ds-p-6 {
-  padding: var(--ds-space-6);
-}
-
-.ds-p-8 {
-  padding: var(--ds-space-8);
-}
-
-/* ============================================================
-   ANIMATION KEYFRAMES
-   ============================================================ */
-@keyframes ds-blink {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.4;
-  }
-}
-
-@keyframes ds-spin {
   to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes ds-pulse {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.6;
-  }
-}
-
-@keyframes ds-wave {
-
-  0%,
-  100% {
-    transform: scaleY(0.4);
-    opacity: 0.4;
-  }
-
-  50% {
-    transform: scaleY(1);
     opacity: 1;
   }
 }
@@ -674,16 +337,6 @@
   }
 }
 
-@keyframes ds-fade-in {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
 @keyframes ds-scale-in {
   from {
     opacity: 0;
@@ -696,24 +349,81 @@
   }
 }
 
-@keyframes ds-pulse-stress {
+@keyframes ds-pulse {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes ds-blink {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes ds-spin {
   from {
-    opacity: 0.5;
-    transform: scale(0.9);
+    transform: rotate(0deg);
   }
 
   to {
-    opacity: 1;
-    transform: scale(1.2);
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ds-wave {
+  0% {
+    transform: scaleY(0.4);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+
+  100% {
+    transform: scaleY(0.4);
   }
 }
 
 @keyframes ds-shimmer {
-  0% {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
     background-position: -200% 0;
+  }
+}
+
+@keyframes ds-pulse-stress {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
   }
 
   100% {
-    background-position: 200% 0;
+    transform: scale(0.9);
+    opacity: 0.8;
   }
 }

@@ -53,18 +53,79 @@ const getCssVar = (name, fallback) => {
 // the user FEELS it, not sees it. Pure biofeedback.
 // ══════════════════════════════════════════════
 
+// ── CHROMOTHERAPY COLOR MAP ──────────────────────────────────
+// Colors chosen based on color therapy research:
+// Blue calms (lowers heart rate), Green grounds (safety),
+// Gold affirms (self-worth), Violet deepens (introspection),
+// Warm white signals clarity (alignment).
+
+const CHROMO_STATES = {
+    stressed:  { r: 20, g: 40, b: 80 },   // deep blue — calming
+    confused:  { r: 15, g: 50, b: 45 },   // teal-green — grounding
+    selfaware: { r: 50, g: 38, b: 8 },    // warm gold — affirmation
+    clarity:   { r: 40, g: 25, b: 55 },   // soft violet — insight
+    avoidance: { r: 20, g: 22, b: 35 },   // grey-blue — gentle confrontation
+    neutral:   { r: 4, g: 4, b: 15 },     // near-black default
+};
+
+const getChromoState = (nodes) => {
+    if (!nodes || nodes.length < 3) return CHROMO_STATES.neutral;
+    const n1 = nodes.find(n => n.id === 1)?.radius ?? 50; // أنت
+    const n2 = nodes.find(n => n.id === 2)?.radius ?? 50; // العلم
+    const n3 = nodes.find(n => n.id === 3)?.radius ?? 50; // الواقع
+    const avgFluidity = nodes.reduce((s, n) => s + (n.fluidity ?? 0.5), 0) / nodes.length;
+
+    // All low → avoidance (grey-blue)
+    if (n1 < 42 && n2 < 42 && n3 < 42) return CHROMO_STATES.avoidance;
+    // All high & aligned → clarity (violet)
+    if (n1 > 55 && n2 > 55 && n3 > 55) return CHROMO_STATES.clarity;
+    // High fluidity → stressed (calming blue)
+    if (avgFluidity > 0.65) return CHROMO_STATES.stressed;
+    // Self-awareness dominant → gold
+    if (n1 > n2 + 15 && n1 > n3 + 15) return CHROMO_STATES.selfaware;
+    // Low fluidity, grounded → green
+    if (avgFluidity < 0.35) return CHROMO_STATES.confused;
+    return CHROMO_STATES.neutral;
+};
+
+// Smooth transition between chromo states
+let prevChromoR = 4, prevChromoG = 4, prevChromoB = 15;
+
 const drawBackground = (ctx, canvasWidth, canvasHeight, color, nodes) => {
+    // Base fill
     ctx.fillStyle = color;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
     if (!nodes || nodes.length === 0) return;
 
-    // Find dominant node (largest radius)
+    // ── Chromotherapy ambient layer ──────────────────────────
+    const target = getChromoState(nodes);
+    const chromoLerp = 0.02; // very slow transition
+    prevChromoR = prevChromoR + (target.r - prevChromoR) * chromoLerp;
+    prevChromoG = prevChromoG + (target.g - prevChromoG) * chromoLerp;
+    prevChromoB = prevChromoB + (target.b - prevChromoB) * chromoLerp;
+
+    const cr = Math.round(prevChromoR);
+    const cg = Math.round(prevChromoG);
+    const cb = Math.round(prevChromoB);
+
+    // Full-screen therapeutic tint (extremely subtle — felt, not seen)
+    const chromoGrd = ctx.createRadialGradient(
+        canvasWidth / 2, canvasHeight / 2, 0,
+        canvasWidth / 2, canvasHeight / 2,
+        Math.max(canvasWidth, canvasHeight) * 0.7
+    );
+    chromoGrd.addColorStop(0, `rgba(${cr},${cg},${cb},0.18)`);
+    chromoGrd.addColorStop(0.5, `rgba(${cr},${cg},${cb},0.10)`);
+    chromoGrd.addColorStop(1, `rgba(${cr},${cg},${cb},0.03)`);
+    ctx.fillStyle = chromoGrd;
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    // ── Original dominant-node aura (on top of chromo) ──────
     const dominant = nodes.reduce((a, b) => a.radius > b.radius ? a : b);
     const dominantColor = dominant.color;
-    const intensity = Math.min(0.06, (dominant.radius - 60) / 1200); // max 6% opacity
+    const intensity = Math.min(0.06, (dominant.radius - 60) / 1200);
 
-    // Full-screen aura from dominant node position
     const grd = ctx.createRadialGradient(
         dominant.x, dominant.y, 0,
         canvasWidth / 2, canvasHeight / 2,
@@ -74,7 +135,6 @@ const drawBackground = (ctx, canvasWidth, canvasHeight, color, nodes) => {
     grd.addColorStop(0, `rgba(${r},${g},${b},${intensity * 2})`);
     grd.addColorStop(0.5, `rgba(${r},${g},${b},${intensity})`);
     grd.addColorStop(1, `rgba(${r},${g},${b},0)`);
-
     ctx.fillStyle = grd;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 };
@@ -209,6 +269,271 @@ const drawSatellites = (ctx, satellites, nodes, now) => {
 // Drawn as a mini sparkline at the bottom of canvas
 // ══════════════════════════════════════════════
 
+
+// ══════════════════════════════════════════════════
+// THE OTHER PERSON — دايرة الآخر
+// A smaller blob that appears when the user mentions
+// someone specific. Connected to "أنت" by a colored
+// link that represents the relationship quality.
+// Auto-fades after 5 minutes without re-mention.
+// ══════════════════════════════════════════════════
+
+const OTHER_FADE_MS = 300000; // 5 minutes
+
+const drawOtherNode = (ctx, otherNode, selfNode, now) => {
+    if (!otherNode || !selfNode) return;
+
+    const elapsed = now - otherNode.born;
+    const sinceLastMention = now - otherNode.lastMentioned;
+
+    // Auto-fade after 5 min
+    if (sinceLastMention > OTHER_FADE_MS) {
+        otherNode.targetRadius = 0;
+        otherNode.targetOpacity = 0;
+    }
+
+    // Animate radius and opacity
+    const lerpSpd = 0.06;
+    otherNode.radius += (otherNode.targetRadius - otherNode.radius) * lerpSpd;
+    otherNode.opacity += (otherNode.targetOpacity - otherNode.opacity) * lerpSpd;
+
+    if (otherNode.radius < 1 && otherNode.targetRadius === 0) return null; // fully gone
+
+    const r = otherNode.radius;
+    const cx = otherNode.x;
+    const cy = otherNode.y;
+    const alpha = otherNode.opacity;
+    const tension = otherNode.tension;
+    const color = otherNode.color;
+
+    // ── CONNECTION LINE to "أنت" ────────────────────────
+    const grad = ctx.createLinearGradient(selfNode.x, selfNode.y, cx, cy);
+    // Line color intensity based on tension
+    const lineAlpha = alpha * (0.15 + tension * 0.25);
+    grad.addColorStop(0, hexToRgba(selfNode.color, lineAlpha));
+    grad.addColorStop(1, hexToRgba(color, lineAlpha));
+    ctx.beginPath();
+    ctx.moveTo(selfNode.x, selfNode.y);
+
+    // Curved connection — tension = more curve
+    const midX = (selfNode.x + cx) / 2 + Math.sin(now * 0.001) * tension * 30;
+    const midY = (selfNode.y + cy) / 2 - 20 - tension * 15;
+    ctx.quadraticCurveTo(midX, midY, cx, cy);
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 1.5 + tension * 1.5;
+    ctx.setLineDash(tension > 0.6 ? [4, 6] : []); // dashed if high tension
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Tension spark on line (for high tension)
+    if (tension > 0.5) {
+        const sparkT = ((now * 0.002) % 1);
+        const sx = selfNode.x + (cx - selfNode.x) * sparkT;
+        const sy = selfNode.y + (cy - selfNode.y) * sparkT - Math.sin(sparkT * Math.PI) * tension * 20;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(color, alpha * 0.6);
+        ctx.fill();
+    }
+
+    // ── THE OTHER — blob shape (same as "أنت" but smaller) ──
+    // Outer glow
+    ctx.beginPath();
+    const glowSteps = 50;
+    for (let i = 0; i <= glowSteps; i++) {
+        const theta = (i / glowSteps) * Math.PI * 2;
+        const wave = 0.12 + tension * 0.15;
+        let wr = (r + 4) * (1 + Math.sin(theta * 4 + now * 0.002) * wave);
+        const px = cx + Math.cos(theta) * wr;
+        const py = cy + Math.sin(theta) * wr;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = hexToRgba(color, alpha * 0.12);
+    ctx.fill();
+
+    // Main body
+    ctx.beginPath();
+    for (let i = 0; i <= glowSteps; i++) {
+        const theta = (i / glowSteps) * Math.PI * 2;
+        const wave = 0.10 + tension * 0.12;
+        let wr = r * (1 + Math.sin(theta * 4 + now * 0.002) * wave);
+        const px = cx + Math.cos(theta) * wr;
+        const py = cy + Math.sin(theta) * wr;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = hexToRgba(color, alpha * 0.5);
+    ctx.fill();
+    ctx.strokeStyle = hexToRgba(color, alpha * 0.7);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Name label
+    if (r > 15) {
+        const fontSize = Math.max(9, Math.floor(r / 2.8));
+        ctx.font = `600 ${fontSize}px 'Outfit', sans-serif`;
+        ctx.fillStyle = `rgba(255,255,255,${alpha * 0.9})`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(otherNode.name, cx, cy);
+    }
+
+    return otherNode; // still alive
+};
+
+
+// ══════════════════════════════════════════════════
+// DIVINE VOICE ORB — "Sound from the Cosmos"
+// A celestial orb that appears at canvas center when
+// Dawayir speaks, creating an otherworldly presence.
+// Pulsing rings, gold particles, and light beams
+// that reach out to touch the three circles.
+// ══════════════════════════════════════════════════
+
+const DIVINE_ORB_PARTICLES_MAX = 24;
+
+const spawnOrbParticles = (particles, cx, cy, now) => {
+    // Spawn 1-2 new particles per frame
+    const toSpawn = Math.random() < 0.6 ? 1 : 2;
+    for (let i = 0; i < toSpawn && particles.length < DIVINE_ORB_PARTICLES_MAX; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 0.3 + Math.random() * 0.8;
+        particles.push({
+            x: cx + (Math.random() - 0.5) * 20,
+            y: cy + (Math.random() - 0.5) * 20,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 0.2, // drift upwards
+            size: 1 + Math.random() * 2.5,
+            life: 1.0,
+            decay: 0.008 + Math.random() * 0.012,
+            born: now,
+        });
+    }
+    return particles;
+};
+
+const drawDivineOrb = (ctx, canvasWidth, canvasHeight, nodes, amp, now) => {
+    const cx = canvasWidth / 2;
+    const cy = canvasHeight * 0.42;
+
+    // Subtle canvas dim — darkens everything slightly for focus
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.08 + amp * 0.12})`;
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    // ── 1. AURORA — wide soft glow behind the orb ────────────────
+    const auroraR = 180 + amp * 120;
+    const auroraGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, auroraR);
+    auroraGrd.addColorStop(0, `rgba(255, 215, 0, ${0.04 + amp * 0.06})`);
+    auroraGrd.addColorStop(0.4, `rgba(255, 180, 0, ${0.02 + amp * 0.03})`);
+    auroraGrd.addColorStop(0.7, `rgba(200, 120, 255, ${0.01 + amp * 0.02})`);
+    auroraGrd.addColorStop(1, 'transparent');
+    ctx.beginPath();
+    ctx.arc(cx, cy, auroraR, 0, Math.PI * 2);
+    ctx.fillStyle = auroraGrd;
+    ctx.fill();
+
+    // ── 2. SHOCKWAVE RINGS — expanding circles ────────────────────
+    const ringCount = 3;
+    for (let i = 0; i < ringCount; i++) {
+        const phase = ((now * 0.0008) + i * 0.33) % 1.0;
+        const ringR = 20 + phase * (100 + amp * 80);
+        const ringOpacity = (1 - phase) * (0.12 + amp * 0.18);
+        if (ringOpacity < 0.01) continue;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 215, 0, ${ringOpacity})`;
+        ctx.lineWidth = 1.5 - phase;
+        ctx.stroke();
+    }
+
+    // ── 3. CORE ORB — the divine source ───────────────────────────
+    const orbR = 16 + amp * 22;
+    const pulse = Math.sin(now * 0.006) * 0.3 + 0.7; // 0.4..1.0
+
+    // Inner orb glow
+    const orbGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, orbR * 2);
+    orbGrd.addColorStop(0, `rgba(255, 240, 200, ${0.7 * pulse})`);
+    orbGrd.addColorStop(0.3, `rgba(255, 200, 80, ${0.4 * pulse})`);
+    orbGrd.addColorStop(0.6, `rgba(255, 150, 0, ${0.12 * pulse})`);
+    orbGrd.addColorStop(1, 'transparent');
+    ctx.beginPath();
+    ctx.arc(cx, cy, orbR * 2, 0, Math.PI * 2);
+    ctx.fillStyle = orbGrd;
+    ctx.fill();
+
+    // Solid core
+    ctx.beginPath();
+    ctx.arc(cx, cy, orbR * 0.6, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 245, 220, ${0.6 + amp * 0.4})`;
+    ctx.fill();
+
+    // Rotating halo
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(now * 0.0003);
+    ctx.beginPath();
+    ctx.arc(0, 0, orbR * 1.1, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 215, 0, ${0.25 + amp * 0.25})`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 8]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // ── 4. LIGHT BEAMS to circles ────────────────────────────────
+    if (nodes && nodes.length > 0 && amp > 0.05) {
+        nodes.forEach((node, idx) => {
+            const beamPhase = ((now * 0.001) + idx * 0.4) % 1.0;
+            const beamOpacity = amp * 0.15 * Math.sin(beamPhase * Math.PI);
+            if (beamOpacity < 0.01) return;
+
+            const grad = ctx.createLinearGradient(cx, cy, node.x, node.y);
+            grad.addColorStop(0, `rgba(255, 215, 0, ${beamOpacity * 1.5})`);
+            grad.addColorStop(0.5, `rgba(255, 200, 100, ${beamOpacity * 0.6})`);
+            grad.addColorStop(1, 'transparent');
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(node.x, node.y);
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = Math.min(1, beamOpacity * 3);
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+        });
+    }
+};
+
+const updateOrbParticles = (ctx, particles, now) => {
+    const alive = [];
+    particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy -= 0.003; // slight upwards drift
+        p.life -= p.decay;
+        if (p.life <= 0) return;
+
+        const alpha = p.life * 0.8;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 215, 80, ${alpha})`;
+        ctx.fill();
+
+        // Tiny sparkle highlight
+        if (p.life > 0.5 && p.size > 1.5) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * 0.3, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
+            ctx.fill();
+        }
+
+        alive.push(p);
+    });
+    return alive;
+};
+
 const TIMELINE_INTERVAL_MS = 12000;
 const TIMELINE_MAX_POINTS = 12;
 
@@ -326,27 +651,44 @@ const updateNodesPhysics = (nodes, draggingNode, canvasWidth, canvasHeight, minX
 // that travels from node to node continuously.
 // ══════════════════════════════════════════════
 
-const drawConnections = (ctx, nodes, dashOffsetRef) => {
+const drawConnections = (ctx, nodes, dashOffsetRef, reducedMotion = false) => {
     const now = Date.now();
 
-    dashOffsetRef.current += 0.2;
+    if (!reducedMotion) {
+        dashOffsetRef.current += 0.2;
+    }
 
     for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
             const a = nodes[i];
             const b = nodes[j];
 
-            // Base connection line (slim, elegant)
+            // ── ALIGNMENT GLOW — shows match/mismatch between circles
+            // Compare radii similarity to determine alignment
+            const radiusDiff = Math.abs(a.radius - b.radius);
+            const maxR = Math.max(a.radius, b.radius, 1);
+            const alignment = 1 - (radiusDiff / maxR); // 0=misaligned, 1=aligned
+            // Green glow for aligned, red tint for misaligned
+            const alignR = Math.round(lerp(255, 0, alignment));
+            const alignG = Math.round(lerp(60, 200, alignment));
+            const alignB = Math.round(lerp(60, 100, alignment));
+            const alignAlpha = 0.08 + alignment * 0.12; // brighter when aligned
+
             const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-            grad.addColorStop(0, hexToRgba(a.color, 0.12));
-            grad.addColorStop(1, hexToRgba(b.color, 0.12));
+            grad.addColorStop(0, `rgba(${alignR},${alignG},${alignB},${alignAlpha})`);
+            grad.addColorStop(0.5, `rgba(${alignR},${alignG},${alignB},${alignAlpha * 1.3})`);
+            grad.addColorStop(1, `rgba(${alignR},${alignG},${alignB},${alignAlpha})`);
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
             ctx.strokeStyle = grad;
-            ctx.lineWidth = 1;
-            ctx.setLineDash([]);
+            ctx.lineWidth = 0.8 + alignment * 1.5; // thicker when aligned
+            ctx.setLineDash(alignment < 0.3 ? [3, 6] : []); // dashed when misaligned
             ctx.stroke();
+
+            if (reducedMotion) {
+                continue;
+            }
 
             // Flowing light dot — cycles 0→1 every 4s, per pair
             const cycleMs = 3500 + (i * 700 + j * 300);
@@ -367,6 +709,68 @@ const drawConnections = (ctx, nodes, dashOffsetRef) => {
 };
 
 
+// ── SHAPE IDENTITY: Each circle has a unique shape that mirrors its meaning.
+// أنت (id=1)  → organic blob (alive, imperfect, human)
+// العلم (id=2) → hexagon (precise, crystalline, rational)
+// الواقع (id=3) → diamond (solid, grounded, factual)
+
+const drawBlob = (ctx, cx, cy, r, f, time) => {
+    // Organic amoeba shape — exaggerated for id=1 "أنت"
+    ctx.beginPath();
+    const steps = 80;
+    for (let i = 0; i <= steps; i++) {
+        const theta = (i / steps) * Math.PI * 2;
+        // Always has organic character (not just when fluidity>0.5)
+        const baseWave = 0.18 + f * 0.22; // 0.18..0.40
+        let wr = r;
+        wr += Math.sin(theta * 5 + time * 0.0028) * r * baseWave;
+        wr += Math.cos(theta * 3 - time * 0.0021) * r * 0.12;
+        wr += Math.sin(theta * 7 + time * 0.0015) * r * 0.06;
+        const x = cx + Math.cos(theta) * wr;
+        const y = cy + Math.sin(theta) * wr;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+};
+
+const drawHexagon = (ctx, cx, cy, r, f, time) => {
+    // Crystalline hexagon for id=2 "العلم" — can wobble slightly if fluidity is high
+    ctx.beginPath();
+    const sides = 6;
+    for (let i = 0; i <= sides; i++) {
+        const theta = (i / sides) * Math.PI * 2 - Math.PI / 6; // flat top
+        let wr = r;
+        if (f > 0.6) {
+            // High fluidity: slightly wavy hex
+            wr += Math.sin(theta * 3 + time * 0.002) * r * (f - 0.6) * 0.3;
+        }
+        const x = cx + Math.cos(theta) * wr;
+        const y = cy + Math.sin(theta) * wr;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+};
+
+const drawDiamond = (ctx, cx, cy, r, f, time) => {
+    // Diamond / rhombus for id=3 "الواقع" — solid when clear, shaky when unclear
+    ctx.beginPath();
+    const scale = f < 0.4 ? 1.0 : 1.0 - (f - 0.4) * 0.12; // compress vertically if uncertain
+    const jitter = f > 0.6 ? Math.sin(time * 0.005) * r * (f - 0.6) * 0.12 : 0;
+    ctx.moveTo(cx, cy - r * 1.08 + jitter);           // top
+    ctx.lineTo(cx + r * 0.82, cy + jitter * 0.5);     // right
+    ctx.lineTo(cx, cy + r * scale + jitter * 0.8);    // bottom
+    ctx.lineTo(cx - r * 0.82, cy + jitter * 0.5);     // left
+    ctx.closePath();
+};
+
+const drawNodeShape = (ctx, node, cx, cy, r, f, time) => {
+    if (node.id === 1) return drawBlob(ctx, cx, cy, r, f, time);
+    if (node.id === 2) return drawHexagon(ctx, cx, cy, r, f, time);
+    if (node.id === 3) return drawDiamond(ctx, cx, cy, r, f, time);
+    // Fallback: original dynamic shape
+    return drawDynamicShape(ctx, cx, cy, r, f, time);
+};
+
 const drawDynamicShape = (ctx, cx, cy, r, f, time) => {
     ctx.beginPath();
     const steps = 80;
@@ -374,69 +778,235 @@ const drawDynamicShape = (ctx, cx, cy, r, f, time) => {
         const theta = (i / steps) * Math.PI * 2;
         let wr = r;
         if (f > 0.5) {
-            // Wavy / Fluid
-            const wave = (f - 0.5) * 2; // 0 to 1
+            const wave = (f - 0.5) * 2;
             wr += Math.sin(theta * 6 + time * 0.003) * 12 * wave;
             wr += Math.cos(theta * 4 - time * 0.002) * 8 * wave;
         } else if (f < 0.5) {
-            // Stable / Squircle
-            const rigidity = (0.5 - f) * 2; // 0 to 1
+            const rigidity = (0.5 - f) * 2;
             const cos = Math.cos(theta);
             const sin = Math.sin(theta);
             const maxCosSin = Math.max(Math.abs(cos), Math.abs(sin));
             const squircleR = r / (Math.pow(maxCosSin, 0.45));
             wr = lerp(r, squircleR * 0.85, rigidity);
         }
-
         const x = cx + Math.cos(theta) * wr;
         const y = cy + Math.sin(theta) * wr;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.closePath();
 };
 
-const drawNodes = (ctx, nodes, now) => {
-    nodes.forEach(node => {
-        const currentRadius = node.radius + (node.pulse * 20);
-        const f = node.fluidity ?? 0.5;
 
-        // Pulse ring
-        if (node.pulse > 0.1) {
-            drawDynamicShape(ctx, node.x, node.y, currentRadius + (node.pulse * 30), f, now);
+// ══════════════════════════════════════════════════
+// NEURAL NETWORK TEXTURE — Internal Pathways
+// Each circle shows an internal network of lines
+// representing the "pathways" of thought/perception.
+// أنت: dense, organic, tangled (learned patterns)
+// العلم: ordered, geometric grid (structured knowledge)
+// الواقع: few strong lines (hard facts)
+// ══════════════════════════════════════════════════
+
+const drawNeuralNetwork = (ctx, node, cx, cy, r, f, time) => {
+    if (r < 30) return; // too small to show detail
+
+    ctx.save();
+    ctx.beginPath();
+    // Clip to the circle shape so network stays inside
+    ctx.arc(cx, cy, r * 0.88, 0, Math.PI * 2);
+    ctx.clip();
+
+    const innerR = r * 0.75;
+
+    if (node.id === 1) {
+        // ── أنت: ORGANIC TANGLED NETWORK ─────────────────
+        // Dense, slightly chaotic — represents learned patterns,
+        // childhood wiring, emotional habits
+        const density = 6 + Math.floor(f * 6); // 6-12 paths
+        const nodePoints = [];
+
+        for (let i = 0; i < density; i++) {
+            const angle = (i / density) * Math.PI * 2 + time * 0.0003;
+            const dist = innerR * (0.2 + Math.random() * 0.6);
+            const wobble = Math.sin(time * 0.002 + i * 1.3) * innerR * f * 0.15;
+            nodePoints.push({
+                x: cx + Math.cos(angle) * dist + wobble,
+                y: cy + Math.sin(angle) * dist + wobble * 0.7,
+            });
+        }
+
+        // Draw connections between nearby points
+        const opacity = 0.12 + f * 0.08;
+        ctx.strokeStyle = hexToRgba(node.color, opacity);
+        ctx.lineWidth = 0.8;
+
+        for (let i = 0; i < nodePoints.length; i++) {
+            for (let j = i + 1; j < nodePoints.length; j++) {
+                const dx = nodePoints[i].x - nodePoints[j].x;
+                const dy = nodePoints[i].y - nodePoints[j].y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < innerR * 0.8) {
+                    ctx.beginPath();
+                    // Curved lines for organic feel
+                    const midX = (nodePoints[i].x + nodePoints[j].x) / 2 +
+                                 Math.sin(time * 0.001 + i) * 8 * f;
+                    const midY = (nodePoints[i].y + nodePoints[j].y) / 2 +
+                                 Math.cos(time * 0.001 + j) * 8 * f;
+                    ctx.moveTo(nodePoints[i].x, nodePoints[i].y);
+                    ctx.quadraticCurveTo(midX, midY, nodePoints[j].x, nodePoints[j].y);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Tiny neuron dots at intersection points
+        nodePoints.forEach((p, i) => {
+            const dotPulse = 0.5 + Math.sin(time * 0.004 + i * 0.8) * 0.5;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 1.5 + dotPulse, 0, Math.PI * 2);
+            ctx.fillStyle = hexToRgba(node.color, 0.2 + dotPulse * 0.15);
+            ctx.fill();
+        });
+
+    } else if (node.id === 2) {
+        // ── العلم: GEOMETRIC GRID NETWORK ────────────────
+        // Ordered, structured, hexagonal — represents proven knowledge
+        const gridSize = Math.max(18, 24 - f * 10); // tighter when stable
+        const opacity = 0.08 + (1 - f) * 0.06; // more visible when low fluidity
+
+        ctx.strokeStyle = hexToRgba(node.color, opacity);
+        ctx.lineWidth = 0.6;
+
+        // Horizontal lines
+        for (let y = cy - innerR; y < cy + innerR; y += gridSize) {
+            const dx = Math.sqrt(Math.max(0, innerR * innerR - (y - cy) * (y - cy)));
+            ctx.beginPath();
+            ctx.moveTo(cx - dx, y);
+            ctx.lineTo(cx + dx, y);
+            ctx.stroke();
+        }
+
+        // Diagonal lines (hex-like pattern)
+        for (let x = cx - innerR; x < cx + innerR; x += gridSize) {
+            const dy = Math.sqrt(Math.max(0, innerR * innerR - (x - cx) * (x - cx)));
+            ctx.beginPath();
+            ctx.moveTo(x, cy - dy);
+            ctx.lineTo(x + gridSize * 0.5, cy + dy);
+            ctx.stroke();
+        }
+
+        // Knowledge nodes at intersections
+        for (let y = cy - innerR; y < cy + innerR; y += gridSize) {
+            for (let x = cx - innerR; x < cx + innerR; x += gridSize) {
+                const dx = x - cx;
+                const dy2 = y - cy;
+                if (dx * dx + dy2 * dy2 < innerR * innerR * 0.7) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, 1.2, 0, Math.PI * 2);
+                    ctx.fillStyle = hexToRgba(node.color, opacity * 1.5);
+                    ctx.fill();
+                }
+            }
+        }
+
+    } else if (node.id === 3) {
+        // ── الواقع: FEW STRONG LINES ────────────────────
+        // Minimal, bold, definite — represents hard facts
+        const lineCount = 3 + Math.floor((1 - f) * 3); // 3-6 lines (more when stable)
+        const opacity = 0.10 + (1 - f) * 0.10; // stronger when certain
+
+        ctx.strokeStyle = hexToRgba(node.color, opacity);
+        ctx.lineWidth = 1.5 + (1 - f) * 1; // thicker when f is low (certain)
+        ctx.lineCap = 'round';
+
+        for (let i = 0; i < lineCount; i++) {
+            const angle = (i / lineCount) * Math.PI + time * 0.0001;
+            const len = innerR * (0.5 + (1 - f) * 0.3);
+            ctx.beginPath();
+            ctx.moveTo(
+                cx + Math.cos(angle) * len * 0.2,
+                cy + Math.sin(angle) * len * 0.2
+            );
+            ctx.lineTo(
+                cx + Math.cos(angle) * len,
+                cy + Math.sin(angle) * len
+            );
+            ctx.stroke();
+
+            // Strong endpoint dot — "fact anchor"
+            ctx.beginPath();
+            ctx.arc(
+                cx + Math.cos(angle) * len,
+                cy + Math.sin(angle) * len,
+                2 + (1 - f) * 1.5, 0, Math.PI * 2
+            );
+            ctx.fillStyle = hexToRgba(node.color, opacity * 1.3);
+            ctx.fill();
+        }
+
+        // Central anchor point
+        ctx.beginPath();
+        ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(node.color, opacity * 1.5);
+        ctx.fill();
+    }
+
+    ctx.restore();
+};
+
+const drawNodes = (ctx, nodes, now, reducedMotion = false) => {
+    nodes.forEach(node => {
+        const currentRadius = node.radius + (reducedMotion ? 0 : node.pulse * 20);
+        const f = node.fluidity ?? 0.5;
+        const drawTime = reducedMotion ? 0 : now;
+
+        // Pulse ring — uses the per-id shape
+        if (!reducedMotion && node.pulse > 0.1) {
+            drawNodeShape(ctx, node, node.x, node.y, currentRadius + (node.pulse * 30), f, drawTime);
             ctx.strokeStyle = hexToRgba(node.color, node.pulse * 0.75);
             ctx.lineWidth = 3;
             ctx.stroke();
         }
 
-        // Outer glow circle
-        drawDynamicShape(ctx, node.x, node.y, currentRadius + 6, f, now);
+        // Outer glow — identity shape
+        drawNodeShape(ctx, node, node.x, node.y, currentRadius + 6, f, drawTime);
         ctx.fillStyle = hexToRgba(node.color, 0.15);
         ctx.fill();
 
-        // Main circle
-        drawDynamicShape(ctx, node.x, node.y, currentRadius, f, now);
+        // Main fill — identity shape
+        drawNodeShape(ctx, node, node.x, node.y, currentRadius, f, drawTime);
         ctx.fillStyle = hexToRgba(node.color, 0.6);
         ctx.fill();
 
-        // Highlight dot
+        // ── NEURAL NETWORK TEXTURE — internal pathways ──────
+        if (!reducedMotion && currentRadius > 35) {
+            drawNeuralNetwork(ctx, node, node.x, node.y, currentRadius, f, drawTime);
+        }
+
+        // Inner edge stroke for crispness
+        drawNodeShape(ctx, node, node.x, node.y, currentRadius, f, drawTime);
+        ctx.strokeStyle = hexToRgba(node.color, 0.85);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Highlight dot (shifted per shape for better feel)
+        const hlOffset = node.id === 3 ? 0.25 : 0.33; // diamond: more centered
         ctx.beginPath();
-        ctx.arc(node.x - currentRadius / 3, node.y - currentRadius / 3, currentRadius / 5, 0, Math.PI * 2);
+        ctx.arc(node.x - currentRadius * hlOffset, node.y - currentRadius * hlOffset,
+                currentRadius / 5, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.fill();
 
         // Main label
         const labelSize = Math.floor(currentRadius / 3.5);
         ctx.fillStyle = '#FFF';
-        ctx.font = `600 ${labelSize}px 'Outfit', sans-serif`;
+        ctx.font = `700 ${labelSize}px 'Outfit', sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // If there's a subtitle, shift label up slightly so both fit
         const yOffset = node.subtitle ? -labelSize * 0.55 : 0;
         ctx.fillText(node.label, node.x, node.y + yOffset);
 
-        // Subtitle — plain language explanation
+        // Subtitle
         if (node.subtitle && currentRadius > 40) {
             const subtitleSize = Math.max(9, Math.floor(labelSize * 0.55));
             ctx.font = `400 ${subtitleSize}px 'Outfit', sans-serif`;
@@ -449,6 +1019,8 @@ const drawNodes = (ctx, nodes, now) => {
 const DawayirCanvas = memo(forwardRef((props, ref) => {
     const PANEL_WIDTH = 380;
     const TARGET_FPS = 20;
+    const MOBILE_FPS = 16; // Lower FPS target on mobile devices
+    const effectiveFPS = typeof window !== 'undefined' && window.innerWidth < 768 ? MOBILE_FPS : TARGET_FPS;
     const DEBUG_CANVAS = false;
     const paletteRef = useRef({
         background: '#04040f',
@@ -466,9 +1038,9 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
     const initRange = initMaxX - initMinX;
 
     const nodesRef = useRef([
-        { id: 1, x: initMinX + initRange * 0.25, y: initH / 2, radius: 70, targetRadius: 70, color: '#00F5FF', targetColor: '#00F5FF', label: isAr ? 'الوعي' : 'Awareness', subtitle: isAr ? 'مشاعرك' : 'feelings', pulse: 0, velocity: { x: 0.2, y: 0.1 }, fluidity: 0.5, targetFluidity: 0.5 },
-        { id: 2, x: initMinX + initRange * 0.5, y: initH / 2, radius: 85, targetRadius: 85, color: '#00FF41', targetColor: '#00FF41', label: isAr ? 'العلم' : 'Knowledge', subtitle: isAr ? 'تفكيرك' : 'thinking', pulse: 0, velocity: { x: -0.15, y: 0.25 }, fluidity: 0.5, targetFluidity: 0.5 },
-        { id: 3, x: initMinX + initRange * 0.75, y: initH / 2, radius: 95, targetRadius: 95, color: '#FF00E5', targetColor: '#FF00E5', label: isAr ? 'الحقيقة' : 'Truth', subtitle: isAr ? 'قرارك' : 'decision', pulse: 0, velocity: { x: 0.1, y: -0.2 }, fluidity: 0.5, targetFluidity: 0.5 },
+        { id: 1, x: initMinX + initRange * 0.25, y: initH / 2, radius: 70, targetRadius: 70, color: '#00F5FF', targetColor: '#00F5FF', label: isAr ? 'أنت' : 'You', subtitle: isAr ? 'إدراكك' : 'your perception', pulse: 0, velocity: { x: 0.2, y: 0.1 }, fluidity: 0.6, targetFluidity: 0.6 },
+        { id: 2, x: initMinX + initRange * 0.5, y: initH / 2, radius: 85, targetRadius: 85, color: '#00FF41', targetColor: '#00FF41', label: isAr ? 'العلم' : 'Science', subtitle: isAr ? 'ما وصل له العلم' : 'what science knows', pulse: 0, velocity: { x: -0.15, y: 0.25 }, fluidity: 0.2, targetFluidity: 0.2 },
+        { id: 3, x: initMinX + initRange * 0.75, y: initH / 2, radius: 95, targetRadius: 95, color: '#FF00E5', targetColor: '#FF00E5', label: isAr ? 'الواقع' : 'Reality', subtitle: isAr ? 'ما هو موجود فعلاً' : 'what actually is', pulse: 0, velocity: { x: 0.1, y: -0.2 }, fluidity: 0.15, targetFluidity: 0.15 },
     ]);
     const satellitesRef = useRef([]);          // live orbital topic nodes
     const timelineRef = useRef([]);             // session state snapshots
@@ -476,6 +1048,9 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
     // Add voice-breathing amplitude support + clarity bloom refs
     const voiceAmplitudeRef = useRef(0);    // 0..1, updated externally
     const bloomRef = useRef(null);           // { startTime } or null
+    const agentSpeakingRef = useRef(false);   // true when Dawayir is speaking
+    const orbParticlesRef = useRef([]);       // Divine Orb gold particles
+    const otherNodeRef = useRef(null);        // The "Other Person" circle
     const prevTruthRadiusRef = useRef(95);   // track Truth node for bloom trigger
     const particlesRef = useRef([]);
     const dashOffsetRef = useRef(0);
@@ -501,18 +1076,21 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
         });
 
         const particles = [];
-        for (let i = 0; i < 20; i++) {
-            particles.push({
-                x: Math.random() * window.innerWidth,
-                y: Math.random() * window.innerHeight,
-                size: Math.random() * 2 + 0.5,
-                opacity: Math.random() * 0.3 + 0.1,
-                speedX: (Math.random() - 0.5) * 0.3,
-                speedY: (Math.random() - 0.5) * 0.3
-            });
+        if (!props.reducedMotion) {
+            const isMobile = window.innerWidth < 768;
+        for (let i = 0; i < (isMobile ? 8 : 20); i++) {
+                particles.push({
+                    x: Math.random() * window.innerWidth,
+                    y: Math.random() * window.innerHeight,
+                    size: Math.random() * 2 + 0.5,
+                    opacity: Math.random() * 0.3 + 0.1,
+                    speedX: (Math.random() - 0.5) * 0.3,
+                    speedY: (Math.random() - 0.5) * 0.3
+                });
+            }
         }
         particlesRef.current = particles;
-    }, []);
+    }, [props.reducedMotion]);
 
     useImperativeHandle(ref, () => ({
         updateNode: (id, updates) => {
@@ -527,22 +1105,41 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
             if (updates.x !== undefined) node.x = updates.x;
             if (updates.y !== undefined) node.y = updates.y;
             if (updates.fluidity !== undefined) node.targetFluidity = Number(updates.fluidity);
+            if (props.reducedMotion) {
+                if (updates.radius !== undefined) node.radius = Number(updates.radius);
+                if (updates.color !== undefined) node.color = String(updates.color);
+                if (updates.fluidity !== undefined) node.fluidity = Number(updates.fluidity);
+                node.pulse = 0;
+            }
         },
         pulseNode: (id) => {
+            if (props.reducedMotion) return;
             nodesRef.current = nodesRef.current.map(node =>
                 node.id === id ? { ...node, pulse: 1.0 } : node
             );
         },
         pulseAll: () => {
+            if (props.reducedMotion) return;
             nodesRef.current = nodesRef.current.map(node => ({ ...node, pulse: 0.8 }));
         },
         getNodes: () => nodesRef.current.map(n => ({ id: n.id, x: n.x, y: n.y, radius: n.radius, color: n.color, label: n.label })),
+        // ── ACCESSIBILITY ──────────────────────────────────────
+        getAccessibleDescription: () => {
+            const nodes = nodesRef.current;
+            if (!nodes || nodes.length === 0) return '';
+            const descriptions = nodes.map(n => {
+                const size = n.radius > 80 ? 'large' : n.radius > 50 ? 'medium' : 'small';
+                return `${n.label}: ${size}`;
+            });
+            return descriptions.join(', ');
+        },
 
         // ── SATELLITE NODES ──────────────────────────────
         // Spawn a small topic node orbiting the parent circle.
         // nodeId: 1=Awareness 2=Knowledge 3=Truth
         // label: short topic word (max ~6 chars for best display)
         addSatellite: (nodeId, label) => {
+            if (props.reducedMotion) return;
             const now = Date.now();
             const current = satellitesRef.current.filter(s => now - s.createdAt < SATELLITE_LIFETIME_MS);
             // Max 2 per parent
@@ -573,17 +1170,65 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
         // ── FEATURE 5: VOICE BREATHING ──────────────────────────
         // Expose setVoiceAmplitude for App.jsx to call with mic level
         setVoiceAmplitude: (amp) => {
-            voiceAmplitudeRef.current = Math.max(0, Math.min(1, amp));
+            voiceAmplitudeRef.current = props.reducedMotion ? 0 : Math.max(0, Math.min(1, amp));
         },
 
         // ── CLARITY BLOOM (manual trigger) ──────────────────────
         triggerBloom: () => {
+            if (props.reducedMotion) return;
             bloomRef.current = { startTime: Date.now() };
         },
 
         // ── TIMELINE ─────────────────────────────────────────────
         getTimeline: () => timelineRef.current,
+        // ── MEMORY REPLAY ──────────────────────────────────────
+        replayTimeline: (snapshots, onFrame) => {
+            if (!snapshots || snapshots.length < 2) return;
+            let frame = 0;
+            const interval = setInterval(() => {
+                if (frame >= snapshots.length) { clearInterval(interval); return; }
+                const snap = snapshots[frame];
+                snap.nodes.forEach(ns => {
+                    const node = nodesRef.current.find(n => n.id === ns.id);
+                    if (node) node.targetRadius = ns.radius;
+                });
+                if (onFrame) onFrame(frame, snapshots.length);
+                frame++;
+            }, 800); // 800ms per frame
+            return () => clearInterval(interval); // cleanup
+        },
         clearSatellites: () => { satellitesRef.current = []; },
+
+        // ── DIVINE VOICE ORB ─────────────────────────────────────
+        setAgentSpeaking: (speaking) => {
+            agentSpeakingRef.current = Boolean(speaking);
+        },
+
+        // ── THE OTHER PERSON CIRCLE ─────────────────────────────
+        setOtherNode: (name, tension, color) => {
+            const selfNode = nodesRef.current.find(n => n.id === 1);
+            const cx = selfNode ? selfNode.x + selfNode.radius * 2.2 : 300;
+            const cy = selfNode ? selfNode.y - 40 : 200;
+            otherNodeRef.current = {
+                name: String(name).slice(0, 8),
+                tension: Math.max(0, Math.min(1, Number(tension) || 0.5)),
+                color: String(color || '#FFD700'),
+                x: cx,
+                y: cy,
+                radius: 0,       // starts at 0, animates in
+                targetRadius: 38,
+                opacity: 0,
+                targetOpacity: 1,
+                born: Date.now(),
+                lastMentioned: Date.now(),
+            };
+        },
+        dismissOther: () => {
+            if (otherNodeRef.current) {
+                otherNodeRef.current.targetRadius = 0;
+                otherNodeRef.current.targetOpacity = 0;
+            }
+        },
     }));
 
     useEffect(() => {
@@ -610,7 +1255,7 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
         let animationFrameId;
 
         const render = (timestamp) => {
-            const frameInterval = 1000 / TARGET_FPS;
+            const frameInterval = 1000 / effectiveFPS;
             if (timestamp - lastFrameTimeRef.current < frameInterval) {
                 animationFrameId = window.requestAnimationFrame(render);
                 return;
@@ -627,13 +1272,16 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
             const maxX = isAr ? canvasWidth - currentPanelWidth : canvasWidth;
 
             const now = Date.now();
+            const reducedMotion = Boolean(props.reducedMotion);
 
             drawBackground(ctx, canvasWidth, canvasHeight, paletteRef.current.background, currentNodes);
-            drawParticles(ctx, particlesRef.current, canvasWidth, canvasHeight, currentNodes);
+            if (!reducedMotion) {
+                drawParticles(ctx, particlesRef.current, canvasWidth, canvasHeight, currentNodes);
+            }
 
             // ── FEATURE 5: VOICE BREATHING ──────────────────────────
             // Circles gently swell with voice amplitude — living biofeedback
-            const amp = voiceAmplitudeRef.current;
+            const amp = reducedMotion ? 0 : voiceAmplitudeRef.current;
             if (amp > 0.05) {
                 currentNodes.forEach(node => {
                     const breathe = amp * 12; // max +12px
@@ -641,13 +1289,44 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
                 });
             }
 
-            updateNodesPhysics(currentNodes, draggingNode, canvasWidth, canvasHeight, minX, maxX);
-            drawConnections(ctx, currentNodes, dashOffsetRef);
-            drawNodes(ctx, currentNodes, now);
+            if (reducedMotion) {
+                currentNodes.forEach((node) => {
+                    node.radius = node.targetRadius;
+                    node.color = node.targetColor;
+                    node.fluidity = node.targetFluidity;
+                    node.pulse = 0;
+                });
+            } else {
+                updateNodesPhysics(currentNodes, draggingNode, canvasWidth, canvasHeight, minX, maxX);
+            }
+            drawConnections(ctx, currentNodes, dashOffsetRef, reducedMotion);
+            drawNodes(ctx, currentNodes, now, reducedMotion);
+
+            // ── THE OTHER PERSON CIRCLE ────────────────────────────
+            if (otherNodeRef.current) {
+                const selfNode = currentNodes.find(n => n.id === 1);
+                const result = drawOtherNode(ctx, otherNodeRef.current, selfNode, now);
+                if (!result) otherNodeRef.current = null; // fully faded
+            }
+
+            // ── DIVINE VOICE ORB — drawn on top of circles ──────────
+            if (!reducedMotion && agentSpeakingRef.current) {
+                const orbAmp = voiceAmplitudeRef.current;
+                const cx = canvasWidth / 2;
+                const cy = canvasHeight * 0.42;
+                drawDivineOrb(ctx, canvasWidth, canvasHeight, currentNodes, orbAmp, now);
+                orbParticlesRef.current = spawnOrbParticles(orbParticlesRef.current, cx, cy, now);
+                orbParticlesRef.current = updateOrbParticles(ctx, orbParticlesRef.current, now);
+            } else if (orbParticlesRef.current.length > 0) {
+                // Fade out remaining particles after speech stops
+                orbParticlesRef.current = updateOrbParticles(ctx, orbParticlesRef.current, now);
+            }
 
             // Draw satellite topic nodes
-            satellitesRef.current = updateSatellites(satellitesRef.current, currentNodes, now);
-            drawSatellites(ctx, satellitesRef.current, currentNodes, now);
+            if (!reducedMotion) {
+                satellitesRef.current = updateSatellites(satellitesRef.current, currentNodes, now);
+                drawSatellites(ctx, satellitesRef.current, currentNodes, now);
+            }
 
             // Record timeline snapshot every TIMELINE_INTERVAL_MS
             if (now - lastTimelineSnapRef.current > TIMELINE_INTERVAL_MS) {
@@ -673,7 +1352,7 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
                 prevTruthRadiusRef.current = truthNode.radius;
             }
 
-            if (bloomRef.current) {
+            if (!reducedMotion && bloomRef.current) {
                 const elapsed = now - bloomRef.current.startTime;
                 const bloomDuration = 2200;
                 if (elapsed < bloomDuration && truthNode) {
@@ -714,7 +1393,7 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
 
         render();
         return () => window.cancelAnimationFrame(animationFrameId);
-    }, [draggingNode, PANEL_WIDTH]);
+    }, [draggingNode, PANEL_WIDTH, props.lang, props.reducedMotion]);
 
     const handleMouseDown = (e) => {
         const rect = canvasRef.current.getBoundingClientRect();

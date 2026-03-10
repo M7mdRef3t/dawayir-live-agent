@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+﻿import React, { useMemo } from 'react';
 
 const NODE_NAMES = {
   ar: { 1: 'الوعي', 2: 'العلم', 3: 'الحقيقة' },
@@ -70,9 +70,9 @@ const buildMomentTitle = ({ lang, order, focusId }) => {
   const circle = names[focusId] || names[3];
 
   if (lang === 'ar') {
-    if (order === 0) return `إشارة البداية نحو ${circle}`;
-    if (order === 1) return `نقطة التحول داخل ${circle}`;
-    return `ذروة الوضوح في ${circle}`;
+    if (order === 0) return `بداية التحول ناحية ${circle}`;
+    if (order === 1) return `نقطة التحول جوه ${circle}`;
+    return `أوضح لحظة في ${circle}`;
   }
 
   if (order === 0) return `Opening shift toward ${circle}`;
@@ -225,12 +225,12 @@ function SessionHighlightReel({ lang = 'ar', reportName = '', replayData = null 
     <section className="highlight-reel-section">
       <div className="highlight-reel-header">
         <div>
-          <span className="highlight-reel-kicker">{lang === 'ar' ? 'الشريط الأذكى' : 'Auto Highlight Reel'}</span>
-          <h3>{lang === 'ar' ? 'أقوى 3 لحظات في الجلسة' : 'The 3 strongest moments in the session'}</h3>
-          <p>{lang === 'ar' ? 'اختيار تلقائي للحظات التي تثبت التغير الحي بشكل أسرع للمحكم أو المستثمر.' : 'Automatically selected moments that prove live cognitive change fastest to a judge or investor.'}</p>
+          <span className="highlight-reel-kicker">{lang === 'ar' ? 'أهم اللقطات' : 'Auto Highlight Reel'}</span>
+          <h3>{lang === 'ar' ? 'أهم 3 لحظات في الجلسة' : 'The 3 strongest moments in the session'}</h3>
+          <p>{lang === 'ar' ? 'اختيار تلقائي لأهم اللحظات اللي بتوضح التغير بسرعة وبشكل مقنع.' : 'Automatically selected moments that prove live cognitive change fastest to a judge or investor.'}</p>
         </div>
         <button className="highlight-reel-btn" onClick={handleExportSheet}>
-          {lang === 'ar' ? 'احفظ الشريط كلوحة' : 'Save Highlight Sheet'}
+          {lang === 'ar' ? 'احفظ اللقطات كلوحة' : 'Save Highlight Sheet'}
         </button>
       </div>
 
@@ -245,7 +245,7 @@ function SessionHighlightReel({ lang = 'ar', reportName = '', replayData = null 
                 <strong>{formatDuration(step.atMs, lang)}</strong>
               </div>
               <h4>{buildMomentTitle({ lang, order: index, focusId })}</h4>
-              <p>{step.reason || (lang === 'ar' ? 'لا يوجد وصف مسجل لهذه اللحظة.' : 'No reason was recorded for this moment.')}</p>
+              <p>{step.reason || (lang === 'ar' ? 'مفيش وصف محفوظ للحظة دي.' : 'No reason was recorded for this moment.')}</p>
               <div className="highlight-card-metrics">
                 <span>{lang === 'ar' ? 'الوضوح' : 'Clarity'} {metricPercent(step?.metrics?.clarityDelta)}</span>
                 <span>{lang === 'ar' ? 'التوازن' : 'Equilibrium'} {metricPercent(step?.metrics?.equilibriumScore)}</span>

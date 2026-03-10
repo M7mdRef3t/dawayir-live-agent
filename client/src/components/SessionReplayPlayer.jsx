@@ -169,7 +169,7 @@ const drawExportFrame = ({ ctx, width, height, step, stepIndex, totalSteps, lang
 
   ctx.fillStyle = '#ffffff';
   ctx.font = '600 18px Arial';
-  ctx.fillText('Why Now', 68, boxY + 20);
+  ctx.fillText(lang === 'ar' ? 'ليه اللحظة دي؟' : 'Why Now', 68, boxY + 20);
   ctx.fillStyle = 'rgba(235,242,255,0.92)';
   ctx.font = '500 23px Arial';
 
@@ -334,7 +334,7 @@ function SessionReplayPlayer({ replayData, lang = 'ar' }) {
       <section className="session-replay-section empty">
         <div className="session-replay-empty">
           <strong>{lang === 'ar' ? 'إعادة الجلسة غير متاحة' : 'Replay unavailable'}</strong>
-          <p>{lang === 'ar' ? 'افتح تقريرًا أحدث أو احفظ الجلسة بعد التفاعل ليظهر Replay كامل.' : 'Open a newer report or save the session after interaction to unlock replay.'}</p>
+          <p>{lang === 'ar' ? 'افتح تقرير أحدث أو احفظ الجلسة بعد التفاعل عشان إعادة الجلسة تظهر كاملة.' : 'Open a newer report or save the session after interaction to unlock replay.'}</p>
         </div>
       </section>
     );
@@ -344,18 +344,18 @@ function SessionReplayPlayer({ replayData, lang = 'ar' }) {
     <section className="session-replay-section">
       <div className="session-replay-header">
         <div>
-          <h3>{lang === 'ar' ? 'إعادة الرحلة الحية' : 'Session Replay'}</h3>
+          <h3>{lang === 'ar' ? 'إعادة الجلسة' : 'Session Replay'}</h3>
           <p>
             {lang === 'ar'
-              ? `تم التقاط ${steps.length} لحظة عبر ${formatDuration(totalDurationMs, lang)}`
+              ? `اتسجل ${steps.length} لحظة خلال ${formatDuration(totalDurationMs, lang)}`
               : `${steps.length} captured moments across ${formatDuration(totalDurationMs, lang)}`}
           </p>
         </div>
         <button className="replay-control-btn export" onClick={handleExportVideo} disabled={isExporting}>
-          {isExporting ? (lang === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªØµØ¯ÙŠØ±...' : 'Exporting...') : (lang === 'ar' ? 'ØªØµØ¯ÙŠØ± ÙÙŠØ¯ÙŠÙˆ' : 'Export Video')}
+          {isExporting ? (lang === 'ar' ? 'بنجهز الفيديو...' : 'Exporting...') : (lang === 'ar' ? 'نزّل فيديو' : 'Export Video')}
         </button>
         <button className="replay-control-btn" onClick={togglePlayback} disabled={isExporting}>
-          {isPlaying ? (lang === 'ar' ? 'إيقاف' : 'Pause') : (currentIndex >= steps.length - 1 ? (lang === 'ar' ? 'إعادة' : 'Replay') : (lang === 'ar' ? 'تشغيل' : 'Play'))}
+          {isPlaying ? (lang === 'ar' ? 'إيقاف' : 'Pause') : (currentIndex >= steps.length - 1 ? (lang === 'ar' ? 'شغّل من الأول' : 'Replay') : (lang === 'ar' ? 'تشغيل' : 'Play'))}
         </button>
       </div>
 
@@ -402,7 +402,7 @@ function SessionReplayPlayer({ replayData, lang = 'ar' }) {
           </div>
 
           <p className="session-replay-reason">
-            {currentStep?.reason || (lang === 'ar' ? 'لا يوجد وصف لهذه اللحظة.' : 'No reason captured for this moment.')}
+            {currentStep?.reason || (lang === 'ar' ? 'مفيش وصف للحظة دي.' : 'No reason captured for this moment.')}
           </p>
 
           <div className="session-replay-tags">

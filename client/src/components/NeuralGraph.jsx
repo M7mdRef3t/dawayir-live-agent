@@ -287,6 +287,8 @@ const NeuralGraph = ({ reportContent = '', lang = 'ar', animate = true }) => {
         <div className="neural-graph-wrapper" style={{ position: 'relative', width: '100%' }}>
             <canvas
                 ref={canvasRef}
+                role="img"
+                aria-label={lang === 'ar' ? 'الشبكة العصبية الإدراكية للجلسة' : 'Session cognitive neural network'}
                 onMouseMove={handleMouseMove}
                 onClick={handleClick}
                 onMouseLeave={() => setHoveredNode(null)}

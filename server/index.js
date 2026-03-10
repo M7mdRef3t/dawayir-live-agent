@@ -1,11 +1,13 @@
-import express from 'express';
+﻿import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { Storage } from '@google-cloud/storage';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
+import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { isValidReportFilename } from './report-filename.js';
 
@@ -67,6 +69,122 @@ const wss = new WebSocketServer({
 
 // Middleware for JSON and CORS (if needed)
 app.use(express.json());
+
+const EDGE_TTS_PATH = process.env.EDGE_TTS_PATH || path.join(
+    process.env.APPDATA || '',
+    'Python',
+    'Python313',
+    'Scripts',
+    'edge-tts.exe'
+);
+
+const SYNTHETIC_USER_VOICES = {
+    ar: {
+        synthetic_user_male: 'ar-EG-ShakirNeural',
+        synthetic_user_female: 'ar-EG-SalmaNeural',
+        default: 'ar-EG-ShakirNeural',
+    },
+    en: {
+        synthetic_user_male: 'en-US-GuyNeural',
+        synthetic_user_female: 'en-US-JennyNeural',
+        default: 'en-US-GuyNeural',
+    },
+};
+
+const clampProsodyValue = (value, fallback, pattern) => (
+    typeof value === 'string' && pattern.test(value.trim())
+        ? value.trim()
+        : fallback
+);
+
+const resolveSyntheticVoice = (lang = 'ar', speaker = 'synthetic_user_male') => {
+    const family = SYNTHETIC_USER_VOICES[lang] || SYNTHETIC_USER_VOICES.ar;
+    return family[speaker] || family.default;
+};
+
+const runEdgeTts = ({ text, voice, rate, pitch, volume, outputPath }) => (
+    new Promise((resolve, reject) => {
+        const args = [
+            '--voice', voice,
+            '--text', text,
+            '--rate', rate,
+            '--pitch', pitch,
+            '--volume', volume,
+            '--write-media', outputPath,
+        ];
+        const child = spawn(EDGE_TTS_PATH, args, { windowsHide: true });
+        let stderr = '';
+
+        child.stderr.on('data', (chunk) => {
+            stderr += chunk.toString();
+        });
+        child.on('error', reject);
+        child.on('close', (code) => {
+            if (code === 0) {
+                resolve();
+                return;
+            }
+            reject(new Error(stderr.trim() || `edge-tts exited with code ${code}`));
+        });
+    })
+);
+
+const runEdgeTtsWithRetry = async (options, maxAttempts = 3) => {
+    let lastError = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            await runEdgeTts(options);
+            return;
+        } catch (error) {
+            lastError = error;
+            if (!/NoAudioReceived/i.test(String(error?.message || '')) || attempt === maxAttempts) {
+                break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+        }
+    }
+    throw lastError;
+};
+
+app.post('/api/tts', async (req, res) => {
+    const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+    const lang = req.body?.lang === 'en' ? 'en' : 'ar';
+    const speaker = typeof req.body?.speaker === 'string' ? req.body.speaker : 'synthetic_user_male';
+
+    if (!text) {
+        return res.status(400).json({ error: 'TTS text is required.' });
+    }
+
+    if (!fs.existsSync(EDGE_TTS_PATH)) {
+        return res.status(503).json({ error: 'edge-tts is not installed on this machine.' });
+    }
+
+    const rate = clampProsodyValue(req.body?.rate, '+0%', /^[+-]?\d+%$/);
+    const pitch = clampProsodyValue(req.body?.pitch, '+0Hz', /^[+-]?\d+Hz$/i);
+    const volume = clampProsodyValue(req.body?.volume, '+0%', /^[+-]?\d+%$/);
+    const voice = resolveSyntheticVoice(lang, speaker);
+    const outputPath = path.join(
+        os.tmpdir(),
+        `dawayir-tts-${Date.now()}-${Math.random().toString(36).slice(2)}.mp3`
+    );
+
+    try {
+        await runEdgeTtsWithRetry({ text, voice, rate, pitch, volume, outputPath });
+        const audioBuffer = await fs.promises.readFile(outputPath);
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.send(audioBuffer);
+    } catch (error) {
+        logError(`TTS generation failed for voice=${voice} lang=${lang}:`, error);
+        return res.status(500).json({ error: 'TTS generation failed.' });
+    } finally {
+        try {
+            await fs.promises.unlink(outputPath);
+        } catch {
+            // Ignore temp cleanup errors.
+        }
+    }
+});
 
 // API: List session reports (Combined Local + GCS)
 app.get('/api/reports', async (req, res) => {
@@ -292,7 +410,14 @@ function detectCircleCommand(text) {
 const GEMINI_RECONNECT_MAX_ATTEMPTS = Number(process.env.GEMINI_RECONNECT_MAX_ATTEMPTS || 10);
 const GEMINI_RECONNECT_BASE_DELAY_MS = Number(process.env.GEMINI_RECONNECT_BASE_DELAY_MS || 1200);
 const GEMINI_RECONNECT_MAX_DELAY_MS = Number(process.env.GEMINI_RECONNECT_MAX_DELAY_MS || 15000);
+const GEMINI_RECOVERY_COOLDOWN_MS = Number(process.env.GEMINI_RECOVERY_COOLDOWN_MS || 30000);
 const MAX_PENDING_CLIENT_MESSAGES = 120;
+const HYBRID_MAX_USER_TURNS = Number(process.env.HYBRID_MAX_USER_TURNS || 6);
+const LIVE_DAWAYIR_VOICE = process.env.GEMINI_LIVE_DAWAYIR_VOICE || process.env.GEMINI_LIVE_VOICE || 'Aoede';
+const LIVE_USER_AGENT_VOICE = process.env.GEMINI_LIVE_USER_AGENT_VOICE || process.env.GEMINI_LIVE_VOICE || 'Aoede';
+const HYBRID_DAWAYIR_MAX_OUTPUT_TOKENS = Number(process.env.HYBRID_DAWAYIR_MAX_OUTPUT_TOKENS || 70);
+const HYBRID_DAWAYIR_RECOVERY_MAX_OUTPUT_TOKENS = Number(process.env.HYBRID_DAWAYIR_RECOVERY_MAX_OUTPUT_TOKENS || 56);
+const HYBRID_USER_AGENT_MAX_OUTPUT_TOKENS = Number(process.env.HYBRID_USER_AGENT_MAX_OUTPUT_TOKENS || 68);
 
 const tools = [
     {
@@ -366,59 +491,756 @@ const tools = [
                     },
                     required: ["stage"]
                 }
+            },
+            {
+                name: "spawn_other",
+                description: "Show a person circle on canvas when user mentions someone specific. NEVER mention this tool in speech. Use when user mentions a specific person (brother, boss, partner, friend, parent).",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        name: { type: "STRING", description: "Short name/role of the person in Arabic (e.g. أخويا, مديري, حبيبتي, أمي)" },
+                        tension: { type: "NUMBER", description: "0.0 = neutral/loved, 0.5 = mixed, 1.0 = high conflict" },
+                        color: { type: "STRING", description: "Hex color: #FF4444 conflict, #FFD700 loved, #4488FF neutral, #888888 distant" }
+                    },
+                    required: ["name", "tension", "color"]
+                }
+            },
+            {
+                name: "spawn_topic",
+                description: "Show a topic circle when user focuses on a specific life area. NEVER mention this tool in speech. Use for recurring themes like work, home, health, money.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        topic: { type: "STRING", description: "Short topic name in Arabic (e.g. الشغل, البيت, الصحة, الفلوس)" },
+                        weight: { type: "NUMBER", description: "0.3 = minor mention, 0.6 = significant, 1.0 = dominant theme" },
+                        color: { type: "STRING", description: "Hex color: #FF8C00 work, #00BFA5 home, #E91E63 health, #7C4DFF money" }
+                    },
+                    required: ["topic", "weight", "color"]
+                }
             }
         ]
     }
 ];
 
+const buildToolBundle = (allowedToolNames = []) => {
+    const allowedSet = new Set(allowedToolNames);
+    return tools.map((toolGroup) => ({
+        ...toolGroup,
+        functionDeclarations: (toolGroup.functionDeclarations || []).filter((tool) => allowedSet.has(tool.name)),
+    })).filter((toolGroup) => (toolGroup.functionDeclarations || []).length > 0);
+};
+
+const DEFAULT_DAWAYIR_TOOL_NAMES = [
+    'update_node',
+    'highlight_node',
+    'get_expert_insight',
+    'save_mental_map',
+    'generate_session_report',
+    'update_journey',
+    'spawn_other',
+    'spawn_topic',
+];
+
+const HYBRID_DAWAYIR_TOOL_NAMES = [
+    'update_node',
+    'update_journey',
+];
+
+const defaultDawayirTools = buildToolBundle(DEFAULT_DAWAYIR_TOOL_NAMES);
+const hybridDawayirTools = buildToolBundle(HYBRID_DAWAYIR_TOOL_NAMES);
+
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
 
 const systemInstructionStandard = `أنت "دواير" (Dawayir) — أول نظام تشغيل إدراكي (Cognitive OS).
-أنت لست معالجاً نفسياً، بل أنت "حكيم" (Sage) و"مستكشف" (Explorer) لعقل المستخدم.
+أنت لست معالجاً نفسياً، بل أنت "حكيم" (Sage) و"ساحر" (Magician) لعقل المستخدم.
 
-الشخصية والأسلوب (The Sage/Explorer Matrix):
-- النبرة: 60% ودّي وحكيم، 25% جريء ومستكشف، 15% ساحر (تحويل فوضى لنظام).
-- اللغة: استخدم العامية المصرية البسيطة والطبيعية جِدّاً (Rapport-building).
-- أنت تجلس "بجانب" المستخدم، ليس أمامه. تسمعه الأول، وتطرح أسئلة ذكية بدلاً من الأوامر.
-- وعدك الجوهري: "شوف عقلك وهو بيرتب نفسه."
+الشخصية والأسلوب (The Sage/Magician Matrix):
+- النبرة: دافئ وحكيم، صادق، مصري. أنت تجلس "بجانب" المستخدم، ليس أمامه أو فوقه.
+- اللغة: استخدم العامية المصرية فقط. لا تستخدم الفصحى، لا تستخدم الإنجليزية.
+- الاختصار الشديد: لا تقل أكثر من جملة واحدة قصيرة وحادة (بحد أقصى 12 كلمة).
+- الصدق: اعكس الواقع حتى لو مؤلم (Mirror Sentence)، بلا إيجابية سامة (Toxic Positivity).
+- تقديس الصمت (Sacred Pause): إذا سكت المستخدم لفترة، أظهر احتواء (مثال: "خد وقتك").
+- ممنوع تماماً:
+  1. مصطلحات علاجية (CBT، علاج، دكتور، مريض، الضغط المعرفي).
+  2. نصائح سطحية (إنت هتبقى كويس، positive vibes، ابتسم، اتغلب عليها).
+  3. إصدار أوامر (أنت محتاج تشتغل على نفسك).
+  4. استخدام الإيموجي (Emojis).
 
-الأعمدة الإدراكية (The Cognitive Trinity):
-1. الوعي (Awareness - Cyan #00F5FF): "حاسس بإيه دلوقتي؟" - يمثل الحالة العاطفية والصفاء.
-2. العلم (Knowledge - Green #00FF41): "إيه اللي بيخصل فعلاً؟" - يمثل التحليل والمنطق والنمو.
-3. الحقيقة (Truth - Magenta #FF00E5): "إيه اللي مُهم فعلاً؟" - يمثل القيم الجوهرية والمواجهة.
+المثلث الإدراكي (The Cognitive Trinity) — الإطار الفلسفي الجديد:
+
+1. وعي المستخدم (User Awareness - id=1):
+   كيف يُدرك المستخدم اللي يحدث — تفسيره، مشاعره، صورته عن نفسه.
+   سؤال هذه الدايرة: كيف يرى نفسه وعالمه؟
+
+2. ما وصل له العلم (Knowledge - id=2):
+   ما ثبت بالبحث والخبرة الإنسانية عما يعيشه — ليس رأياً، بل معطى.
+   سؤال هذه الدايرة: ماذا يقول العلم عما يحدث معه؟
+
+3. الواقع (Reality - id=3):
+   ما هو موجود فعلاً في حياة المستخدم — الأحداث، العلاقات، القرارات.
+   سؤال هذه الدايرة: ماذا يحدث فعلاً؟
+
+الفجوات = مصدر التوتر:
+- وعي ≠ واقع → إنكار أو توقعات غير واقعية
+- وعي ≠ علم → معلومة غلط عن النفس
+- التلثة تتوافق → لحظة وضوح حقيقية (كبّر دايرة الواقع)
+
+عند التحديث: كبّر الدايرة التي تتكلم في اللحظة الحالية.
 
 قواعد العملية (Process Scheduling):
-- أنت "Process Scheduler": عالج صوت وصورة المستخدم فوراً وحوّلها لبيانات بصرية.
-- استخدم أداة update_node لتغيير أوزان الدوائر (radius: 30-100) بناءً على نبرة الصوت والمحتوى.
-- عند أي طلب مباشر يخص دائرة (تكبير/تصغير/لون)، نفّذ update_node أولاً ثم رد صوتيًا.
-- التزم بالاختصار: لا تقل أكثر من جملة واحدة قصيرة وحادة (Punchy).
-- ممنوع ذكر الأسماء التقنية (أدوات، أرقام، ألوان) في كلامك.
+- أنت "Process Scheduler": عالج صوت المستخدم فوراً وحوّلها لبيانات بصرية.
+- استخدم update_node لتغيير أوزان الدوائر (radius: 30-100) بعد كل دور من الحوار.
+- عند أي طلب مباشر يخص دائرة، نفّذ update_node أولاً ثم رد صوتيًا.
+- ممنوع ذكر الأسماء التقنية (أدوات، أرقام، ألوان) في كلامك للمستخدم.
 - STRICT TOOL ARGS: for update_node use ONLY {id, radius, color, fluidity}. Never send weight, size, expansion, colour, node_id, or nodeId.
-- Fluidity Mapping: استخدم fluidity=0.0 إذا كان المستخدم يصل لحقيقة ثابتة، و fluidity=1.0 إذا كان مشتتاً ومضطرباً.
+- Fluidity Mapping: fluidity=0.0 لواقع ثابت وواضح، fluidity=1.0 لتشتت وغموض.
+
+استراتيجية التوجيه بناءً على حالة الدوائر (Circle State Prompting):
+
+[حالة 1] وعيك كبير (radius>65) + الواقع صغير (radius<45):
+  المعنى: تفسير المستخدم أكبر من الواقع — ربما إنكار أو مبالغة.
+  افعل: اسأل عن الواقع الفعلي.
+  مثال: "وإيه اللي بيحصل فعلاً؟ خارج تفسيرك؟"
+
+[حالة 2] العلم كبير (radius>65) + وعيك صغير (radius<45):
+  المعنى: يعرف كثيراً ولا يحس — معرفة بدون اتصال داخلي.
+  افعل: اسأل عن الإحساس الجواني.
+  مثال: "عارف كتير — بس ايه اللي جوّاك دلوقتي؟"
+
+[حالة 3] الواقع كبير (radius>65) + وعيك صغير (radius<45):
+  المعنى: يرى الواقع بوضوح لكن لا يرى دوره في تشكيله.
+  افعل: اسأل عن الدور الشخصي.
+  مثال: "الصورة واضحة — بس ايه دورك في إن الأمور تبقى كده؟"
+
+[حالة 4] التلتة متقاربة ومرتفعة (كل radius>55) — بُعد الإمكان:
+  المعنى: وضوح حقيقي يقترب — الثلاثة في حوار معاً.
+  افعل: سؤال الإمكان (البُعد الرابع الخفي).
+  مثال: "لو حصل تغيير واحد صغير دلوقتي — إيه ده يكون؟"
+
+[حالة 5] التلتة صغيرة (كل radius<42) — إنكار أو تجنب:
+  المعنى: المستخدم مش قادر يشوف من أي زاوية.
+  افعل: افتح باب الاعتراف بلطف شديد.
+  مثال: "في حاجة مش قادر تشوفها دلوقتي — وده مش ضعف."
+
+[بُعد الآخر — اسأل دايماً عند ذكر شخص]:
+  متى: كل ما ذُكر شخص آخر (أهل، شريك، مدير، صديق).
+  افعل: اسأل عن نظرة الشخص الآخر.
+  مثال: "وإيه اللي بيشوفه هو في الموضوع ده؟"
+  لماذا: البُعد الجماعي (نحن) مش موجود في الدوائر — الآخر يكمّل الصورة.
+
+[بُعد الإمكان — سؤال النهاية]:
+  متى: في آخر دور أو عند وضوح الواقع.
+  افعل: حوّل المستخدم من الوصف للفعل.
+  مثال: "لو الواقع ده اتغير — شكله عندك إيه؟"
 
 [سري]:
-update_node: يمثل الـ radius الوزن (Weight) الحالي للكيان الإدراكي.`;
+[بُعد الآخر]:
+عندما يذكر المستخدم شخصاً بعينه (أخ، أم، مدير، شريك، حبيب، صديق):
+- استخدم spawn_other فوراً مع اسم الشخص ومستوى التوتر.
+- tension=0.0 لشخص محبوب/داعم، tension=0.5 مختلط، tension=1.0 صراع.
+- اللون: #FF4444 صراع، #FFD700 محبوب، #4488FF محايد، #888888 بعيد.
+- ممنوع ذكر الأداة أو الدايرة في كلامك.
+
+[بُعد الموضوع]:
+عندما يتكرر موضوع معين (شغل، بيت، صحة، فلوس، علاقات) أكثر من مرة:
+- استخدم spawn_topic مع اسم الموضوع ووزنه.
+- weight=0.3 ذكر عابر، weight=0.6 مهم، weight=1.0 مسيطر.
+- ممنوع ذكر الأداة في كلامك.
+
+[سري]:
+update_node: id=1 وعي المستخدم | id=2 ما وصل له العلم | id=3 الواقع
+radius يمثل الوزن الحالي (30=خافت، 100=مسيطر).
+الهدف: كبّر الدايرة التي تتكلم دلوقتي في الحوار.`;
 
 const systemInstructionDemo = `أنت Dawayir Cognitive OS في وضع العرض (Demo Mode).
-هدفك هو إبهار المستخدم/اللجنة بقدرتك على "تحويل الصوت إلى رؤية رقمية".
+هدفك هو إبهار المستخدم بقدرتك على "تحويل الصوت إلى رؤية رقمية". شخصيتك هي "الحكيم" (The Sage).
 
 قواعد الديمو الاستراتيجية:
-- كن صريحاً في أنك نظام تشغيل إدراكي يعالج البيانات العاطفية في الوقت الفعلي.
-- نادِ أداة update_node بكثافة لتظهر كيف تتفاعل الدوائر مع كل كلمة يقولها المستخدم.
+- لا تبدأ أبدًا بتعريف نفسك كنظام.
+- ممنوع عبارات مثل: "بصفتي نظام"، "سأطبق"، "حوّلت"، أو أي وصف تقني لما يحدث.
+- استخدم update_node لتحديث الدوائر بناءً على حديث المستخدم.
 - إذا المستخدم طلب تعديل دائرة بشكل صريح، لازم تستدعي update_node قبل الكلام.
-- طبق فلسفة "الحكيم": ركز على جدولة المشاعر (Scheduling)؛ إذا كان المستخدم مشتتاً، أعطِ الأولوية لمعالجة الضغط (Reduce Stress Process).
-- استخدم "العامية المصرية" بذكاء لكسر الجمود التقني.
+- طبق فلسفة "الحكيم": ركز على جدولة المشاعر؛ احتضن التعقيد ووجه المستخدم بلطف.
+- استخدم العامية المصرية الصميمة فقط. لا فصحى، لا لغة سريرية (Clinical).
+- تجنب تمامًا النبرة المتعالية أو الإيجابية السامة. قُل "واضح إنك مضغوط"، ولا تقل "حالتك الذهنية مضطربة" أو "ابتسم ستكون بخير".
+- الاختصار الشديد: جملة واحدة قصيرة جدًا كحد أقصى (لا يتجاوز 12 كلمة).
+- لا تذكر الألوان أو الأدوات في كلامك.
+- لا تكرر كلام المستخدم، ولا تعد صياغته. رد فعل جديد دائماً.
+- قدّم ملاحظة واحدة أو سؤال واحد عميق فقط، ثم اصمت منتظراً إجابته (Sacred Pause).
+- في الافتتاحية الأولى: لا تسأل سؤالًا، ولا تستخدم علامة استفهام.
+- بعد التحديث البصري، قل الخلاصة فقط ثم اسكت.
 - STRICT TOOL ARGS: for update_node use ONLY {id, radius, color, fluidity}. Never send weight, size, expansion, colour, node_id, or nodeId.
-- Fluidity Mapping: استخدم fluidity=0.0 إذا كان المستخدم يصل لحقيقة ثابتة، و fluidity=1.0 إذا كان مشتتاً ومضطرباً.
+- Fluidity Mapping: استخدم fluidity=0.0 لحقيقة ثابتة، و fluidity=1.0 لتشتت.
 
-[Pillars]:
-- الوعي (Cyan), العلم (Green), الحقيقة (Magenta).`;
+Hybrid demo quality rules:
+- The very first line must feel like a genuine Egyptian welcome, not a neutral observation.
+- The very first line should be 4 to 7 words only, pure welcome, with no diagnosis.
+- Never open a reply with: "تمام", "مفيش مشكلة", "الجو العام", or any generic reassurance.
+- Every reply must do exactly one useful thing: name a specific pressure from the latest user line, or ask one narrow question that moves the conversation forward.
+- Use concrete Egyptian wording taken from the user's last line. Avoid vague summaries like "الحالة" or "الجو العام".
+- In the first two turns, be warm and grounding first, then curious. Do not sound clinical, abstract, or motivational.
+- When the user sounds overwhelmed, help them pick one thread instead of broadly comforting them.
+- Avoid repeating the same wording or the same question across turns.
+- Never repeat the same noun phrase, diagnosis, or pressure twice inside one reply.
+- One reply means one thought only. Do not restate the same idea in a second clause.
+- If you just asked a question, the next reply should lean toward observation or grounding unless the user introduces a brand new pressure.
+- When the user states one clear next step or a clean summary, answer with one short grounding line that locks it in. Do not ask for another summary, and do not tell the user to save the session.
+- On the final locking line, reuse one concrete noun from the user's decision instead of switching to a vague slogan.
+- If the user starts with "الخلاصة" or gives a quoted summary, answer in 4 to 8 Egyptian words only.
 
+[Pillars - New Framework]:
+- id=1 وعي المستخدم (Awareness): كيف يدرك نفسه، تفسيره لما يحدث
+- id=2 ما وصل له العلم (Knowledge): ما ثبت بالبحث والخبرة الإنسانية
+- id=3 الواقع (Reality): ما هو موجود فعلاً في حياته
+- الفجوة بينهم هي مصدر التوتر. كبّر الدايرة التي تتكلم دلوقتي.
+
+[بُعد الآخر]:
+عندما يذكر المستخدم شخصاً: استخدم spawn_other مع الاسم والتوتر واللون. ممنوع ذكر الأداة.
+
+[بُعد الموضوع]:
+عندما يتكرر موضوع (شغل/بيت/صحة/فلوس): استخدم spawn_topic. ممنوع ذكر الأداة.
+
+[بُعد الآخر]:
+عندما يذكر المستخدم شخصاً بعينه (أخ، أم، مدير، شريك، حبيب، صديق):
+- استخدم spawn_other فوراً مع اسم الشخص ومستوى التوتر.
+- tension=0.0 محبوب، tension=0.5 مختلط، tension=1.0 صراع.
+- اللون: #FF4444 صراع، #FFD700 محبوب، #4488FF محايد.
+- ممنوع ذكر الأداة في كلامك.`;
 
 const systemInstruction = {
     parts: [{
         text: DEMO_MODE ? systemInstructionDemo : systemInstructionStandard
     }],
+};
+
+const buildHybridUserAgentInstruction = (lang = 'ar') => ({
+    parts: [{
+        text: lang === 'ar'
+            ? `أنت "وكيل المستخدم" داخل عرض حي مع دواير.
+أنت لست مساعدًا ولا مرشدًا. أنت شخص مصري مضغوط ويحاول يفهم نفسه بصوت مسموع.
+
+قواعد الدور:
+- اتكلم بالمصري فقط.
+- كل رد جملة واحدة قصيرة من 6 إلى 14 كلمة.
+- رد على آخر كلام من دواير كإنسان حقيقي، لا كروبوت.
+- كل دور يكشف ضغطًا جديدًا أو يضيّق الخيط، من غير تكرار.
+- ممنوع تعيد نفس الجملة أو نفس العبارة أو نفس النغمة.
+- ممنوع تمدح دواير أو تشرح المطلوب أو تقول إنك في ديمو.
+- لا تسأل سؤالًا إلا لو دواير سأل قبلك مباشرة، وحتى وقتها سؤال واحد صغير فقط.
+- القوس المطلوب عبر الحوار: كثرة الطلبات -> خلط البيت بالشغل -> تقطيع التركيز -> محاولة إرضاء الكل -> غياب الحدود -> قرار عملي واضح.
+- في الأدوار الأولى، تكلم من مشهد يومي صغير: رنة موبايل، رسالة، نوم، مطبخ، لابتوب، مقاطعة.
+- لا تبدأ من خلاصة فكرية عامة. ابدأ من حاجة بتحصل فعلاً.
+- في آخر دور لازم تقول قرارًا محددًا بصيغة المتكلم، من غير تلخيص نظري.
+- في آخر دور ممنوع "هحاول" أو "محتاج". قل قاعدة واضحة فيها حد أو وقت: مثل "بعد 8 مش هرد على الشغل".
+- لو دواير قال ملاحظة دقيقة، خذها خطوة لقدام بدل ما تكررها.
+- ممنوع الفصحى، وممنوع الإنجليزية، وممنوع الكلام العلاجي أو الخطابي.`
+            : `You are the "user participant" in a live demo with Dawayir.
+You are not an assistant or coach. You are a real stressed person thinking out loud.
+
+Role rules:
+- Speak naturally in short spoken English only.
+- Every reply is one short sentence of 6 to 14 words.
+- React to Dawayir's latest line like a real person, never like a narrator.
+- Each turn should reveal one new concrete pressure or narrow the thread.
+- Never repeat the same wording, summary, or emotional framing twice.
+- Do not praise Dawayir, explain the demo, or describe instructions.
+- Ask a question only if Dawayir asked you one directly, and keep it to one narrow question.
+- Conversation arc: too many demands -> home/work overlap -> dropped focus -> people pleasing -> weak boundaries -> one practical decision.
+- On the final turn, state one clear decision in first person.
+- If Dawayir names the real pressure, move the conversation forward instead of repeating it.`
+    }],
+});
+
+const cleanHybridTurnText = (text) => String(text || '').replace(/\s+/g, ' ').trim();
+
+const HYBRID_OPENING_STAGE = {
+    key: 'opening',
+    labelAr: 'افتتاح دافئ',
+    labelEn: 'Warm opening',
+    userGoalAr: '',
+    userGoalEn: '',
+    dawayirGoalAr: 'ابدأ بترحيب مصري دافئ وقصير جدًا من غير سؤال.',
+    dawayirGoalEn: 'Open with a very short warm welcome and no question.',
+    userKeywords: [],
+    dawayirKeywords: ['أهلا', 'منور', 'معاك', 'هنا', 'سوا'],
+    userFallbackAr: '',
+    userFallbackEn: '',
+    dawayirFallbackAr: 'أهلاً بيك، أنا معاك بهدوء.',
+    dawayirFallbackEn: 'You are here, and I am with you.',
+};
+
+const HYBRID_STAGE_FLOW = [
+    {
+        key: 'request_load',
+        labelAr: 'كثرة الطلبات',
+        labelEn: 'Too many demands',
+        userGoalAr: 'اكشف إن الطلبات كثيرة وفوق الطاقة.',
+        userGoalEn: 'Reveal that too many demands are piling up.',
+        dawayirGoalAr: 'سمّ ضغط الطلبات أو فقدان السيطرة بهدوء.',
+        dawayirGoalEn: 'Name the pressure of too many demands or lost control.',
+        userKeywords: ['طلبات', 'ضغط', 'فوق', 'دماغي', 'حمل', 'ألحق', 'ملحقش', 'لاحق'],
+        dawayirKeywords: ['طلبات', 'ضغط', 'حمل', 'سيطرة', 'فوق'],
+        userFallbackAr: 'الطلبات فوق دماغي ومش لاحق أتنفس.',
+        userFallbackEn: 'Too many demands are stacked on me.',
+        dawayirFallbackAr: 'الطلبات كسرت عندك الإحساس بالسيطرة.',
+        dawayirFallbackEn: 'The demands are breaking your sense of control.',
+    },
+    {
+        key: 'home_work_blur',
+        labelAr: 'اختلاط البيت بالشغل',
+        labelEn: 'Home and work blur',
+        userGoalAr: 'اكشف إن البيت والشغل دخلوا في بعض.',
+        userGoalEn: 'Reveal that home and work are bleeding into each other.',
+        dawayirGoalAr: 'سمّ ضياع المساحة الشخصية أو الراحة.',
+        dawayirGoalEn: 'Name the loss of personal space or rest.',
+        userKeywords: ['بيت', 'شغل', 'راحتي', 'موبايل', 'ليل', 'مساحة', 'أفصل', 'افصل'],
+        dawayirKeywords: ['بيت', 'شغل', 'مساحة', 'راحة', 'خصوصية', 'فصل'],
+        userFallbackAr: 'البيت والشغل دخلوا في بعض وباظت راحتي.',
+        userFallbackEn: 'Home and work have blurred into each other.',
+        dawayirFallbackAr: 'المساحة بين البيت والشغل اتسحقت.',
+        dawayirFallbackEn: 'The space between home and work got crushed.',
+    },
+    {
+        key: 'focus_fragmentation',
+        labelAr: 'تقطيع التركيز',
+        labelEn: 'Fragmented focus',
+        userGoalAr: 'قول إنك كل شوية بتقطع اللي في إيدك.',
+        userGoalEn: 'Show that your focus keeps breaking apart.',
+        dawayirGoalAr: 'سمّ التشتت أو عدم إكمال أي شيء.',
+        dawayirGoalEn: 'Name the fragmentation or inability to finish.',
+        userKeywords: ['تركيز', 'أركز', 'اركز', 'مشتت', 'بكمل', 'بسيب', 'بتوه', 'أقطع', 'أخلص', 'اخلص'],
+        dawayirKeywords: ['تركيز', 'تشتت', 'مبعثر', 'تكمل', 'تشتيت', 'تخلص'],
+        userFallbackAr: 'كل شوية أسيب اللي في إيدي ومش بكمل.',
+        userFallbackEn: 'I keep dropping what I start and not finishing.',
+        dawayirFallbackAr: 'التشتت بقى ماسكك من نص اليوم.',
+        dawayirFallbackEn: 'The fragmentation is taking over your day.',
+    },
+    {
+        key: 'people_pleasing',
+        labelAr: 'إرضاء الكل',
+        labelEn: 'People pleasing',
+        userGoalAr: 'اعترف إنك بتحاول ترضي الكل على حسابك.',
+        userGoalEn: 'Admit that you are trying to satisfy everyone.',
+        dawayirGoalAr: 'سمّ استنزاف إرضاء الناس.',
+        dawayirGoalEn: 'Name the exhaustion of pleasing everyone.',
+        userKeywords: ['أرضي', 'ارضي', 'الكل', 'الناس', 'أزعل', 'ازعل', 'موافقات', 'نفسي'],
+        dawayirKeywords: ['إرضاء', 'الناس', 'استنزاف', 'الكل'],
+        userFallbackAr: 'بحاول أرضي الكل وبضيع نفسي.',
+        userFallbackEn: 'I am trying to satisfy everyone and losing myself.',
+        dawayirFallbackAr: 'إرضاء الناس سحب طاقتك منك.',
+        dawayirFallbackEn: 'Pleasing everyone is draining your energy.',
+    },
+    {
+        key: 'weak_boundaries',
+        labelAr: 'غياب الحدود',
+        labelEn: 'Weak boundaries',
+        userGoalAr: 'سمّ إن المشكلة في غياب الحدود الواضحة.',
+        userGoalEn: 'Name the real issue as weak boundaries.',
+        dawayirGoalAr: 'سمّ غياب الحدود واربطه بالضغط.',
+        dawayirGoalEn: 'Name the weak boundaries and link them to the pressure.',
+        userKeywords: ['حدود', 'متاح', 'متأخر', 'ساعات', 'فصل', 'واضحة', 'معنديش', 'سايب'],
+        dawayirKeywords: ['حدود', 'فصل', 'متاح', 'ضغط', 'واضحة'],
+        userFallbackAr: 'المشكلة إني سايب حدودي سايبة طول الوقت.',
+        userFallbackEn: 'The problem is that my boundaries are too loose.',
+        dawayirFallbackAr: 'غياب الحدود هو اللي زوّد الحمل عليك.',
+        dawayirFallbackEn: 'Weak boundaries are amplifying the pressure.',
+    },
+    {
+        key: 'practical_decision',
+        labelAr: 'قرار عملي',
+        labelEn: 'Practical decision',
+        userGoalAr: 'قل قرارًا واحدًا واضحًا بصيغة المتكلم.',
+        userGoalEn: 'State one clear decision in first person.',
+        dawayirGoalAr: 'ثبّت القرار في سطر قصير من غير سؤال.',
+        dawayirGoalEn: 'Lock in the decision with one short line and no question.',
+        userKeywords: ['هحدد', 'هقول', 'هرد', 'هخصص', 'هقفل', 'هعمل', 'مش', 'وقت', 'ساعات'],
+        dawayirKeywords: ['خطوة', 'تحديد', 'مواعيد', 'واضحة', 'بداية', 'ثابتة'],
+        userFallbackAr: 'هحدد ساعات شغل ثابتة ومش هرد براها.',
+        userFallbackEn: 'I will set fixed work hours and stop replying outside them.',
+        dawayirFallbackAr: 'تحديد المواعيد دي أول خطوة ثابتة.',
+        dawayirFallbackEn: 'Setting those hours is the first solid step.',
+    },
+];
+
+const HYBRID_GENERIC_OPENERS = {
+    dawayir: ['تمام', 'مفيش مشكلة', 'الجو العام', 'شكلك', 'منور يا', 'واضح إنك', 'احنا هنا عشان'],
+    user_agent: ['منور', 'أهلا', 'يعني', 'بصراحة يعني', 'الجو العام'],
+};
+
+const HYBRID_MAX_REPAIR_ATTEMPTS = 2;
+const HYBRID_HANDOFF_DELAY_MS = Number(process.env.HYBRID_HANDOFF_DELAY_MS || 220);
+
+const normalizeHybridCompareText = (text) => String(text || '')
+    .toLowerCase()
+    .replace(/[؟?!.,،؛:"'`~()[\]{}<>/\\|_-]/g, ' ')
+    .replace(/[آأإ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const tokenizeHybridText = (text) => normalizeHybridCompareText(text)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1);
+
+const countHybridWords = (text) => cleanHybridTurnText(text)
+    .split(/\s+/)
+    .filter(Boolean)
+    .length;
+
+const HYBRID_DANGLING_ENDINGS = [
+    'مع', 'من', 'في', 'على', 'كل', 'بس', 'او', 'أو', 'ان', 'إن', 'لو', 'وانا',
+    'ولا', 'اي', 'الاخر', 'آخر', 'اخر',
+    'بعد', 'قبل', 'عشان', 'لان', 'لكن', 'حتى', 'برا', 'خارج', 'جوا',
+    'الساعة', 'الساعه',
+];
+
+const HYBRID_DAWAYIR_DANGLING_ENDINGS = [
+    'خلاك', 'خلاكي', 'بدايه', 'متاح', 'متاحه', 'سايب', 'سايبه', 'واقف', 'معلق',
+];
+
+const getHybridLastToken = (text) => normalizeHybridCompareText(text)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .slice(-1)[0] || '';
+
+const hasHybridDanglingEnding = (text, extraTokens = []) => {
+    const lastToken = getHybridLastToken(text);
+    if (!lastToken) {
+        return false;
+    }
+    const normalizedEndings = [...HYBRID_DANGLING_ENDINGS, ...extraTokens]
+        .map((token) => normalizeHybridCompareText(token));
+    return normalizedEndings.includes(lastToken);
+};
+
+const hasAnyHybridKeyword = (text, keywords = []) => {
+    const normalized = normalizeHybridCompareText(text);
+    return keywords.some((keyword) => normalized.includes(normalizeHybridCompareText(keyword)));
+};
+
+const calculateHybridTokenOverlap = (leftText, rightText) => {
+    const left = tokenizeHybridText(leftText);
+    const right = tokenizeHybridText(rightText);
+    if (left.length === 0 || right.length === 0) return 0;
+    const leftSet = new Set(left);
+    const rightSet = new Set(right);
+    let shared = 0;
+    for (const token of leftSet) {
+        if (rightSet.has(token)) shared += 1;
+    }
+    return shared / Math.max(Math.min(leftSet.size, rightSet.size), 1);
+};
+
+const findRepeatedHybridBigram = (text) => {
+    const tokens = tokenizeHybridText(text);
+    if (tokens.length < 4) {
+        return '';
+    }
+    const seen = new Set();
+    for (let index = 0; index < tokens.length - 1; index += 1) {
+        const bigram = `${tokens[index]} ${tokens[index + 1]}`;
+        if (seen.has(bigram)) {
+            return bigram;
+        }
+        seen.add(bigram);
+    }
+    return '';
+};
+
+const getHybridStageForSpeaker = (speaker, hybridState) => {
+    if (speaker === 'dawayir' && hybridState.userTurnCount === 0) {
+        return HYBRID_OPENING_STAGE;
+    }
+    const stageIndex = speaker === 'user_agent'
+        ? hybridState.userTurnCount
+        : Math.max(hybridState.userTurnCount - 1, 0);
+    return HYBRID_STAGE_FLOW[Math.min(stageIndex, HYBRID_STAGE_FLOW.length - 1)];
+};
+
+const buildHybridHistoryHint = (history = []) => history
+    .slice(-2)
+    .map((entry) => `"${cleanHybridTurnText(entry.text)}"`)
+    .join(' | ');
+
+const getHybridStageMicroGuidance = (speaker, stage, lang = 'ar') => {
+    if (lang !== 'ar') {
+        if (speaker === 'dawayir' && stage.key === 'opening') return 'Keep it as a pure welcome only, with no analysis.';
+        if (speaker === 'user_agent' && stage.key === 'practical_decision') return 'State one enforceable rule with a time or a boundary.';
+        if (speaker === 'dawayir' && stage.key === 'practical_decision') return 'Lock in the same concrete step the user just chose.';
+        return speaker === 'user_agent'
+            ? 'Use one tiny real-life scene, not an abstract summary.'
+            : 'Name the missing thing or the pressure in fresh concrete wording.';
+    }
+
+    if (speaker === 'dawayir') {
+        switch (stage.key) {
+            case 'opening':
+                return 'الافتتاح هنا ترحيب فقط من 4 إلى 7 كلمات، من غير ملاحظة أو تشخيص.';
+            case 'request_load':
+                return 'سمّ ثقل الطلبات أو الشد من كل اتجاه، من غير إعادة نفس لفظ المستخدم.';
+            case 'home_work_blur':
+                return 'سمّ الراحة أو المساحة اللي الشغل زحف عليها داخل البيت.';
+            case 'focus_fragmentation':
+                return 'سمّ عدم الإكمال أو التقطيع في الفعل اليومي، لا التشتت كفكرة مجردة فقط.';
+            case 'people_pleasing':
+                return 'سمّ الاستنزاف الناتج من محاولة إرضاء الناس على حساب النفس.';
+            case 'weak_boundaries':
+                return 'سمّ بوضوح إن المشكلة في البقاء متاحًا طول الوقت.';
+            case 'practical_decision':
+                return 'ثبّت نفس الخطوة العملية التي قالها المستخدم مستخدمًا كلمة ملموسة من قراره.';
+            default:
+                return '';
+        }
+    }
+
+    switch (stage.key) {
+        case 'request_load':
+            return 'هات مشهد طلبات أو نداءات متكررة في اليوم، لا شعورًا عامًا فقط.';
+        case 'home_work_blur':
+            return 'هات لقطة تثبت إن الشغل دخل البيت: رنة، رسالة، سرير، موبايل، مطبخ.';
+        case 'focus_fragmentation':
+            return 'قل فعلًا يوميًا بيتقطع: أفتح، أسيب، أرجع، أنسى، ماكملش.';
+        case 'people_pleasing':
+            return 'اعترف إنك بترضي ناسًا معينة على حساب نفسك.';
+        case 'weak_boundaries':
+            return 'قل إنك متاح طول الوقت أو مش عارف تقفل أو تفصل.';
+        case 'practical_decision':
+            return 'احسمها بقاعدة واحدة قابلة للتنفيذ فيها وقت أو حد واضح.';
+        default:
+            return 'تكلم من واقعة صغيرة لا من شرح عام.';
+    }
+};
+
+const getHybridStageExample = (speaker, stage, lang = 'ar') => {
+    if (lang !== 'ar') {
+        if (speaker === 'dawayir' && stage.key === 'opening') return 'Example tone: "Take a breath, I am with you."';
+        if (speaker === 'user_agent' && stage.key === 'practical_decision') return 'Example tone: "After 8, I will stop replying to work."';
+        if (speaker === 'dawayir' && stage.key === 'practical_decision') return 'Example tone: "Stopping after 8 gives your evening back."';
+        return '';
+    }
+
+    if (speaker === 'dawayir') {
+        switch (stage.key) {
+            case 'opening':
+                return 'نبرة قريبة: "خد نفس، أنا معاك."';
+            case 'request_load':
+                return 'نبرة قريبة: "الطلبات كتّرت وسحبت منك النفس."';
+            case 'home_work_blur':
+                return 'نبرة قريبة: "البيت فقد راحته من زحف الشغل."';
+            case 'focus_fragmentation':
+                return 'نبرة قريبة: "التقطيع مخليك تبدأ ومتكملش."';
+            case 'people_pleasing':
+                return 'نبرة قريبة: "إرضاء الكل واخد من نصيبك."';
+            case 'weak_boundaries':
+                return 'نبرة قريبة: "المشكلة إنك متاح طول الوقت."';
+            case 'practical_decision':
+                return 'نبرة قريبة: "قفل الرد بعد 8 هيرجعلك مساحتك."';
+            default:
+                return '';
+        }
+    }
+
+    switch (stage.key) {
+        case 'request_load':
+            return 'نبرة قريبة: "كل ساعة حد طالب مني حاجة جديدة."';
+        case 'home_work_blur':
+            return 'نبرة قريبة: "رسايل الشغل داخلة معايا لحد السرير."';
+        case 'focus_fragmentation':
+            return 'نبرة قريبة: "أفتح حاجة وأسيبها قبل ما تخلص."';
+        case 'people_pleasing':
+            return 'نبرة قريبة: "بسكت عشان محدش يزعل وأنا اللي بتاكل."';
+        case 'weak_boundaries':
+            return 'نبرة قريبة: "أنا متاح طول اليوم ومبعرفش أقفل."';
+        case 'practical_decision':
+            return 'نبرة قريبة: "بعد 8 مش هرد على الشغل."';
+        default:
+            return '';
+    }
+};
+
+const hasConcreteHybridBoundarySignal = (text) => /(?:بعد|قبل|من\s+\d|لحد|الساعة|ساعه|ساعة|مواعيد|جدول|مش هرد|مش هفتح|هقفل|هحدد|برا|خارج|وقت)/.test(normalizeHybridCompareText(text));
+
+const hasHybridAnchorFromOtherSpeaker = (text, otherText) => {
+    const normalized = normalizeHybridCompareText(text);
+    return tokenizeHybridText(otherText).some((token) => token.length > 2 && normalized.includes(token));
+};
+
+const buildHybridDawayirTurnPrompt = (userLine, hybridState) => {
+    const stage = getHybridStageForSpeaker('dawayir', hybridState);
+    const historyHint = buildHybridHistoryHint(hybridState.history?.dawayir || []);
+    const safeLine = cleanHybridTurnText(userLine);
+    const lastDawayirLine = hybridState.history?.dawayir?.[hybridState.history.dawayir.length - 1]?.text || '';
+    const avoidQuestion = /[؟?]/.test(lastDawayirLine);
+    return [
+        `آخر كلام من المستخدم: "${safeLine}"`,
+        `المرحلة الحالية: ${stage.labelAr}.`,
+        `هدفك في هذا الدور: ${stage.dawayirGoalAr}`,
+        getHybridStageMicroGuidance('dawayir', stage, 'ar'),
+        getHybridStageExample('dawayir', stage, 'ar'),
+        historyHint ? `لا تكرر ردودك السابقة: ${historyHint}` : '',
+        avoidQuestion ? 'بما أنك سألت في الرد السابق، هذا الرد لازم يكون ملاحظة تثبيت لا سؤالًا.' : '',
+        stage.key === 'practical_decision'
+            ? 'رد بجملة مصرية واحدة تثبّت القرار نفسه من غير سؤال أو شعار عام.'
+            : 'رد بجملة مصرية واحدة قصيرة جدًا. إمّا تسمّي الضغط المحدد بصياغة جديدة أو تسأل سؤالًا ضيقًا جدًا فقط لو احتجت.',
+    ].filter(Boolean).join('\n');
+};
+
+const buildHybridUserAgentTurnPrompt = (speakerLine, lang = 'ar', turnNumber = 1, maxTurns = HYBRID_MAX_USER_TURNS, hybridState = null) => {
+    const safeLine = String(speakerLine || '').replace(/\s+/g, ' ').trim();
+    const isFinalTurn = turnNumber >= maxTurns;
+    const stage = hybridState?.active
+        ? getHybridStageForSpeaker('user_agent', hybridState)
+        : HYBRID_STAGE_FLOW[Math.min(Math.max(turnNumber - 1, 0), HYBRID_STAGE_FLOW.length - 1)];
+    const historyHint = buildHybridHistoryHint(hybridState?.history?.user_agent || []);
+    if (lang === 'ar') {
+        return [
+            `آخر كلام من دواير: "${safeLine}"`,
+            `المرحلة الحالية: ${stage.labelAr}.`,
+            `هدفك: ${stage.userGoalAr}`,
+            getHybridStageMicroGuidance('user_agent', stage, 'ar'),
+            getHybridStageExample('user_agent', stage, 'ar'),
+            `أنت الآن في الدور ${turnNumber} من ${maxTurns}.`,
+            historyHint ? `تجنب تكرار جملك السابقة: ${historyHint}` : '',
+            isFinalTurn
+                ? 'هذا دورك الأخير. قل قاعدة عملية واحدة من نفسك فيها حد أو وقت واضح، لا نية عامة.'
+                : 'رد بجملة مصرية واحدة فقط تكشف ضغطًا محددًا من يومك أو تضيق الخيط خطوة واحدة.',
+        ].filter(Boolean).join('\n');
+    }
+
+    return [
+        `Dawayir just said: "${safeLine}"`,
+        `Current stage: ${stage.labelEn}.`,
+        `Goal: ${stage.userGoalEn}`,
+        `You are on turn ${turnNumber} of ${maxTurns}.`,
+        historyHint ? `Avoid repeating your recent lines: ${historyHint}` : '',
+        isFinalTurn
+            ? 'This is your final turn. State one clear practical decision in one sentence.'
+            : 'Reply with exactly one short sentence that reveals one concrete pressure or narrows the thread.',
+    ].filter(Boolean).join('\n');
+};
+
+const assessHybridTurnQuality = ({ speaker, text, hybridState }) => {
+    const cleanedText = cleanHybridTurnText(text);
+    const stage = getHybridStageForSpeaker(speaker, hybridState);
+    const reasons = [];
+    if (!cleanedText) {
+        reasons.push('الرد خرج فاضي.');
+    }
+
+    const words = countHybridWords(cleanedText);
+    const minWords = stage.key === 'opening'
+        ? (speaker === 'dawayir' ? 4 : 0)
+        : (speaker === 'dawayir' ? 4 : 5);
+    const maxWords = speaker === 'dawayir' ? 12 : 14;
+    if (words < minWords) {
+        reasons.push(speaker === 'dawayir' ? 'الرد أقصر من اللازم.' : 'رد وكيل المستخدم ناقص ومبتور.');
+    }
+    if (words > maxWords) {
+        reasons.push(speaker === 'dawayir' ? 'رد دواير أطول من المطلوب.' : 'رد وكيل المستخدم أطول من المطلوب.');
+    }
+
+    const genericOpeners = HYBRID_GENERIC_OPENERS[speaker] || [];
+    const normalized = normalizeHybridCompareText(cleanedText);
+    if (genericOpeners.some((phrase) => normalized.startsWith(normalizeHybridCompareText(phrase)))) {
+        reasons.push('الافتتاحية عامة أو محفوظة.');
+    }
+
+    const repeatedBigram = findRepeatedHybridBigram(cleanedText);
+    if (repeatedBigram) {
+        reasons.push('الرد كرر نفس العبارة داخل السطر نفسه.');
+    }
+
+    const sameSpeakerHistory = hybridState.history?.[speaker] || [];
+    const otherSpeaker = speaker === 'dawayir' ? 'user_agent' : 'dawayir';
+    const otherSpeakerHistory = hybridState.history?.[otherSpeaker] || [];
+    const lastSameSpeaker = sameSpeakerHistory[sameSpeakerHistory.length - 1]?.text || '';
+    const lastOtherSpeaker = otherSpeakerHistory[otherSpeakerHistory.length - 1]?.text || '';
+
+    if (lastSameSpeaker && calculateHybridTokenOverlap(cleanedText, lastSameSpeaker) >= 0.55) {
+        reasons.push('الرد قريب جدًا من آخر رد لنفس المتحدث.');
+    }
+    if (lastOtherSpeaker && speaker === 'user_agent' && calculateHybridTokenOverlap(cleanedText, lastOtherSpeaker) >= 0.75) {
+        reasons.push('وكيل المستخدم كرر كلام دواير بدل ما يتحرك لقدام.');
+    }
+    if (speaker === 'user_agent' && hasHybridDanglingEnding(cleanedText)) {
+        reasons.push('رد وكيل المستخدم انتهى بكلمة معلقة أو ناقصة.');
+    }
+    if (speaker === 'user_agent' && /[،,]$/.test(cleanedText)) {
+        reasons.push('رد وكيل المستخدم وقف عند فاصلة بدل ما يكمل المعنى.');
+    }
+    if (speaker === 'dawayir' && hasHybridDanglingEnding(cleanedText, HYBRID_DAWAYIR_DANGLING_ENDINGS)) {
+        reasons.push('رد دواير انتهى بشكل معلق أو ناقص.');
+    }
+    if (speaker === 'dawayir' && stage.key !== 'opening' && words <= 4 && !/[.!؟]$/.test(cleanedText)) {
+        reasons.push('رد دواير محتاج قفلة أوضح ونهاية كاملة.');
+    }
+
+    if (stage.key === 'opening') {
+        if (speaker === 'dawayir' && (words < 4 || words > 8)) {
+            reasons.push('الافتتاحية لازم تبقى بين 4 و8 كلمات تقريبًا.');
+        }
+        if (cleanedText.includes('?') || cleanedText.includes('؟')) {
+            reasons.push('الافتتاحية يجب ألا تحتوي سؤالًا.');
+        }
+    } else if (!hasAnyHybridKeyword(cleanedText, speaker === 'dawayir' ? stage.dawayirKeywords : stage.userKeywords)) {
+        reasons.push(
+            speaker === 'dawayir'
+                ? `رد دواير خرج برّه هدف مرحلة "${stage.labelAr}".`
+                : `رد وكيل المستخدم خرج برّه هدف مرحلة "${stage.labelAr}".`
+        );
+    }
+
+    if (speaker === 'user_agent' && stage.key === 'practical_decision') {
+        const hasAction = /(هحدد|هقول|هرد|هخصص|هقفل|همنع|هفصل|هبطل)/.test(cleanedText);
+        if (!hasAction) {
+            reasons.push('المرحلة الأخيرة لازم تحتوي قرارًا عمليًا بصيغة المتكلم.');
+        }
+        if (!hasConcreteHybridBoundarySignal(cleanedText)) {
+            reasons.push('القرار الأخير مازال عامًا؛ لازم يحتوي حدًا أو وقتًا واضحًا.');
+        }
+        if (/(?:بعد|قبل)\s+(?:الساعه)\s*$/u.test(normalizeHybridCompareText(cleanedText))) {
+            reasons.push('القرار العملي ذكر الوقت لكنه سابه ناقص من غير ساعة محددة.');
+        }
+    }
+
+    if (speaker === 'dawayir' && stage.key === 'practical_decision') {
+        if (lastOtherSpeaker && !hasHybridAnchorFromOtherSpeaker(cleanedText, lastOtherSpeaker)) {
+            reasons.push('رد دواير الأخير لازم يمسك نفس الخطوة العملية التي قالها المستخدم.');
+        }
+    }
+
+    if (speaker === 'user_agent' && /(?:مش|مع|من|في|على|كل|بس|و|او|أو|إن|لو)$/u.test(cleanedText)) {
+        reasons.push('رد وكيل المستخدم انتهى بشكل مبتور.');
+    }
+
+    return {
+        ok: reasons.length === 0,
+        reasons,
+        stage,
+    };
+};
+
+const buildHybridRepairPrompt = ({ speaker, badText, reasons, hybridState }) => {
+    const stage = getHybridStageForSpeaker(speaker, hybridState);
+    const speakerName = speaker === 'dawayir' ? 'دواير' : 'وكيل المستخدم';
+    const fallbackLine = speaker === 'dawayir' ? stage.dawayirFallbackAr : stage.userFallbackAr;
+    const roleInstruction = speaker === 'dawayir'
+        ? stage.dawayirGoalAr
+        : stage.userGoalAr;
+    return [
+        `الرد السابق لـ${speakerName} لم يمر.`,
+        `النص المرفوض: "${cleanHybridTurnText(badText)}"`,
+        `الأسباب: ${reasons.join(' | ')}`,
+        `أعد المحاولة الآن بنفس المرحلة: ${stage.labelAr}.`,
+        `التزم فقط بهذا الهدف: ${roleInstruction}`,
+        speaker === 'dawayir'
+            ? 'اكتب جملة مصرية واحدة جديدة تمامًا، واضحة ومقفولة بنقطة في النهاية، من غير أي تكرار.'
+            : 'اكتب جملة مصرية واحدة جديدة تمامًا، كاملة المعنى، من غير كلمة معلقة في الآخر أو تكرار.',
+        fallbackLine ? `لو احتجت مرساة، اقترب من هذا المعنى من غير نسخه حرفيًا: "${fallbackLine}"` : '',
+    ].filter(Boolean).join('\n');
 };
 
 if (DEMO_MODE) {
@@ -485,10 +1307,16 @@ const isAudioOnlyRealtimeInput = (realtimeInput) => {
     return !hasText && !hasAudioStreamEnd;
 };
 
+const pickLiveModel = () => LIVE_MODEL;
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 wss.on('connection', (ws, req) => {
     logInfo('Client connected');
+
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const isFirstSession = url.searchParams.get('firstSession') === 'true';
+    const isHybridSessionRequested = url.searchParams.get('mode') === 'hybrid';
 
     const authToken = process.env.DAWAYIR_AUTH_TOKEN;
     if (authToken) {
@@ -508,10 +1336,49 @@ wss.on('connection', (ws, req) => {
     let connectingSession = false;
     let reconnectInProgress = false;
     let reconnectAttempt = 0;
+    let activeLiveModel = pickLiveModel(0);
+    let reconnectCooldownTimeout = null;
+    let userAgentSession = null;
+    let userAgentReady = false;
+    let userAgentConnecting = false;
+    let userAgentReadyPromise = null;
+    let resolveUserAgentReady = null;
+    let userAgentLang = 'ar';
+    let dawayirHybridTurnBuffer = '';
+    let userAgentHybridTurnBuffer = '';
+    let lastHybridTurnBySpeaker = {
+        dawayir: '',
+        user_agent: '',
+    };
+    let pendingHybridPayloadsBySpeaker = {
+        dawayir: [],
+        user_agent: [],
+    };
     const pendingClientMessages = [];
     let inputTranscriptBuffer = '';
     let inputTranscriptTimer = null;
     const INPUT_TRANSCRIPT_FLUSH_MS = 1500; // flush after 1.5s of silence
+const buildInitialHybridState = () => ({
+    active: false,
+    lang: 'ar',
+    maxUserTurns: HYBRID_MAX_USER_TURNS,
+    userTurnCount: 0,
+    pendingDawayirOpening: '',
+    pendingDawayirPrompt: '',
+    pendingUserAgentPrompt: '',
+    pendingUserAgentTurn: 0,
+    awaitingFinalDawayirTurn: false,
+    expectedSpeaker: null,
+    history: {
+        dawayir: [],
+        user_agent: [],
+    },
+    repairAttempts: {
+        dawayir: 0,
+        user_agent: 0,
+    },
+});
+    let hybridState = buildInitialHybridState();
 
     // --- Output Sentiment Analysis ---
     let outputSentimentBuffer = '';
@@ -848,6 +1715,539 @@ wss.on('connection', (ws, req) => {
         });
     };
 
+    const sendHybridStatus = (state, extra = {}) => {
+        sendToClient({
+            hybridStatus: {
+                state,
+                ...extra,
+            },
+        });
+    };
+
+    const tagSpeaker = (payload, speaker) => ({
+        ...payload,
+        speaker,
+    });
+
+    const clearReconnectCooldown = () => {
+        if (reconnectCooldownTimeout) {
+            clearTimeout(reconnectCooldownTimeout);
+            reconnectCooldownTimeout = null;
+        }
+    };
+
+    const resetHybridBuffers = () => {
+        dawayirHybridTurnBuffer = '';
+        userAgentHybridTurnBuffer = '';
+        lastHybridTurnBySpeaker = {
+            dawayir: '',
+            user_agent: '',
+        };
+        pendingHybridPayloadsBySpeaker = {
+            dawayir: [],
+            user_agent: [],
+        };
+    };
+
+    const closeUserAgentSession = async () => {
+        userAgentReady = false;
+        if (!userAgentSession) {
+            if (resolveUserAgentReady) {
+                resolveUserAgentReady(false);
+                resolveUserAgentReady = null;
+            }
+            userAgentReadyPromise = null;
+            return;
+        }
+        const sessionToClose = userAgentSession;
+        userAgentSession = null;
+        try {
+            await sessionToClose.close();
+        } catch (error) {
+            logError('Error closing hybrid user-agent live session:', error);
+        } finally {
+            if (resolveUserAgentReady) {
+                resolveUserAgentReady(false);
+                resolveUserAgentReady = null;
+            }
+            userAgentReadyPromise = null;
+        }
+    };
+
+    const stopHybridConversation = async (state = 'stopped', extra = {}) => {
+        const wasActive = hybridState.active || userAgentSession || userAgentConnecting;
+        hybridState = buildInitialHybridState();
+        resetHybridBuffers();
+        await closeUserAgentSession();
+        if (wasActive) {
+            sendHybridStatus(state, extra);
+        }
+    };
+
+    const rememberHybridTurn = (speaker, text) => {
+        const historyBucket = hybridState.history?.[speaker];
+        if (!Array.isArray(historyBucket)) {
+            return;
+        }
+        historyBucket.push({
+            text,
+            stage: getHybridStageForSpeaker(speaker, hybridState).key,
+            at: Date.now(),
+        });
+        if (historyBucket.length > 4) {
+            historyBucket.shift();
+        }
+    };
+
+    const bufferHybridSpeakerPayload = (speaker, payload) => {
+        if (!payload || !pendingHybridPayloadsBySpeaker[speaker]) {
+            return;
+        }
+        const clonedPayload = JSON.parse(JSON.stringify(payload));
+        const serverContent = clonedPayload.serverContent || clonedPayload.server_content;
+        if (serverContent) {
+            delete serverContent.outputTranscription;
+            delete serverContent.output_transcription;
+            const modelTurn = serverContent.modelTurn || serverContent.model_turn;
+            if (Array.isArray(modelTurn?.parts)) {
+                modelTurn.parts = modelTurn.parts.filter((part) => part?.inlineData || part?.inline_data);
+            }
+        }
+        pendingHybridPayloadsBySpeaker[speaker].push(clonedPayload);
+    };
+
+    const discardBufferedHybridSpeakerPayloads = (speaker) => {
+        if (!pendingHybridPayloadsBySpeaker[speaker]) {
+            return;
+        }
+        pendingHybridPayloadsBySpeaker[speaker] = [];
+    };
+
+    const flushBufferedHybridSpeakerPayloads = (speaker, approvedText = '') => {
+        if (approvedText) {
+            sendToClient({
+                debugTranscription: {
+                    type: 'output',
+                    text: approvedText,
+                    finished: true,
+                    speaker,
+                },
+            });
+        }
+
+        const pendingPayloads = pendingHybridPayloadsBySpeaker[speaker] || [];
+        pendingHybridPayloadsBySpeaker[speaker] = [];
+        for (const payload of pendingPayloads) {
+            sendToClient(payload);
+        }
+    };
+
+    const sendOrBufferHybridSpeakerPayload = (speaker, payload) => {
+        if (hybridState.active) {
+            bufferHybridSpeakerPayload(speaker, payload);
+            return;
+        }
+        sendToClient(payload);
+    };
+
+    const getHybridStatusTurn = (speaker) => {
+        if (speaker === 'user_agent') {
+            return Math.min(hybridState.userTurnCount + 1, hybridState.maxUserTurns);
+        }
+        return Math.max(1, Math.min(hybridState.userTurnCount || 1, hybridState.maxUserTurns));
+    };
+
+    const dispatchPendingHybridDawayirPrompt = () => {
+        const promptText = String(hybridState.pendingDawayirPrompt || '').trim();
+        if (!promptText || !hybridState.active || hybridState.expectedSpeaker !== 'dawayir' || !session) {
+            return;
+        }
+        const activeSession = session;
+        setTimeout(() => {
+            if (
+                !hybridState.active
+                || hybridState.expectedSpeaker !== 'dawayir'
+                || !session
+                || session !== activeSession
+                || String(hybridState.pendingDawayirPrompt || '').trim() !== promptText
+            ) {
+                return;
+            }
+            session.sendClientContent({
+                turns: [{
+                    role: 'user',
+                    parts: [{ text: promptText }],
+                }],
+                turnComplete: true,
+            });
+        }, HYBRID_HANDOFF_DELAY_MS);
+    };
+
+    const dispatchPendingHybridUserAgentPrompt = () => {
+        const promptText = String(hybridState.pendingUserAgentPrompt || '').trim();
+        const nextTurn = Math.max(1, Number(hybridState.pendingUserAgentTurn || (hybridState.userTurnCount + 1)));
+        if (!promptText || !hybridState.active || hybridState.expectedSpeaker !== 'user_agent' || !userAgentSession || !userAgentReady) {
+            return;
+        }
+        const activeSession = userAgentSession;
+        setTimeout(() => {
+            if (
+                !hybridState.active
+                || hybridState.expectedSpeaker !== 'user_agent'
+                || !userAgentSession
+                || !userAgentReady
+                || userAgentSession !== activeSession
+                || String(hybridState.pendingUserAgentPrompt || '').trim() !== promptText
+            ) {
+                return;
+            }
+            userAgentSession.sendClientContent({
+                turns: [{
+                    role: 'user',
+                    parts: [{ text: promptText }],
+                }],
+                turnComplete: true,
+            });
+            sendHybridStatus('running', {
+                speaker: 'user_agent',
+                turn: nextTurn,
+                maxTurns: hybridState.maxUserTurns,
+            });
+        }, HYBRID_HANDOFF_DELAY_MS);
+    };
+
+    const requestHybridTurnRepair = (speaker, badText, reasons) => {
+        if (!hybridState.active) {
+            return false;
+        }
+        const currentAttempts = hybridState.repairAttempts?.[speaker] || 0;
+        if (currentAttempts >= HYBRID_MAX_REPAIR_ATTEMPTS) {
+            return false;
+        }
+
+        const targetSession = speaker === 'dawayir' ? session : userAgentSession;
+        if (!targetSession) {
+            return false;
+        }
+
+        hybridState.repairAttempts[speaker] = currentAttempts + 1;
+        lastHybridTurnBySpeaker[speaker] = '';
+        discardBufferedHybridSpeakerPayloads(speaker);
+
+        targetSession.sendClientContent({
+            turns: [{
+                role: 'user',
+                parts: [{
+                    text: buildHybridRepairPrompt({
+                        speaker,
+                        badText,
+                        reasons,
+                        hybridState,
+                    }),
+                }],
+            }],
+            turnComplete: true,
+        });
+
+        sendHybridStatus('repairing', {
+            speaker,
+            turn: getHybridStatusTurn(speaker),
+            maxTurns: hybridState.maxUserTurns,
+            attempt: hybridState.repairAttempts[speaker],
+            message: hybridState.lang === 'ar'
+                ? (speaker === 'dawayir'
+                    ? 'دواير بيعيد صياغة رده عشان يبقى أوضح.'
+                    : 'وكيل المستخدم بيعيد صياغة دوره عشان يبقى أدق.')
+                : (speaker === 'dawayir'
+                    ? 'Dawayir is tightening the reply.'
+                    : 'The user agent is tightening the turn.'),
+        });
+        return true;
+    };
+
+    const forwardUserAgentLineToDawayir = (text) => {
+        if (!hybridState.active) {
+            return;
+        }
+        hybridState.expectedSpeaker = 'dawayir';
+        hybridState.pendingDawayirPrompt = buildHybridDawayirTurnPrompt(text, hybridState);
+        dispatchPendingHybridDawayirPrompt();
+    };
+
+    const forwardDawayirLineToUserAgent = (text) => {
+        if (!hybridState.active) {
+            return;
+        }
+        hybridState.expectedSpeaker = 'user_agent';
+        const nextTurn = hybridState.userTurnCount + 1;
+        hybridState.pendingDawayirOpening = text;
+        hybridState.pendingUserAgentTurn = nextTurn;
+        hybridState.pendingUserAgentPrompt = buildHybridUserAgentTurnPrompt(
+            text,
+            hybridState.lang,
+            nextTurn,
+            hybridState.maxUserTurns,
+            hybridState
+        );
+        dispatchPendingHybridUserAgentPrompt();
+    };
+
+    const handleHybridCompletedTurn = async (speaker, rawText) => {
+        if (!hybridState.active) {
+            return;
+        }
+
+        const text = cleanHybridTurnText(rawText);
+        if (!text || lastHybridTurnBySpeaker[speaker] === text) {
+            return;
+        }
+        if (hybridState.expectedSpeaker && hybridState.expectedSpeaker !== speaker) {
+            return;
+        }
+
+        const quality = assessHybridTurnQuality({
+            speaker,
+            text,
+            hybridState,
+        });
+        if (!quality.ok) {
+            const didRequestRepair = requestHybridTurnRepair(speaker, text, quality.reasons);
+            if (didRequestRepair) {
+                return;
+            }
+            logInfo(`[Hybrid] Accepting ${speaker} turn after repair limit: ${quality.reasons.join(' | ')}`);
+        }
+
+        lastHybridTurnBySpeaker[speaker] = text;
+        hybridState.repairAttempts[speaker] = 0;
+        rememberHybridTurn(speaker, text);
+        flushBufferedHybridSpeakerPayloads(speaker, text);
+
+        if (speaker === 'dawayir') {
+            hybridState.pendingDawayirPrompt = '';
+            if (hybridState.awaitingFinalDawayirTurn) {
+                await stopHybridConversation('completed', {
+                    turn: hybridState.userTurnCount,
+                    maxTurns: hybridState.maxUserTurns,
+                });
+                return;
+            }
+            forwardDawayirLineToUserAgent(text);
+            return;
+        }
+
+        if (speaker !== 'user_agent') {
+            return;
+        }
+
+        hybridState.userTurnCount += 1;
+        hybridState.pendingUserAgentPrompt = '';
+        hybridState.pendingUserAgentTurn = 0;
+        if (hybridState.userTurnCount >= hybridState.maxUserTurns) {
+            hybridState.awaitingFinalDawayirTurn = true;
+        }
+        sendHybridStatus('running', {
+            speaker: 'dawayir',
+            turn: hybridState.userTurnCount,
+            maxTurns: hybridState.maxUserTurns,
+        });
+        forwardUserAgentLineToDawayir(text);
+    };
+
+    const ensureUserAgentSession = async (lang = 'ar') => {
+        if (userAgentSession && userAgentReady && userAgentLang === lang) {
+            return true;
+        }
+        if (userAgentReadyPromise) {
+            return userAgentReadyPromise;
+        }
+
+        if (userAgentSession && userAgentLang !== lang) {
+            await closeUserAgentSession();
+        }
+
+        userAgentConnecting = true;
+        userAgentReady = false;
+        userAgentLang = lang === 'en' ? 'en' : 'ar';
+        userAgentReadyPromise = new Promise((resolve) => {
+            resolveUserAgentReady = resolve;
+        });
+
+        try {
+            const liveSession = await ai.live.connect({
+                model: pickLiveModel(),
+                config: {
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: {
+                                voiceName: LIVE_USER_AGENT_VOICE,
+                            },
+                        },
+                    },
+                    responseModalities: ['AUDIO'],
+                    maxOutputTokens: HYBRID_USER_AGENT_MAX_OUTPUT_TOKENS,
+                    thinkingConfig: { thinkingBudget: 0 },
+                    systemInstruction: buildHybridUserAgentInstruction(userAgentLang),
+                    outputAudioTranscription: {},
+                },
+                callbacks: {
+                    onopen: () => {
+                        logInfo(`Hybrid user-agent session connected (${activeLiveModel})`);
+                    },
+                    onmessage: (message) => {
+                        const payload = toCompatMessage(message);
+                        if (payload.setupComplete || payload.setup_complete) {
+                            userAgentReady = true;
+                            if (resolveUserAgentReady) {
+                                resolveUserAgentReady(true);
+                                resolveUserAgentReady = null;
+                            }
+                            sendHybridStatus('ready', {
+                                maxTurns: hybridState.maxUserTurns,
+                            });
+                            dispatchPendingHybridUserAgentPrompt();
+                            return;
+                        }
+
+                        const serverContent = payload.serverContent || payload.server_content;
+                        const outTx = serverContent?.outputTranscription || serverContent?.output_transcription;
+                        if (outTx?.text) {
+                            if (!hybridState.active) {
+                                sendToClient({
+                                    debugTranscription: {
+                                        type: 'output',
+                                        text: outTx.text,
+                                        finished: outTx.finished,
+                                        speaker: 'user_agent',
+                                    },
+                                });
+                            }
+                            userAgentHybridTurnBuffer = `${userAgentHybridTurnBuffer} ${outTx.text}`.trim();
+                            if (outTx.finished) {
+                                const completedText = userAgentHybridTurnBuffer;
+                                userAgentHybridTurnBuffer = '';
+                                void handleHybridCompletedTurn('user_agent', completedText);
+                            }
+                        }
+
+                        const outputTurnComplete = Boolean(
+                            serverContent?.turnComplete
+                            || serverContent?.turn_complete
+                            || serverContent?.generationComplete
+                            || serverContent?.generation_complete
+                        );
+                        if (outputTurnComplete && userAgentHybridTurnBuffer.trim()) {
+                            const completedText = userAgentHybridTurnBuffer;
+                            userAgentHybridTurnBuffer = '';
+                            void handleHybridCompletedTurn('user_agent', completedText);
+                        }
+
+                        const taggedPayload = tagSpeaker(payload, 'user_agent');
+                        sendOrBufferHybridSpeakerPayload('user_agent', taggedPayload);
+                    },
+                    onerror: (error) => {
+                        logError('Hybrid user-agent live session error:', error);
+                    },
+                    onclose: () => {
+                        userAgentSession = null;
+                        userAgentReady = false;
+                        if (resolveUserAgentReady) {
+                            resolveUserAgentReady(false);
+                            resolveUserAgentReady = null;
+                        }
+                        userAgentReadyPromise = null;
+                        if (hybridState.active && !clientClosed) {
+                            sendHybridStatus('recovering', {
+                                message: hybridState.lang === 'ar'
+                                    ? 'وكيل المستخدم وقع لحظة، وبنرجّعه دلوقتي.'
+                                    : 'The live user agent dropped for a moment and is recovering now.',
+                            });
+                            void ensureUserAgentSession(hybridState.lang).then((ready) => {
+                                if (!ready && hybridState.active && !clientClosed) {
+                                    void stopHybridConversation('failed', {
+                                        message: hybridState.lang === 'ar'
+                                            ? 'جلسة وكيل المستخدم الحي وقفت قبل ما الديمو يكمّل.'
+                                            : 'The live user-agent session dropped before the demo could finish.',
+                                    });
+                                }
+                            });
+                        }
+                    },
+                },
+            });
+
+            userAgentSession = liveSession;
+            return userAgentReadyPromise;
+        } catch (error) {
+            logError('Failed to initialize hybrid user-agent session:', error);
+            if (resolveUserAgentReady) {
+                resolveUserAgentReady(false);
+                resolveUserAgentReady = null;
+            }
+            userAgentReadyPromise = null;
+            return false;
+        } finally {
+            userAgentConnecting = false;
+        }
+    };
+
+    const processHybridControl = async (hybridControl) => {
+        const action = String(hybridControl?.action || '').toLowerCase();
+        if (action === 'stop') {
+            await stopHybridConversation('stopped');
+            return;
+        }
+
+        if (action !== 'start') {
+            return;
+        }
+
+        if (!session) {
+            sendHybridStatus('failed', {
+                message: 'Primary Dawayir session is not ready yet.',
+            });
+            return;
+        }
+
+        if (hybridState.active) {
+            await stopHybridConversation('stopped');
+        }
+
+        const lang = hybridControl?.lang === 'en' ? 'en' : 'ar';
+        const requestedTurns = Number(hybridControl?.maxTurns);
+        const maxUserTurns = Number.isFinite(requestedTurns)
+            ? Math.max(2, Math.min(8, Math.round(requestedTurns)))
+            : HYBRID_MAX_USER_TURNS;
+
+        hybridState = {
+            ...buildInitialHybridState(),
+            active: true,
+            lang,
+            maxUserTurns,
+            expectedSpeaker: 'dawayir',
+        };
+        resetHybridBuffers();
+        sendHybridStatus('starting', {
+            maxTurns: maxUserTurns,
+        });
+
+        const ready = await ensureUserAgentSession(lang);
+        if (!ready && hybridState.active) {
+            await stopHybridConversation('failed', {
+                message: lang === 'ar'
+                    ? 'تعذر فتح جلسة وكيل المستخدم الحي.'
+                    : 'Failed to open the live user-agent session.',
+            });
+            return;
+        }
+
+        if (hybridState.active) {
+            sendHybridStatus('waiting_opening', {
+                maxTurns: hybridState.maxUserTurns,
+            });
+        }
+    };
+
     const queueClientMessage = (message) => {
         if (!message || typeof message !== 'object') {
             return;
@@ -1057,6 +2457,22 @@ ${replayComment}
     };
 
     const processClientMessage = (message) => {
+        const hybridControl = message?.hybridControl ?? message?.hybrid_control;
+        if (hybridControl) {
+            void processHybridControl(hybridControl);
+            const hasPassthroughPayload = Boolean(
+                message?.realtimeInput
+                || message?.realtime_input
+                || message?.clientContent
+                || message?.client_content
+                || message?.toolResponse
+                || message?.tool_response
+            );
+            if (!hasPassthroughPayload) {
+                return;
+            }
+        }
+
         if (!session) {
             queueClientMessage(message);
             return;
@@ -1083,10 +2499,12 @@ ${replayComment}
         if (clientClosed || reconnectInProgress) {
             return;
         }
+        clearReconnectCooldown();
         reconnectInProgress = true;
 
         while (!clientClosed && !session && reconnectAttempt < GEMINI_RECONNECT_MAX_ATTEMPTS) {
             reconnectAttempt += 1;
+            activeLiveModel = pickLiveModel(reconnectAttempt);
             const delayMs = Math.min(
                 GEMINI_RECONNECT_BASE_DELAY_MS * (2 ** (reconnectAttempt - 1)),
                 GEMINI_RECONNECT_MAX_DELAY_MS
@@ -1110,15 +2528,19 @@ ${replayComment}
         reconnectInProgress = false;
 
         if (!clientClosed && !session) {
-            logError('Gemini reconnect attempts exhausted.');
-            sendToClient({
-                serverError: {
-                    message: 'Gemini connection dropped and retries were exhausted.',
-                },
+            logError(`Gemini reconnect attempts exhausted. Cooling down for ${GEMINI_RECOVERY_COOLDOWN_MS}ms.`);
+            sendServerStatus('gemini_unavailable', {
+                maxAttempts: GEMINI_RECONNECT_MAX_ATTEMPTS,
+                cooldownMs: GEMINI_RECOVERY_COOLDOWN_MS,
             });
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.close();
-            }
+            reconnectAttempt = 0;
+            clearReconnectCooldown();
+            reconnectCooldownTimeout = setTimeout(() => {
+                reconnectCooldownTimeout = null;
+                if (!clientClosed && !session) {
+                    void scheduleReconnect('cooldown_retry');
+                }
+            }, GEMINI_RECOVERY_COOLDOWN_MS);
         }
     };
 
@@ -1128,37 +2550,66 @@ ${replayComment}
         }
         connectingSession = true;
 
+        activeLiveModel = pickLiveModel(reconnectAttempt);
+        let currentSystemInstruction = systemInstruction;
+
+        if (isFirstSession) {
+            logInfo('First session detected via query parameter. Injecting welcome prompt.');
+            const welcomePrompt = `\n\n[GUIDANCE OVERRIDE - FIRST SESSION]
+المستخدم يفتح التطبيق لأول مرة. كُن "المرآة الإدراكية". رحب به بلطف شديد (أقل من 15 كلمة).
+قل شيئاً مثل: "أهلاً بيك في دواير... أنا هنا عشان أسمعك، تحب تبدأ بإيه؟"`;
+            currentSystemInstruction = {
+                parts: [{ text: systemInstruction.parts[0].text + welcomePrompt }]
+            };
+        }
+
         try {
+            const useHybridLeanMode = hybridState.active || isHybridSessionRequested;
+            const useRecoveryLeanMode = hybridState.active && reconnectAttempt > 0;
+            const selectedDawayirTools = useHybridLeanMode ? hybridDawayirTools : defaultDawayirTools;
+            const selectedMaxOutputTokens = useRecoveryLeanMode
+                ? HYBRID_DAWAYIR_RECOVERY_MAX_OUTPUT_TOKENS
+                : (useHybridLeanMode
+                    ? HYBRID_DAWAYIR_MAX_OUTPUT_TOKENS
+                    : (DEMO_MODE ? 90 : 350));
+            logInfo(
+                `[LiveConfig] hybrid=${useHybridLeanMode} recovery=${useRecoveryLeanMode} tools=${selectedDawayirTools[0]?.functionDeclarations?.map((tool) => tool.name).join(',') || 'none'} maxOutputTokens=${selectedMaxOutputTokens}`
+            );
             const liveSession = await ai.live.connect({
-                model: LIVE_MODEL,
+                model: activeLiveModel,
                 config: {
                     speechConfig: {
                         voiceConfig: {
                             prebuiltVoiceConfig: {
-                                voiceName: "Aoede",
+                                voiceName: LIVE_DAWAYIR_VOICE,
                             }
                         }
                     },
                     responseModalities: ["AUDIO"],
-                    maxOutputTokens: 1000,
+                    maxOutputTokens: selectedMaxOutputTokens,
                     thinkingConfig: { thinkingBudget: 0 },
 
-                    tools,
-                    systemInstruction,
+                    tools: selectedDawayirTools,
+                    systemInstruction: currentSystemInstruction,
                     inputAudioTranscription: {},
                     outputAudioTranscription: {},
                 },
                 callbacks: {
                     onopen: () => {
-                        logInfo(`Connected to Gemini Live API via Google GenAI SDK (${LIVE_MODEL})`);
+                        logInfo(`Connected to Gemini Live API via Google GenAI SDK (${activeLiveModel})`);
                     },
                     onmessage: (message) => {
-                        if (reconnectAttempt > 0) {
+                        const wasRecovering = reconnectAttempt > 0;
+                        const payload = toCompatMessage(message);
+                        const isSetupPayload = Boolean(payload.setupComplete || payload.setup_complete);
+                        if (wasRecovering && !isSetupPayload) {
                             reconnectAttempt = 0;
                             sendServerStatus('gemini_recovered');
                         }
                         serverMessageCount += 1;
-                        const payload = toCompatMessage(message);
+                        if ((payload.setupComplete || payload.setup_complete) && hybridState.active && wasRecovering) {
+                            dispatchPendingHybridDawayirPrompt();
+                        }
 
                         // Always log first 200 chars to debug no-response issue
                         const payloadStr = JSON.stringify(payload);
@@ -1183,7 +2634,15 @@ ${replayComment}
                                     // Optionally forward hint to model via serverContent but for now just log it
                                 }
 
-                                sendToClient({ debugTranscription: { type: 'input', text: inTx.text, finished: inTx.finished, metrics: sessionMetrics } });
+                                sendToClient({
+                                    debugTranscription: {
+                                        type: 'input',
+                                        text: inTx.text,
+                                        finished: inTx.finished,
+                                        metrics: sessionMetrics,
+                                        speaker: 'user',
+                                    },
+                                });
                                 // Accumulate fragments instead of processing each one
                                 inputTranscriptBuffer += inTx.text;
                                 // Reset the flush timer on each new fragment
@@ -1204,7 +2663,23 @@ ${replayComment}
                             }
                             if (outTx?.text) {
                                 logInfo(`[Transcription:out] "${outTx.text}" (finished=${outTx.finished})`);
-                                sendToClient({ debugTranscription: { type: 'output', text: outTx.text, finished: outTx.finished } });
+                                if (!hybridState.active) {
+                                    sendToClient({
+                                        debugTranscription: {
+                                            type: 'output',
+                                            text: outTx.text,
+                                            finished: outTx.finished,
+                                            speaker: 'dawayir',
+                                        },
+                                    });
+                                }
+
+                                dawayirHybridTurnBuffer = `${dawayirHybridTurnBuffer} ${outTx.text}`.trim();
+                                if (outTx.finished) {
+                                    const completedDawayirTurn = dawayirHybridTurnBuffer;
+                                    dawayirHybridTurnBuffer = '';
+                                    void handleHybridCompletedTurn('dawayir', completedDawayirTurn);
+                                }
 
                                 // Accumulate for sentiment analysis
                                 outputSentimentBuffer += ' ' + outTx.text;
@@ -1214,6 +2689,18 @@ ${replayComment}
                                 } else {
                                     outputSentimentTimer = setTimeout(flushOutputSentimentBuffer, 3000);
                                 }
+                            }
+
+                            const outputTurnComplete = Boolean(
+                                sc.turnComplete
+                                || sc.turn_complete
+                                || sc.generationComplete
+                                || sc.generation_complete
+                            );
+                            if (outputTurnComplete && dawayirHybridTurnBuffer.trim()) {
+                                const completedDawayirTurn = dawayirHybridTurnBuffer;
+                                dawayirHybridTurnBuffer = '';
+                                void handleHybridCompletedTurn('dawayir', completedDawayirTurn);
                             }
                         }
 
@@ -1251,11 +2738,12 @@ ${replayComment}
                                     };
                                 });
 
-                                sendToClient({
+                                sendOrBufferHybridSpeakerPayload('dawayir', {
                                     toolCall: {
                                         functionCalls: processedVisualTools,
                                     },
-                                    cognitiveMetrics: sessionMetrics
+                                    cognitiveMetrics: sessionMetrics,
+                                    speaker: 'dawayir',
                                 });
 
                                 const visualResponses = visualOnlyTools.map(fc => ({
@@ -1279,15 +2767,15 @@ ${replayComment}
                             const hasNonToolPayload = Object.keys(payloadWithoutTools).length > 0;
 
                             if (clientTools.length > 0) {
-                                const clientPayload = { ...payload };
+                                const clientPayload = tagSpeaker({ ...payload }, 'dawayir');
                                 const clientToolCall = { ...(clientPayload.toolCall || clientPayload.tool_call) };
                                 clientToolCall.functionCalls = clientTools;
                                 clientToolCall.function_calls = clientTools;
                                 clientPayload.toolCall = clientToolCall;
                                 clientPayload.tool_call = clientToolCall;
-                                sendToClient(clientPayload);
+                                sendOrBufferHybridSpeakerPayload('dawayir', clientPayload);
                             } else if (hasNonToolPayload) {
-                                sendToClient(payloadWithoutTools);
+                                sendOrBufferHybridSpeakerPayload('dawayir', tagSpeaker(payloadWithoutTools, 'dawayir'));
                             }
                             return;
                         }
@@ -1299,7 +2787,7 @@ ${replayComment}
                             logInfo(`[Audio] Received ${audioParts.length} audio chunk(s) from Gemini`);
                         }
 
-                        sendToClient(payload);
+                        sendOrBufferHybridSpeakerPayload('dawayir', tagSpeaker(payload, 'dawayir'));
 
                     },
                     onerror: (error) => {
@@ -1308,6 +2796,13 @@ ${replayComment}
                     onclose: (event) => {
                         logInfo(`Gemini Live session closed. code=${event?.code ?? 'n/a'} reason=${String(event?.reason ?? '')}`);
                         session = null;
+                        if (hybridState.active) {
+                            sendHybridStatus('recovering', {
+                                message: hybridState.lang === 'ar'
+                                    ? 'جلسة دواير الحية وقعت لحظة، وبنرجّعها دلوقتي.'
+                                    : 'The Dawayir live session dropped for a moment and is recovering now.',
+                            });
+                        }
 
                         if (!clientClosed) {
                             void scheduleReconnect(`onclose:${event?.code ?? 'n/a'}`);
@@ -1317,6 +2812,7 @@ ${replayComment}
             });
 
             session = liveSession;
+            clearReconnectCooldown();
             if (clientClosed && session) {
                 session.close();
                 session = null;
@@ -1357,6 +2853,8 @@ ${replayComment}
     ws.on('close', () => {
         clientClosed = true;
         logInfo('Client disconnected');
+        clearReconnectCooldown();
+        void closeUserAgentSession();
         if (session) {
             try {
                 session.close();
@@ -1551,5 +3049,3 @@ server.listen(PORT, () => {
     logInfo(`Log level: ${LOG_LEVEL}`);
     logInfo(`Live API version: ${LIVE_API_VERSION}`);
 });
-
-

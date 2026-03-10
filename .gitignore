@@ -13,3 +13,11 @@ log_diff.txt
 output.txt
 pull_out.txt
 status_utf8.txt
+.claude/
+server/reports/
+/direct.mp3
+/node_tts_test.mp3
+/proxy_tts_test.mp3
+/tts_recheck.mp3
+/server/test_direct.mp3
+/gen_tts.py

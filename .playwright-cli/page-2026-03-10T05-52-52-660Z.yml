@@ -1,0 +1,81 @@
+- application "Dawayir live session application" [ref=e3]:
+  - link "تخطي إلى المحتوى الرئيسي" [ref=e4] [cursor=pointer]:
+    - /url: "#main-canvas-content"
+  - complementary "لوحة التحكم":
+    - heading "الجلسة الحية" [active] [level=2]
+    - generic:
+      - generic:
+        - generic:
+          - img "Dawayir"
+          - generic: دواير
+          - generic: حوّل اللي جواك لصورة أوضح.
+        - generic:
+          - generic "الأفكار متشابكة":
+            - img "عاصفة": 🌪️
+            - generic: عاصفة
+          - button "Switch to English": EN
+      - status: الجلسة شغالة
+      - generic: جاري فتح وكيل المستخدم الحي...
+    - generic:
+      - generic:
+        - generic:
+          - generic: ١. التشتت
+        - generic:
+          - generic: ٢. التركيز
+        - generic:
+          - generic: ٣. الوضوح
+      - generic: اتكلم براحتك — بسمعك...
+      - generic:
+        - generic:
+          - generic "بصمتك الإدراكية الخاصة":
+            - img "بصمتك الإدراكية الخاصة"
+            - paragraph: بصمتك الإدراكية
+            - button "⬇ احفظها كصورة"
+        - generic:
+          - generic: هادي دلوقتي
+          - img "شكل موجة الصوت"
+        - generic:
+          - generic: 🌀
+          - generic: بتستوعب بهدوء
+        - generic:
+          - generic:
+            - generic: التوازن
+            - generic: 60%
+          - generic:
+            - generic: الضغط
+            - generic: 0%
+          - generic:
+            - generic: الوضوح Δ
+            - generic: +0%
+        - generic "معنى الدوائر الحالية":
+          - generic:
+            - generic: 🔮
+            - generic: دواير اللحظة دي
+          - generic:
+            - generic:
+              - generic: أنت
+              - paragraph: وعيك الداخلي نشط — بتحس بفجوة بين اللي تحسه واللي موجود فعلاً؟
+          - generic:
+            - generic:
+              - meter "أنت"
+              - generic: أنت
+            - generic:
+              - meter "العلم"
+              - generic: العلم
+            - generic:
+              - meter "الواقع"
+              - generic: الواقع
+      - generic:
+        - generic:
+          - button "شغّل الكاميرا": شغّل الكاميرا
+        - button "ايقاف الديمو"
+        - button "أنهي الجلسة": أنهي الجلسة
+  - toolbar "أدوات الجلسة" [ref=e23]:
+    - button "إظهار اللوحة" [ref=e24] [cursor=pointer]
+    - button "المحادثة" [ref=e25] [cursor=pointer]
+    - button "أنهي الجلسة" [ref=e26] [cursor=pointer]
+  - generic: جاري مراقبة سبب أي تقطيع...
+  - main "مساحة الدوائر":
+    - heading "تطبيق دواير للجلسات الصوتية" [level=1] [ref=e20]
+    - 'img "خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة" [ref=e21]'
+  - status [ref=e22]: تم الانتقال إلى الجلسة الحية
