@@ -3,11 +3,11 @@ import NeuralGraph from './NeuralGraph';
 import CognitiveFingerprint from './CognitiveFingerprint';
 import CognitiveCoach from './CognitiveCoach';
 import GrowthArc from './GrowthArc';
+import CognitiveMap from './CognitiveMap';
 import SessionReplayPlayer from './SessionReplayPlayer';
 import SessionHighlightReel from './SessionHighlightReel';
 import SessionSignatureCard from './SessionSignatureCard';
 import JudgeModePanel from './JudgeModePanel';
-import SandMandala from './SandMandala';
 import '../dashboard-styles.css';
 
 // ══════════════════════════════════════════════════
@@ -526,6 +526,19 @@ function DashboardView({
                   ? (lang === 'ar' ? 'الخروج من ملء الشاشة' : 'Exit Fullscreen')
                   : (lang === 'ar' ? 'ملء الشاشة للتحكيم' : 'Judge Fullscreen')}
               </button>
+            </div>
+          </div>
+
+          {/* Cognitive Map — visual session fingerprint header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px', padding: '16px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <CognitiveMap color={(() => { const snap = getReportSnapshot(selectedReport); const topNode = [...(snap?.nodes || [])].sort((a, b) => b.radius - a.radius)[0]; const colors = { 1: 'var(--ds-cyan-500, #38B2D8)', 2: 'var(--ds-green-500, #2ECC71)', 3: 'var(--ds-magenta-500, #9B59B6)' }; return colors[topNode?.id] || colors[1]; })()} />
+            <div>
+              <div style={{ fontSize: '12px', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '1px', fontFamily: "'Outfit', sans-serif", marginBottom: '4px' }}>
+                {lang === 'ar' ? 'بصمة الجلسة المعرفية' : 'Cognitive Session Fingerprint'}
+              </div>
+              <div style={{ fontSize: '15px', fontWeight: '600', fontFamily: "'Outfit', sans-serif" }}>
+                {selectedReport.filename || (lang === 'ar' ? 'تقرير الجلسة' : 'Session Report')}
+              </div>
             </div>
           </div>
 

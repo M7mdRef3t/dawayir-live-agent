@@ -59,6 +59,7 @@ const WelcomeScreen = ({
       <div className="welcome-cta-stack">
         <button
           className="primary-btn welcome-cta welcome-demo-cta"
+          data-testid="start-session-btn"
           onClick={onEnterSetup}
           disabled={isWelcomeDemoLaunching}
         >
@@ -80,6 +81,7 @@ const WelcomeScreen = ({
         aria-label={lang === 'ar' ? 'التبديل إلى العربية' : 'Switch to Arabic'}
         title={lang === 'ar' ? 'العربية' : 'Arabic'}
         className={`icon-btn lang-toggle ${lang === 'ar' ? 'active' : ''}`}
+        data-testid="lang-ar-btn"
         onClick={() => onSetLang('ar')}
       >
         {lang === 'ar' ? 'عربى' : 'AR'}
@@ -88,6 +90,7 @@ const WelcomeScreen = ({
         aria-label={lang === 'ar' ? 'التبديل إلى الإنجليزية' : 'Switch to English'}
         title={lang === 'ar' ? 'الإنجليزية' : 'English'}
         className={`icon-btn lang-toggle ${lang === 'en' ? 'active' : ''}`}
+        data-testid="lang-en-btn"
         onClick={() => onSetLang('en')}
       >
         {lang === 'en' ? 'English' : 'EN'}

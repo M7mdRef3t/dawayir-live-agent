@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+﻿import { useCallback, useRef } from 'react';
 import {
   tryParseJson,
   base64ToArrayBuffer,
@@ -27,7 +27,7 @@ import { AUTO_DEMO_SCRIPT } from '../features/demo/demoScripts';
 const WS_LOG_VERBOSE = typeof import.meta !== 'undefined' && import.meta.env?.VITE_VERBOSE_WS_LOG === '1';
 
 /**
- * useConnection — manages WebSocket lifecycle, message dispatch, and reconnection.
+ * useConnection â€” manages WebSocket lifecycle, message dispatch, and reconnection.
  *
  * Extracts the monster `connect()` and `disconnect()` from App.jsx.
  */
@@ -73,9 +73,17 @@ export function useConnection(opts) {
     closeSpeakerContext, saveSessionProgress,
   } = opts;
 
-  // ── autoDemoCopy ────────────────────────────────────
+  // â”€â”€ autoDemoCopy â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   
-  const wsContractTelemetryRef = useRef({
+  const autoDemoScript = AUTO_DEMO_SCRIPT[lang] ?? AUTO_DEMO_SCRIPT.en;
+const autoDemoCopy = {
+  opening: lang === 'ar' ? 'دوائر بيفتتح الجلسة...' : 'Dawayir is opening the session...',
+  completed: lang === 'ar' ? 'الديمو اكتمل بنجاح' : 'Demo completed successfully.',
+  canceled: lang === 'ar' ? 'تم إيقاف الديمو' : 'Demo stopped.',
+  failed: lang === 'ar' ? 'تعذر استكمال الديمو.' : 'Demo could not be completed.',
+  turns: autoDemoScript.length,
+};
+const wsContractTelemetryRef = useRef({
     totalTracked: 0,
     event: { server_status: 0, hybrid_status: 0, debug_transcription: 0 },
     legacyOnly: { server_status: 0, hybrid_status: 0, debug_transcription: 0 },
@@ -143,7 +151,7 @@ export function useConnection(opts) {
     }
   }, [logWsContractTelemetry]);
 
-  // ── disconnect ──────────────────────────────────────
+  // â”€â”€ disconnect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const disconnect = useCallback(async () => {
     stopAutoDemo('auto_demo_stopped_disconnect', '', { restoreMic: false });
     manualCloseRef.current = true;
@@ -189,7 +197,7 @@ export function useConnection(opts) {
     setLastEvent('manual_disconnect');
   }, [closeSpeakerContext, logWsContractTelemetry, resetAgentTurnState, stopAutoDemo, stopMicrophone, stopPlayback]);
 
-  // ── handleWsMessage ─────────────────────────────────
+  // â”€â”€ handleWsMessage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleWsMessage = useCallback(async (event, socket) => {
     if (wsRef.current !== socket) return;
     let message = null;
@@ -231,7 +239,7 @@ export function useConnection(opts) {
     if (!message) return;
     trackWsContractMessage(message);
 
-    // ── Debug transcription ─────────────────────
+    // â”€â”€ Debug transcription â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const eventType = message?.event?.type;
     const eventPayload = message?.event?.payload;
 
@@ -322,7 +330,7 @@ export function useConnection(opts) {
       return;
     }
 
-    // ── Server status ───────────────────────────
+    // â”€â”€ Server status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const serverStatus = eventType === 'server_status'
       ? eventPayload
       : (message?.serverStatus ?? message?.server_status);
@@ -359,7 +367,7 @@ export function useConnection(opts) {
       return;
     }
 
-    // ── Hybrid status ───────────────────────────
+    // â”€â”€ Hybrid status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const hybridStatus = eventType === 'hybrid_status'
       ? eventPayload
       : (message?.hybridStatus ?? message?.hybrid_status);
@@ -418,7 +426,7 @@ export function useConnection(opts) {
       }
     }
 
-    // ── Server error ────────────────────────────
+    // â”€â”€ Server error â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const serverError = getServerErrorMessage(message);
     if (serverError) {
       setStatus('Error');
@@ -427,7 +435,7 @@ export function useConnection(opts) {
       return;
     }
 
-    // ── Setup complete ──────────────────────────
+    // â”€â”€ Setup complete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (isSetupCompleteMessage(message)) {
       setupCompleteRef.current = true;
       setHasSessionStarted(true);
@@ -565,7 +573,7 @@ export function useConnection(opts) {
       return;
     }
 
-    // ── Tool calls ──────────────────────────────
+    // â”€â”€ Tool calls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const toolCall = getToolCall(message);
     if (toolCall) handleToolCall(toolCall);
 
@@ -575,7 +583,7 @@ export function useConnection(opts) {
       setLastEvent('server_interrupted');
     }
 
-    // ── Audio & text parts ──────────────────────
+    // â”€â”€ Audio & text parts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const speaker = getOutputSpeaker(message?.speaker);
     const outputRole = speaker === 'user_agent' ? 'user_agent' : 'agent';
     const outputBufferRef = speaker === 'user_agent' ? bufferedUserAgentTurnTextRef : bufferedTurnTextRef;
@@ -678,7 +686,7 @@ export function useConnection(opts) {
       sendHybridControl, stopAutoDemo, formatAppError, ensureSpeakerContext,
       trackWsContractMessage]);
 
-  // ── connect ─────────────────────────────────────────
+  // â”€â”€ connect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const connect = useCallback(async () => {
     if (connectLockRef.current) { console.warn('[Connect] Ignored: connect already in-flight'); return; }
     connectLockRef.current = true;
@@ -809,4 +817,5 @@ export function useConnection(opts) {
 
   return { connect, disconnect };
 }
+
 

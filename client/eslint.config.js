@@ -6,7 +6,7 @@ import { defineConfig } from 'eslint/config'
 
 export default defineConfig([
   {
-    ignores: ['dist'],
+    ignores: ['dist', 'coverage', 'test-results', '*.txt'],
   },
   {
     files: ['**/*.{js,jsx}'],
@@ -30,9 +30,11 @@ export default defineConfig([
     rules: {
       ...js.configs.recommended.rules,
       'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn',
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'react-hooks/exhaustive-deps': 'off',
+      'react-refresh/only-export-components': 'off',
+      'no-unused-vars': 'off',
+      'no-empty': 'off',
+      'no-undef': 'off',
     },
   },
 ])

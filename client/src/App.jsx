@@ -1,5 +1,76 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import { useSessionReplay } from './hooks/useSessionReplay';
 import DawayirCanvas from './components/DawayirCanvas';
+import ConnectProgressCard from './components/ConnectProgressCard';
+import OnboardingModal from './components/OnboardingModal';
+import TranscriptPanel from './components/TranscriptPanel';
+import Visualizer from './components/Visualizer';
+import VoiceToneBadge from './components/VoiceToneBadge';
+import BreathingGuide from './components/BreathingGuide';
+import SacredPause from './components/SacredPause';
+import EmotionalWeather from './components/EmotionalWeather';
+import MirrorSentence from './components/MirrorSentence';
+import CognitiveVelocity from './components/CognitiveVelocity';
+import StatusBadge from './components/ui/StatusBadge';
+import AchievementBar from './components/AchievementBar';
+import JourneyTimeline from './components/JourneyTimeline';
+import CognitiveDNACard from './components/CognitiveDNACard';
+import CognitiveFingerprint from './components/CognitiveFingerprint';
+import CircleMeaningPanel from './components/CircleMeaningPanel';
+import CircleFirstShiftTooltip from './components/CircleFirstShiftTooltip';
+import ErrorBoundary from './components/ErrorBoundary';
+import NeuralTopicGraph from './components/NeuralTopicGraph';
+import { playTransitionSound, playInsightSound, playSessionCompleteSound } from './features/session/soundDesign';
+import logoCognitiveTrinity from './assets/dawayir-logo-cognitive-trinity.svg';
+import { STRINGS, NODE_LABELS, ONBOARDING_STEPS, CONNECT_PROGRESS } from './i18n/strings';
+import {
+  INPUT_SAMPLE_RATE,
+  OUTPUT_SAMPLE_RATE,
+  MIC_WORKLET_NAME,
+  MAX_RECONNECT_ATTEMPTS,
+  RECONNECT_DELAY_MS,
+  MAX_RECONNECT_DELAY_MS,
+  TTS_FALLBACK_GRACE_MS,
+  MIC_DEFER_TIMEOUT_MS,
+} from './features/session/constants';
+import {
+  arrayBufferToBase64,
+  base64ToArrayBuffer,
+  pcm16ToFloat32,
+  float32ToPcm16Buffer,
+  downsampleFloat32,
+  tryParseJson,
+  parsePcmSampleRate,
+} from './features/session/audioUtils';
+import {
+  getInlineData,
+  getParts,
+  getServerContent,
+  getToolCall,
+  isSetupCompleteMessage,
+  getServerErrorMessage,
+  isInterruptedMessage,
+  isAudioMimeType,
+  getTurnDataAudioBlobs,
+} from './features/session/protocol';
+import { useSessionHotkeys } from './hooks/useSessionHotkeys';
+import { applyAppSettingsToDocument, readStoredAppSettings, persistAppSettings } from './utils/appSettings';
+import {
+  getCircleAnnouncement,
+  getLocalizedErrorMessage,
+  getMetricsAnnouncement,
+  getTranscriptAnnouncement,
+  getViewAnnouncement,
+} from './utils/accessibility';
+
+// Lazy load heavy views for performance (Code Splitting)
+const WelcomeScreen = lazy(() => import('./components/WelcomeScreen'));
+const SessionCompleteScreen = lazy(() => import('./components/SessionCompleteScreen'));
+const SessionOverlayPanel = lazy(() => import('./components/SessionOverlayPanel'));
+const EndSessionConfirmModal = lazy(() => import('./components/EndSessionConfirmModal'));
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const DashboardView = lazy(() => import('./components/DashboardView'));
+const UiShowcasePage = lazy(() => import('./design-system/UiShowcasePage'));
 
 // ══════════════════════════════════════════════════
 
@@ -32,10 +103,23 @@ const saveSessionProgress = (nodes) => {
       date: new Date().toISOString(),
       circles: nodes.map(n => ({ id: n.id, radius: Math.round(n.radius), label: n.label })),
     });
-    // Keep last 20 sessions
-    const trimmed = history.slice(-20);
-    localStorage.setItem('dawayir_progress', JSON.stringify(trimmed));
-  } catch {}
+    // Keep last 50 sessions (enough for a year of weekly use)
+    const trimmed = history.slice(-50);
+    const serialized = JSON.stringify(trimmed);
+    // Guard: if payload > 2MB, drop oldest half to stay safe
+    if (serialized.length > 2_000_000) {
+      localStorage.setItem('dawayir_progress', JSON.stringify(trimmed.slice(-25)));
+    } else {
+      try {
+        localStorage.setItem('dawayir_progress', serialized);
+      } catch (quotaErr) {
+        // QuotaExceededError — silently drop oldest half and retry once
+        localStorage.setItem('dawayir_progress', JSON.stringify(trimmed.slice(-10)));
+      }
+    }
+  } catch {
+    // localStorage unavailable (private mode, etc.) — fail silently
+  }
 };
 
 const getSessionHistory = () => {
@@ -109,78 +193,6 @@ const createAmbientDrone = (existingCtx) => {
 
   return { start, stop, isPlaying: () => isPlaying };
 };
-
-import ConnectProgressCard from './components/ConnectProgressCard';
-import OnboardingModal from './components/OnboardingModal';
-import TranscriptPanel from './components/TranscriptPanel';
-
-// Lazy load heavy views for performance (Code Splitting)
-const WelcomeScreen = lazy(() => import('./components/WelcomeScreen'));
-const SessionCompleteScreen = lazy(() => import('./components/SessionCompleteScreen'));
-const SessionOverlayPanel = lazy(() => import('./components/SessionOverlayPanel'));
-const EndSessionConfirmModal = lazy(() => import('./components/EndSessionConfirmModal'));
-const SettingsModal = lazy(() => import('./components/SettingsModal'));
-const DashboardView = lazy(() => import('./components/DashboardView'));
-import Visualizer from './components/Visualizer';
-import VoiceToneBadge from './components/VoiceToneBadge';
-import BreathingGuide from './components/BreathingGuide';
-import SacredPause from './components/SacredPause';
-import EmotionalWeather from './components/EmotionalWeather';
-import MirrorSentence from './components/MirrorSentence';
-import CognitiveVelocity from './components/CognitiveVelocity';
-import StatusBadge from './components/ui/StatusBadge';
-import AchievementBar from './components/AchievementBar';
-import JourneyTimeline from './components/JourneyTimeline';
-import CognitiveDNACard from './components/CognitiveDNACard';
-import CognitiveFingerprint from './components/CognitiveFingerprint';
-import CircleMeaningPanel from './components/CircleMeaningPanel';
-import CircleFirstShiftTooltip from './components/CircleFirstShiftTooltip';
-import ErrorBoundary from './components/ErrorBoundary';
-import NeuralTopicGraph from './components/NeuralTopicGraph';
-const UiShowcasePage = lazy(() => import('./design-system/UiShowcasePage'));
-import { playTransitionSound, playInsightSound, playSessionCompleteSound } from './features/session/soundDesign';
-import logoCognitiveTrinity from './assets/dawayir-logo-cognitive-trinity.svg';
-
-import { STRINGS, NODE_LABELS, ONBOARDING_STEPS, CONNECT_PROGRESS } from './i18n/strings';
-import {
-  INPUT_SAMPLE_RATE,
-  OUTPUT_SAMPLE_RATE,
-  MIC_WORKLET_NAME,
-  MAX_RECONNECT_ATTEMPTS,
-  RECONNECT_DELAY_MS,
-  MAX_RECONNECT_DELAY_MS,
-  TTS_FALLBACK_GRACE_MS,
-  MIC_DEFER_TIMEOUT_MS,
-} from './features/session/constants';
-import {
-  arrayBufferToBase64,
-  base64ToArrayBuffer,
-  pcm16ToFloat32,
-  float32ToPcm16Buffer,
-  downsampleFloat32,
-  tryParseJson,
-  parsePcmSampleRate,
-} from './features/session/audioUtils';
-import {
-  getInlineData,
-  getParts,
-  getServerContent,
-  getToolCall,
-  isSetupCompleteMessage,
-  getServerErrorMessage,
-  isInterruptedMessage,
-  isAudioMimeType,
-  getTurnDataAudioBlobs,
-} from './features/session/protocol';
-import { useSessionHotkeys } from './hooks/useSessionHotkeys';
-import { applyAppSettingsToDocument, readStoredAppSettings, persistAppSettings } from './utils/appSettings';
-import {
-  getCircleAnnouncement,
-  getLocalizedErrorMessage,
-  getMetricsAnnouncement,
-  getTranscriptAnnouncement,
-  getViewAnnouncement,
-} from './utils/accessibility';
 
 // moved to features/session/constants
 // Client-side VAD removed -- Gemini's built-in VAD handles turn detection.
@@ -457,6 +469,7 @@ function App() {
   // ── FEATURE ┃: Emotional Weather ──────────────────────────────────────────────
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [transitionCount, setTransitionCount] = useState(0);
+  const [sessionTopic, setSessionTopic] = useState('');
 
   // ── FEATURE ┄: Mirror Sentence ──────────────────────────────────────────────
   // journeyPath: ordered list of unique dominant nodes this session [1, 2, 3] etc
@@ -578,71 +591,17 @@ function App() {
     return { tone: 'neutral', text: (defaults[lang] || defaults.ar)[circleId] || (lang === 'ar' ? `${circleName} بتتجاوب مع اللحظة.` : `${circleName} is responding to this moment.`) };
   }, [cognitiveMetrics.clarityDelta, cognitiveMetrics.equilibriumScore, cognitiveMetrics.overloadIndex, getWhyNowCircleName, lang]);
 
-  const snapshotReplayNodes = useCallback(() => {
-    const fallbackLabels = NODE_LABELS[lang] || NODE_LABELS.en;
-    const nodes = canvasRef.current?.getNodes?.() || [];
-    return nodes
-      .map((node) => ({
-        id: Number(node.id),
-        radius: Math.round(Number(node.radius) || 0),
-        color: typeof node.color === 'string' ? node.color : '#38B2D8',
-        label: String(node.label || fallbackLabels[String(node.id)] || ''),
-      }))
-      .filter((node) => Number.isFinite(node.id))
-      .sort((a, b) => a.id - b.id);
-  }, [lang]);
+  // ── Session Replay (extracted hook) ───────────────────────────────────────
+  // canvasRef must be declared before useSessionReplay which needs it
+  const canvasRef = useRef(null);
+  const {
+    sessionReplayRef,
+    sessionReplayStartedAtRef,
+    snapshotReplayNodes,
+    resetSessionReplay,
+    captureReplayStep,
+  } = useSessionReplay({ canvasRef, cognitiveMetrics, lang, NODE_LABELS });
 
-  const resetSessionReplay = useCallback(() => {
-    sessionReplayStartedAtRef.current = Date.now();
-    lastReplaySignatureRef.current = '';
-    const initialNodes = snapshotReplayNodes();
-    sessionReplayRef.current = initialNodes.length > 0 ? [{
-      atMs: 0,
-      kind: 'start',
-      focusId: null,
-      reason: lang === 'ar' ? 'بداية الجلسة' : 'Session start',
-      source: 'system',
-      policy: 'IDLE',
-      metric: 'turn',
-      nodes: initialNodes,
-      metrics: { ...cognitiveMetrics },
-    }] : [];
-  }, [cognitiveMetrics, lang, snapshotReplayNodes]);
-
-  const captureReplayStep = useCallback((kind, payload = {}) => {
-    const nodes = snapshotReplayNodes();
-    if (nodes.length === 0) return;
-
-    if (!sessionReplayStartedAtRef.current) {
-      sessionReplayStartedAtRef.current = Date.now();
-    }
-
-    const step = {
-      atMs: Math.max(0, Date.now() - sessionReplayStartedAtRef.current),
-      kind,
-      focusId: Number.isFinite(Number(payload.focusId)) ? Number(payload.focusId) : null,
-      reason: typeof payload.reason === 'string' ? payload.reason : '',
-      source: typeof payload.source === 'string' ? payload.source : 'agent',
-      policy: typeof payload.policy === 'string' ? payload.policy : 'IDLE',
-      metric: typeof payload.metric === 'string' ? payload.metric : 'turn',
-      nodes,
-      metrics: { ...cognitiveMetrics },
-    };
-
-    const signature = JSON.stringify({
-      kind: step.kind,
-      focusId: step.focusId,
-      reason: step.reason,
-      nodes: step.nodes.map((node) => ({ id: node.id, radius: node.radius, color: node.color })),
-    });
-
-    if (lastReplaySignatureRef.current === signature && kind === 'update') {
-      return;
-    }
-
-    lastReplaySignatureRef.current = signature;
-    sessionReplayRef.current = [...sessionReplayRef.current, step].slice(-160);
-  }, [cognitiveMetrics, snapshotReplayNodes]);
 
 
   const resetUserSpeaking = useCallback(() => {
@@ -707,6 +666,12 @@ function App() {
     }
   }, [lang]);
 
+  useEffect(() => {
+    if (appView !== 'live' || !isConnected) {
+      setSessionTopic('');
+    }
+  }, [appView, isConnected]);
+
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [journeyStage, setJourneyStage] = useState('Overwhelmed');
@@ -730,7 +695,6 @@ function App() {
     window.cancelAnimationFrame(viewFocusFrameRef.current);
   }, []);
 
-  const canvasRef = useRef(null);
   const videoRef = useRef(null);
   const wsRef = useRef(null);
   const micStreamRef = useRef(null);
@@ -769,9 +733,6 @@ function App() {
   const isConnectedRef = useRef(isConnected);
   const transcriptRef = useRef(transcript);
   const sessionContextRef = useRef([]); // Stores last few text segments for context preservation
-  const sessionReplayRef = useRef([]);
-  const sessionReplayStartedAtRef = useRef(0);
-  const lastReplaySignatureRef = useRef('');
   const restoreAfterGeminiReconnectRef = useRef(false);
   const lastRestorePromptAtRef = useRef(0);
   const connectLockRef = useRef(false);
@@ -1990,6 +1951,7 @@ function App() {
           const topicWeight = Math.max(0.3, Math.min(1, Number(args.weight) || 0.5));
           const topicColor = String(args.color || '#FF8C00');
           console.log(`[App] Spawning topic: ${topicName}, weight=${topicWeight}`);
+          setSessionTopic(topicName);
           // Use satellite nodes for topics (orbit the dominant circle)
           const dominantId = (() => {
             const nodes = canvasRef.current?.getNodes?.() || [];
@@ -2201,7 +2163,8 @@ function App() {
   }, []);
 
   const speakSyntheticUserLine = useCallback((line, runId) => (
-    new Promise(async (resolve) => {
+    new Promise((resolve) => {
+      (async () => {
       if (autoDemoRunIdRef.current !== runId) {
         resolve({ ok: false, delivered: false });
         return;
@@ -2300,6 +2263,7 @@ function App() {
         const delivered = deliverSyntheticTurn();
         resolve({ ok: autoDemoRunIdRef.current === runId, delivered });
       }
+      })();
     })
   ), [appendSyntheticUserTranscript, sendSyntheticUserTextTurn, stopSyntheticUserSpeech]);
 
@@ -3717,7 +3681,13 @@ function App() {
       <main id="main-canvas-content" className="app-canvas-main" role="main" aria-label={lang === 'ar' ? 'مساحة الدوائر' : 'Circle canvas'}>
         <h1 className="visually-hidden">{lang === 'ar' ? 'تطبيق دواير للجلسات الصوتية' : 'Dawayir live voice session app'}</h1>
         <ErrorBoundary name="DawayirCanvas" lang={lang} minHeight="100vh">
-          <DawayirCanvas ref={canvasRef} lang={lang} reducedMotion={effectiveReducedMotion} />
+          <DawayirCanvas
+            ref={canvasRef}
+            lang={lang}
+            reducedMotion={effectiveReducedMotion}
+            topicFocusActive={Boolean(sessionTopic)}
+            topicLabel={sessionTopic}
+          />
         </ErrorBoundary>
       </main>
 

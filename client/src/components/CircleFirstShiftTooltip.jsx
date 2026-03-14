@@ -48,7 +48,6 @@ function CircleFirstShiftTooltip({ lang = 'ar', show = false, onDismiss }) {
     }, 8000);
 
     return () => clearTimeout(autoTimerRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [show]);
 
   const handleDismiss = () => {

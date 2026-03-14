@@ -1,0 +1,30 @@
+{
+  "name": "دوايير — Dawayir",
+  "short_name": "دوايير",
+  "description": "حوّل اللي جواك لصورة أوضح. جلسة صوتية ترسم حالتك أمامك.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#060618",
+  "theme_color": "#060618",
+  "lang": "ar",
+  "dir": "rtl",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "lifestyle", "productivity"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "جلسة جديدة",
+      "short_name": "جلسة",
+      "description": "ابدأ جلسة صوتية جديدة",
+      "url": "/?start=session"
+    }
+  ]
+}

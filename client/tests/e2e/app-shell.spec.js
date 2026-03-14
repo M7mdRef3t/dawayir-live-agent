@@ -14,12 +14,12 @@ test('focus moves to the new heading when changing views', async ({ page }) => {
   });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-  await page.getByRole('button', { name: 'EN' }).click();
-  await page.getByRole('button', { name: /Start My Session/i }).click();
+  await page.getByTestId('lang-en-btn').click();
+  await page.getByTestId('start-session-btn').first().click();
 
   await page.waitForFunction(() => document.activeElement?.getAttribute('data-view-heading') === 'setup');
 
-  await page.getByRole('button', { name: /Memory Bank/i }).click();
+  await page.getByTestId('memory-bank-btn').click();
   await page.waitForFunction(() => document.activeElement?.getAttribute('data-view-heading') === 'dashboard');
 });
 
@@ -29,10 +29,10 @@ test('settings dialog restores focus to its trigger when dismissed', async ({ pa
   });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-  await page.getByRole('button', { name: 'EN' }).click();
-  await page.getByRole('button', { name: /Start My Session/i }).click();
+  await page.getByTestId('lang-en-btn').click();
+  await page.getByTestId('start-session-btn').first().click();
 
-  const settingsButton = page.locator('button[title="Settings"]').first();
+  const settingsButton = page.getByTestId('settings-btn').first();
   await settingsButton.click();
 
   await expect(page.getByRole('dialog')).toBeVisible();
@@ -41,5 +41,5 @@ test('settings dialog restores focus to its trigger when dismissed', async ({ pa
   await page.keyboard.press('Escape');
 
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.waitForFunction(() => document.activeElement?.getAttribute('title') === 'Settings');
+  await expect(settingsButton).toBeFocused();
 });

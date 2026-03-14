@@ -1,3 +1,18 @@
+/**
+ * ⚠️  REFERENCE ARCHIVE — NOT THE LIVE HANDLER  ⚠️
+ *
+ * This file is an early extraction of the tool-call logic from App.jsx.
+ * The refactoring was never completed. The LIVE, authoritative handler is the
+ * `handleToolCall` useCallback defined inside App.jsx (~line 1668).
+ *
+ * App.jsx's version has:
+ *   - More Arabic name mappings (e.g. 'أنت', 'الواقع', etc.)
+ *   - Better legacy weight/radius backward-compat
+ *   - Full useCallback dependency tracking
+ *
+ * DO NOT import `processToolCalls` from this file. Use the inline handler or
+ * refactor App.jsx to import from here if you want to finish the extraction.
+ */
 import { triggerHaptic, HAPTIC_PATTERNS } from '../../utils/haptics';
 import { playTransitionSound, playInsightSound } from './soundDesign';
 import CircleFirstShiftTooltip from '../../components/CircleFirstShiftTooltip';

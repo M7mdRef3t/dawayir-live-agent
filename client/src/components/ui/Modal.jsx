@@ -44,7 +44,6 @@ function Modal({ onClose, className = '', children, titleId }) {
   return (
     <>
       <div className="ds-modal-backdrop" onClick={onClose} aria-hidden="true" />
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         ref={modalRef}
         className={`ds-modal ${className}`.trim()}
