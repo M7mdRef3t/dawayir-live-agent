@@ -1,9 +1,9 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const NODE_COLORS = {
-  1: '#00F5FF',
-  2: '#00FF41',
-  3: '#FF00E5',
+  1: '#38B2D8',
+  2: '#2ECC71',
+  3: '#9B59B6',
 };
 
 const NODE_NAMES = {
@@ -289,8 +289,8 @@ const drawSignaturePoster = ({ width, height, lang, signature, reportName, compa
   });
 
   const chips = [
-    { label: lang === 'ar' ? 'الوضوح' : 'Clarity', value: metricPercent(signature?.metrics?.clarityDelta), color: '#FF00E5' },
-    { label: lang === 'ar' ? 'التوازن' : 'Equilibrium', value: metricPercent(signature?.metrics?.equilibriumScore), color: '#00F5FF' },
+    { label: lang === 'ar' ? 'الوضوح' : 'Clarity', value: metricPercent(signature?.metrics?.clarityDelta), color: '#9B59B6' },
+    { label: lang === 'ar' ? 'التوازن' : 'Equilibrium', value: metricPercent(signature?.metrics?.equilibriumScore), color: '#38B2D8' },
     { label: lang === 'ar' ? 'التركيز' : 'Focus', value: names[focusId], color: focusColor },
   ];
 
@@ -394,14 +394,14 @@ const drawBeforeAfterPoster = ({
       before: compareSnapshot.clarity,
       after: currentSnapshot.clarity,
       delta: compareDeltas?.clarity || 0,
-      color: '#FF00E5',
+      color: '#9B59B6',
     },
     {
       label: lang === 'ar' ? 'التوازن' : 'Equilibrium',
       before: compareSnapshot.equilibrium,
       after: currentSnapshot.equilibrium,
       delta: compareDeltas?.equilibrium || 0,
-      color: '#00F5FF',
+      color: '#38B2D8',
     },
     {
       label: lang === 'ar' ? 'الضغط' : 'Overload',

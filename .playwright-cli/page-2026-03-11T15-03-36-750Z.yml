@@ -1,0 +1,47 @@
+- generic [ref=e1]:
+  - application "Dawayir live session application" [ref=e3]:
+    - link "تخطي إلى المحتوى الرئيسي" [ref=e4] [cursor=pointer]:
+      - /url: "#main-canvas-content"
+    - complementary "لوحة التحكم" [ref=e22]:
+      - heading "تجهيز الجلسة" [active] [level=2] [ref=e23]
+      - generic [ref=e24]:
+        - generic [ref=e25]:
+          - generic [ref=e26]:
+            - img "Dawayir" [ref=e27]
+            - generic [ref=e28]: دواير
+            - generic [ref=e29]: صوتك يتحوّل إلى رؤية حيّة.
+          - generic [ref=e30]:
+            - button "Switch to English" [ref=e31] [cursor=pointer]: EN
+            - button "الإعدادات" [ref=e32] [cursor=pointer]: ⚙
+            - button "بنك الذاكرة" [ref=e33] [cursor=pointer]: 💾
+        - status [ref=e34]: لسه مش متصل
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic [ref=e40]:
+            - strong [ref=e41]: مراية لعقلك — في الوقت الحقيقي
+            - paragraph [ref=e42]: اتكلم براحتك عن أي حاجة بتضغط عليك. الدوائر هتتغير أمامك وتعكس رحلتك من الفوضى للوضوح.
+          - generic [ref=e44]:
+            - generic [ref=e45]:
+              - button "اقرأ حالتي" [ref=e46] [cursor=pointer]:
+                - img [ref=e47]
+                - text: اقرأ حالتي
+              - button "ادخل في السكون" [ref=e50] [cursor=pointer]:
+                - img [ref=e51]
+                - text: ادخل في السكون
+            - button "تخطي ← ابدأ بالصوت فقط" [ref=e56] [cursor=pointer]
+        - button "تشغيل الديمو الهجين" [ref=e58] [cursor=pointer]
+    - main "مساحة الدوائر":
+      - heading "تطبيق دواير للجلسات الصوتية" [level=1] [ref=e19]
+      - 'img "خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة" [ref=e20]'
+    - status [ref=e21]: تم الانتقال إلى تجهيز الجلسة
+  - dialog "مرحباً — أنا دواير 👋" [ref=e60]:
+    - generic [ref=e61]:
+      - img "Dawayir" [ref=e63]
+      - generic [ref=e64]: 1/4
+      - heading "مرحباً — أنا دواير 👋" [level=2] [ref=e65]
+      - paragraph [ref=e66]: اتكلم معايا بطبيعتك، وأنا هحوّل اللي جواك لصورة حية قدامك. مش شات، دي مراية لعقلك.
+    - generic [ref=e67]:
+      - button "تخطي" [ref=e68] [cursor=pointer]:
+        - generic [ref=e69]: تخطي
+      - button "التالي" [ref=e70] [cursor=pointer]:
+        - generic [ref=e71]: التالي

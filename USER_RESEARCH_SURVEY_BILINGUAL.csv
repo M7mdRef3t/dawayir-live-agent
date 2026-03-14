@@ -1,0 +1,11 @@
+order,question_ar,question_en,type,options_ar,options_en,required,decision_usage
+1,"آخر 7 أيام: كم مرة حصل تشوش منعك تتحرك؟","In the last 7 days, how many times did mental overload block you from acting?","scale_0_7","0|1|2|3|4|5|6|7+","0|1|2|3|4|5|6|7+",yes,"قياس تكرار الألم وتحديد الشريحة الأعلى احتياجًا"
+2,"أول رد فعل عند التشوش؟","What is your first reaction when overloaded?","multiple_choice","أؤجل|أتكلم مع شخص|أكتب ملاحظات|أتشتت في السوشيال|غير ذلك","I delay|I talk to someone|I write notes|I distract myself on social media|Other",yes,"تحديد السلوك الفعلي ونقطة الدخول الأنسب"
+3,"الحل الحالي يساعدني آخذ خطوة واضحة.","My current solution helps me take a clear next step.","linear_scale_1_5","1|2|3|4|5","1|2|3|4|5",yes,"قياس baseline جودة البدائل الحالية"
+4,"أكثر شيء تكرهه في الحل الحالي؟","What do you dislike most about your current solution?","multiple_choice","عام جدًا|بطيء|غير عملي|مرهق ذهنيًا|مخاوف خصوصية","Too generic|Too slow|Not actionable|Mentally draining|Privacy concerns",yes,"ترتيب أولويات التحسين في المنتج"
+5,"أثق أن أداة رقمية يمكنها فهم سياقي الفعلي.","I trust that a digital tool can understand my real context.","linear_scale_1_5","1|2|3|4|5","1|2|3|4|5",yes,"قياس حاجز الثقة قبل التبني"
+6,"أفضل نتيجة بالنسبة لي: خطوة واحدة قابلة للتنفيذ الآن.","My ideal outcome is one actionable next step right now.","linear_scale_1_5","1|2|3|4|5","1|2|3|4|5",yes,"التحقق من صحة JTBD الأساسي"
+7,"الوسيط المفضل وقت الضغط؟","Preferred mode under pressure?","multiple_choice","صوت|نص|مختلط","Voice|Text|Hybrid",yes,"تحديد أولوية تجربة الاستخدام (Voice vs Text)"
+8,"لو حصلت على خطوة دقيقة خلال 10 دقائق، سأستخدم الأداة أسبوعيًا.","If I get a precise next step within 10 minutes, I would use this weekly.","linear_scale_1_5","1|2|3|4|5","1|2|3|4|5",yes,"تقدير نية التبني والاحتفاظ المبكر"
+9,"أحتاج متابعة بعد الجلسة (تذكير/تتبع تنفيذ).","I need post-session follow-up (reminders/action tracking).","linear_scale_1_5","1|2|3|4|5","1|2|3|4|5",yes,"تحديد قيمة طبقة ما بعد الجلسة"
+10,"ما الجملة التي لو سمعتها بعد الجلسة ستقول: هذا ما أحتاجه؟","What sentence after a session would make you say: this is exactly what I needed?","open_text","","",yes,"استخراج لغة المستخدم لتحسين الرسائل وواجهة البداية"

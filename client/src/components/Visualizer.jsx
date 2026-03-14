@@ -10,11 +10,11 @@ function Visualizer({ stream, isConnected, lang, onStressLevelChange, dominantCo
   const [stressLevel, setStressLevel] = useState('calm');
   const stressLevelRef = useRef('calm');
   const lastFrameTimeRef = useRef(0);
-  const dominantColorRef = useRef(dominantColor || '#00F5FF');
+  const dominantColorRef = useRef(dominantColor || '#38B2D8');
   const onMicLevelRef = useRef(onMicLevel);
 
   useEffect(() => {
-    dominantColorRef.current = dominantColor || '#00F5FF';
+    dominantColorRef.current = dominantColor || '#38B2D8';
   }, [dominantColor]);
 
   useEffect(() => {

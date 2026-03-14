@@ -24,8 +24,8 @@ const TONE_LABELS = {
 };
 
 const TONE_COLORS = {
-  calm: { bg: 'rgba(0,245,255,0.12)', border: 'rgba(0,245,255,0.4)', glow: '#00F5FF' },
-  focused: { bg: 'rgba(0,255,65,0.12)', border: 'rgba(0,255,65,0.4)', glow: '#00FF41' },
+  calm: { bg: 'rgba(56,178,216,0.10)', border: 'rgba(56,178,216,0.35)', glow: '#38B2D8' },
+  focused: { bg: 'rgba(46,204,113,0.10)', border: 'rgba(46,204,113,0.35)', glow: '#2ECC71' },
   tense: { bg: 'rgba(255,80,50,0.15)', border: 'rgba(255,100,50,0.5)', glow: '#FF5032' },
   excited: { bg: 'rgba(255,200,0,0.12)', border: 'rgba(255,200,0,0.4)', glow: '#FFC800' },
   silent: { bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.1)', glow: '#ffffff' },

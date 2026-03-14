@@ -96,6 +96,35 @@ const drawBackground = (ctx, canvasWidth, canvasHeight, color, nodes) => {
     ctx.fillStyle = color;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
+    // ── COSMIC NEBULA ATMOSPHERE — deep space depth ───────────────────
+    // FEATURE ⑯: VISUAL-SONIC BREATH SYNC
+    // Synchronized exactly to the 8-second LFO (0.125 Hz) in ambientDrone.js
+    const sonicBreathPhase = (Date.now() % 8000) / 8000 * Math.PI * 2;
+    const nebulaPulse = 0.5 + Math.sin(sonicBreathPhase) * 0.15; // Deeper visual breath aligned with audio
+
+    // Primary nebula — centered on canvas body (not panel)
+    const nebGrd1 = ctx.createRadialGradient(
+        canvasWidth * 0.45, canvasHeight * 0.4, 0,
+        canvasWidth * 0.45, canvasHeight * 0.4, canvasHeight * 0.65
+    );
+    nebGrd1.addColorStop(0,   `rgba(30, 20, 80, ${0.45 * nebulaPulse})`);
+    nebGrd1.addColorStop(0.4, `rgba(15, 10, 45, ${0.30 * nebulaPulse})`);
+    nebGrd1.addColorStop(1,   'transparent');
+    ctx.fillStyle = nebGrd1;
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    // Secondary nebula — offset for depth (breathes opposite phase)
+    const nebPulse2 = 0.5 + Math.sin(sonicBreathPhase + Math.PI) * 0.06;
+    const nebGrd2 = ctx.createRadialGradient(
+        canvasWidth * 0.65, canvasHeight * 0.65, 0,
+        canvasWidth * 0.65, canvasHeight * 0.65, canvasHeight * 0.5
+    );
+    nebGrd2.addColorStop(0,   `rgba(10, 20, 55, ${0.30 * nebPulse2})`);
+    nebGrd2.addColorStop(0.5, `rgba(5, 10, 30, ${0.15 * nebPulse2})`);
+    nebGrd2.addColorStop(1,   'transparent');
+    ctx.fillStyle = nebGrd2;
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
     if (!nodes || nodes.length === 0) return;
 
     // ── Chromotherapy ambient layer ──────────────────────────
@@ -138,6 +167,7 @@ const drawBackground = (ctx, canvasWidth, canvasHeight, color, nodes) => {
     ctx.fillStyle = grd;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 };
+
 
 // ══════════════════════════════════════════════
 // FEATURE 2: PARTICLE GRAVITY FIELD
@@ -383,31 +413,60 @@ const drawOtherNode = (ctx, otherNode, selfNode, now) => {
 };
 
 
-// ══════════════════════════════════════════════════
-// DIVINE VOICE ORB — "Sound from the Cosmos"
-// A celestial orb that appears at canvas center when
-// Dawayir speaks, creating an otherworldly presence.
-// Pulsing rings, gold particles, and light beams
-// that reach out to touch the three circles.
-// ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// DIVINE VOICE ORB — "صوت من عمق الفضاء"
+// ─────────────────────────────────────────────────────────────
+// NOT an orb. A tear in spacetime through which the voice of
+// the cosmos bleeds into the user's consciousness.
+//
+// DESIGN PHILOSOPHY — SUBCONSCIOUS ADDRESSING:
+// Nothing here should be "noticed." Everything should be FELT.
+// • Heartbeat rhythm (1.2Hz) → entrains parasympathetic system
+// • Alpha shimmer (10Hz) → below conscious threshold, primes calm
+// • Sacred geometry (golden ratio) → archetypal pattern recognition
+// • Infinite depth (wormhole iris) → triggers awe/sublime response
+// • Color temperature (warm→cool gradient) → circadian associations
+// • Logarithmic scaling → matches human perception curves
+//
+// The user should NEVER think "cool animation."
+// They should think "something is... here."
+// ══════════════════════════════════════════════════════════════
 
-const DIVINE_ORB_PARTICLES_MAX = 24;
+// Golden ratio — the universe's favorite number
+const PHI = 1.618033988749895;
+const TAU = Math.PI * 2;
+
+// Heartbeat: 72 BPM = 1.2Hz — resting heart rate entrainment
+const HEARTBEAT_HZ = 1.2;
+const HEARTBEAT_PERIOD = 1000 / HEARTBEAT_HZ;
+
+// Alpha wave: 10Hz — relaxation brainwave, below conscious visual threshold
+const ALPHA_HZ = 10;
+
+const DIVINE_ORB_PARTICLES_MAX = 40;
+
+// Sacred particle spawning — golden angle distribution
+let goldenAngleCounter = 0;
+const GOLDEN_ANGLE = TAU / (PHI * PHI); // ~137.5° — sunflower spiral
 
 const spawnOrbParticles = (particles, cx, cy, now) => {
-    // Spawn 1-2 new particles per frame
-    const toSpawn = Math.random() < 0.6 ? 1 : 2;
+    const toSpawn = Math.random() < 0.5 ? 1 : 2;
     for (let i = 0; i < toSpawn && particles.length < DIVINE_ORB_PARTICLES_MAX; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 0.3 + Math.random() * 0.8;
+        goldenAngleCounter++;
+        const angle = goldenAngleCounter * GOLDEN_ANGLE; // sacred spiral
+        const spiralR = 5 + Math.sqrt(goldenAngleCounter % 60) * 4;
+        const speed = 0.15 + Math.random() * 0.4;
         particles.push({
-            x: cx + (Math.random() - 0.5) * 20,
-            y: cy + (Math.random() - 0.5) * 20,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed - 0.2, // drift upwards
-            size: 1 + Math.random() * 2.5,
+            x: cx + Math.cos(angle) * spiralR,
+            y: cy + Math.sin(angle) * spiralR,
+            vx: Math.cos(angle) * speed * 0.6,
+            vy: Math.sin(angle) * speed * 0.6 - 0.15,
+            size: 0.5 + Math.random() * 2,
             life: 1.0,
-            decay: 0.008 + Math.random() * 0.012,
+            decay: 0.004 + Math.random() * 0.008, // slower decay — linger longer
             born: now,
+            hue: 30 + Math.random() * 30, // warm gold → amber range
+            spiralPhase: angle,
         });
     }
     return particles;
@@ -417,91 +476,302 @@ const drawDivineOrb = (ctx, canvasWidth, canvasHeight, nodes, amp, now) => {
     const cx = canvasWidth / 2;
     const cy = canvasHeight * 0.42;
 
-    // Subtle canvas dim — darkens everything slightly for focus
-    ctx.fillStyle = `rgba(0, 0, 0, ${0.08 + amp * 0.12})`;
+    // ═══════════════════════════════════════════════════════════
+    // LAYER 0 — COSMIC DARKNESS
+    // Deepen the void. The voice comes from somewhere BEHIND reality.
+    // ═══════════════════════════════════════════════════════════
+    const voidDepth = 0.06 + amp * 0.14;
+    ctx.fillStyle = `rgba(0, 0, 0, ${voidDepth})`;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-    // ── 1. AURORA — wide soft glow behind the orb ────────────────
-    const auroraR = 180 + amp * 120;
-    const auroraGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, auroraR);
-    auroraGrd.addColorStop(0, `rgba(255, 215, 0, ${0.04 + amp * 0.06})`);
-    auroraGrd.addColorStop(0.4, `rgba(255, 180, 0, ${0.02 + amp * 0.03})`);
-    auroraGrd.addColorStop(0.7, `rgba(200, 120, 255, ${0.01 + amp * 0.02})`);
-    auroraGrd.addColorStop(1, 'transparent');
+    // ═══════════════════════════════════════════════════════════
+    // LAYER 1 — DEEP SPACE NEBULA (6 concentric gas layers)
+    // Each layer has a slightly different phase, creating parallax
+    // depth illusion. Colors shift from warm center to cool edges
+    // (mimics real nebulae and triggers awe response).
+    // ═══════════════════════════════════════════════════════════
+    const nebulaLayers = [
+        { r: 400, hue: 270, sat: 40, phase: 0.0003, opacity: 0.012 },  // deep violet — farthest
+        { r: 320, hue: 250, sat: 50, phase: 0.0005, opacity: 0.015 },  // indigo
+        { r: 240, hue: 220, sat: 35, phase: 0.0007, opacity: 0.018 },  // twilight blue
+        { r: 170, hue: 40,  sat: 60, phase: 0.0011, opacity: 0.025 },  // warm amber
+        { r: 110, hue: 30,  sat: 70, phase: 0.0017, opacity: 0.035 },  // deep gold
+        { r: 60,  hue: 20,  sat: 80, phase: 0.0023, opacity: 0.05 },   // sacred fire — closest
+    ];
+
+    nebulaLayers.forEach((layer, i) => {
+        const breathe = Math.sin(now * layer.phase + i * 1.1) * 0.4 + 0.6;
+        const layerR = layer.r + amp * (layer.r * 0.3) * breathe;
+        const layerOp = (layer.opacity + amp * layer.opacity * 1.5) * breathe;
+
+        // Offset center slightly per layer — parallax depth
+        const offsetX = Math.sin(now * layer.phase * 0.7 + i) * 3;
+        const offsetY = Math.cos(now * layer.phase * 0.5 + i * 0.7) * 2;
+        const lcx = cx + offsetX;
+        const lcy = cy + offsetY;
+
+        const grd = ctx.createRadialGradient(lcx, lcy, 0, lcx, lcy, layerR);
+        const h = layer.hue;
+        const s = layer.sat;
+        grd.addColorStop(0, `hsla(${h}, ${s}%, 70%, ${layerOp})`);
+        grd.addColorStop(0.4, `hsla(${h}, ${s}%, 50%, ${layerOp * 0.6})`);
+        grd.addColorStop(0.7, `hsla(${h}, ${s}%, 30%, ${layerOp * 0.25})`);
+        grd.addColorStop(1, 'transparent');
+        ctx.beginPath();
+        ctx.arc(lcx, lcy, layerR, 0, TAU);
+        ctx.fillStyle = grd;
+        ctx.fill();
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // LAYER 2 — COSMIC HEARTBEAT PULSE
+    // A slow, deep pulse at 1.2Hz (72 BPM) — matches resting
+    // heart rate. The subconscious syncs to this rhythm without
+    // the user knowing why they feel calmer.
+    // ═══════════════════════════════════════════════════════════
+    const heartPhase = (now % HEARTBEAT_PERIOD) / HEARTBEAT_PERIOD;
+    // Cardiac-like waveform: sharp systole, slow diastole
+    const heartWave = heartPhase < 0.15
+        ? Math.sin(heartPhase / 0.15 * Math.PI) // systole spike
+        : Math.pow(1 - (heartPhase - 0.15) / 0.85, 2.5); // diastole decay
+    const heartIntensity = (0.08 + amp * 0.35) * heartWave;
+
+    // The heartbeat radiates outward like a gravitational wave
+    const heartR = 30 + heartWave * 90 + amp * 40;
+    const heartGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, heartR);
+    heartGrd.addColorStop(0, `rgba(255, 230, 180, ${heartIntensity})`);
+    heartGrd.addColorStop(0.3, `rgba(255, 200, 120, ${heartIntensity * 0.5})`);
+    heartGrd.addColorStop(0.7, `rgba(200, 150, 80, ${heartIntensity * 0.15})`);
+    heartGrd.addColorStop(1, 'transparent');
     ctx.beginPath();
-    ctx.arc(cx, cy, auroraR, 0, Math.PI * 2);
-    ctx.fillStyle = auroraGrd;
+    ctx.arc(cx, cy, heartR, 0, TAU);
+    ctx.fillStyle = heartGrd;
     ctx.fill();
 
-    // ── 2. SHOCKWAVE RINGS — expanding circles ────────────────────
-    const ringCount = 3;
-    for (let i = 0; i < ringCount; i++) {
-        const phase = ((now * 0.0008) + i * 0.33) % 1.0;
-        const ringR = 20 + phase * (100 + amp * 80);
-        const ringOpacity = (1 - phase) * (0.12 + amp * 0.18);
-        if (ringOpacity < 0.01) continue;
+    // ═══════════════════════════════════════════════════════════
+    // LAYER 3 — WORMHOLE IRIS (Infinite Depth)
+    // Concentric rings that get closer together toward center,
+    // creating the illusion of a tunnel into infinity.
+    // This triggers the brain's depth perception → feeling of
+    // "something vast beyond this point."
+    // ═══════════════════════════════════════════════════════════
+    const irisRings = 8;
+    for (let i = 0; i < irisRings; i++) {
+        // Logarithmic spacing — closer together at center (depth illusion)
+        const t = i / irisRings;
+        const logR = Math.pow(t, 0.6) * (45 + amp * 30);
+        const ringPhase = (now * 0.0004 + t * 2) % 1.0;
+        const rotateAngle = now * 0.00015 * (i % 2 === 0 ? 1 : -1);
+        const ringOp = (1 - t) * (0.04 + amp * 0.08) * (0.5 + heartWave * 0.5);
+
+        if (ringOp < 0.005) continue;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rotateAngle);
+
+        // Slight ellipse for 3D perspective illusion
+        ctx.scale(1, 0.92 + t * 0.08);
 
         ctx.beginPath();
-        ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255, 215, 0, ${ringOpacity})`;
-        ctx.lineWidth = 1.5 - phase;
+        ctx.arc(0, 0, logR, 0, TAU);
+        const warmth = Math.round(200 + t * 55);
+        ctx.strokeStyle = `rgba(${warmth}, ${Math.round(180 + t * 60)}, ${Math.round(120 + t * 80)}, ${ringOp})`;
+        ctx.lineWidth = 0.8 + (1 - t) * 1.2;
         ctx.stroke();
+
+        ctx.restore();
     }
 
-    // ── 3. CORE ORB — the divine source ───────────────────────────
-    const orbR = 16 + amp * 22;
-    const pulse = Math.sin(now * 0.006) * 0.3 + 0.7; // 0.4..1.0
+    // ═══════════════════════════════════════════════════════════
+    // LAYER 4 — SACRED GEOMETRY (Golden Spiral + Flower of Life)
+    // These patterns exist at the THRESHOLD of perception.
+    // The user cannot consciously see them, but the brain's
+    // pattern recognition engine detects them and triggers
+    // a feeling of "order" and "rightness."
+    // ═══════════════════════════════════════════════════════════
+    const sacredOp = (0.02 + amp * 0.04) * (0.6 + heartWave * 0.4);
 
-    // Inner orb glow
-    const orbGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, orbR * 2);
-    orbGrd.addColorStop(0, `rgba(255, 240, 200, ${0.7 * pulse})`);
-    orbGrd.addColorStop(0.3, `rgba(255, 200, 80, ${0.4 * pulse})`);
-    orbGrd.addColorStop(0.6, `rgba(255, 150, 0, ${0.12 * pulse})`);
-    orbGrd.addColorStop(1, 'transparent');
-    ctx.beginPath();
-    ctx.arc(cx, cy, orbR * 2, 0, Math.PI * 2);
-    ctx.fillStyle = orbGrd;
-    ctx.fill();
+    if (sacredOp > 0.008) {
+        ctx.save();
+        ctx.translate(cx, cy);
 
-    // Solid core
-    ctx.beginPath();
-    ctx.arc(cx, cy, orbR * 0.6, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255, 245, 220, ${0.6 + amp * 0.4})`;
-    ctx.fill();
+        // Golden spiral — drawn as connected arcs
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(255, 220, 150, ${sacredOp})`;
+        ctx.lineWidth = 0.6;
+        let spiralR = 3;
+        let spiralAngle = 0;
+        const spiralRotation = now * 0.0001;
+        for (let s = 0; s < 60; s++) {
+            spiralR *= 1.05;
+            spiralAngle += 0.15;
+            const sx = Math.cos(spiralAngle + spiralRotation) * spiralR;
+            const sy = Math.sin(spiralAngle + spiralRotation) * spiralR;
+            if (s === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+            if (spiralR > 80 + amp * 40) break;
+        }
+        ctx.stroke();
 
-    // Rotating halo
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(now * 0.0003);
-    ctx.beginPath();
-    ctx.arc(0, 0, orbR * 1.1, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(255, 215, 0, ${0.25 + amp * 0.25})`;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 8]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-
-    // ── 4. LIGHT BEAMS to circles ────────────────────────────────
-    if (nodes && nodes.length > 0 && amp > 0.05) {
-        nodes.forEach((node, idx) => {
-            const beamPhase = ((now * 0.001) + idx * 0.4) % 1.0;
-            const beamOpacity = amp * 0.15 * Math.sin(beamPhase * Math.PI);
-            if (beamOpacity < 0.01) return;
-
-            const grad = ctx.createLinearGradient(cx, cy, node.x, node.y);
-            grad.addColorStop(0, `rgba(255, 215, 0, ${beamOpacity * 1.5})`);
-            grad.addColorStop(0.5, `rgba(255, 200, 100, ${beamOpacity * 0.6})`);
-            grad.addColorStop(1, 'transparent');
-
+        // Flower of Life — 6 interlocking circles (archetypal)
+        const flowerR = 18 + amp * 8;
+        const flowerOp = sacredOp * 0.5; // even more subliminal
+        ctx.strokeStyle = `rgba(200, 180, 255, ${flowerOp})`;
+        ctx.lineWidth = 0.4;
+        const flowerRotation = now * 0.00005;
+        for (let f = 0; f < 6; f++) {
+            const fa = flowerRotation + (f / 6) * TAU;
+            const fx = Math.cos(fa) * flowerR;
+            const fy = Math.sin(fa) * flowerR;
             ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.lineTo(node.x, node.y);
-            ctx.strokeStyle = grad;
-            ctx.lineWidth = 1.5;
-            ctx.globalAlpha = Math.min(1, beamOpacity * 3);
+            ctx.arc(fx, fy, flowerR, 0, TAU);
             ctx.stroke();
-            ctx.globalAlpha = 1.0;
+        }
+        // Center circle
+        ctx.beginPath();
+        ctx.arc(0, 0, flowerR, 0, TAU);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // LAYER 5 — THE SINGULARITY (Core)
+    // Not a "bright ball" — a point of infinite density.
+    // The brightest point is TINY. Smaller = deeper = more power.
+    // The glow around it is vast but the source is a pinpoint.
+    // ═══════════════════════════════════════════════════════════
+    const coreR = 3 + amp * 5; // intentionally VERY small
+    const corePulse = 0.7 + heartWave * 0.3;
+
+    // Wide halo (the perceived size) — warm to cool gradient
+    const haloR = 25 + amp * 35;
+    const haloGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloR);
+    haloGrd.addColorStop(0, `rgba(255, 250, 240, ${0.5 * corePulse * (0.3 + amp * 0.7)})`);
+    haloGrd.addColorStop(0.08, `rgba(255, 230, 180, ${0.35 * corePulse * (0.3 + amp * 0.7)})`);
+    haloGrd.addColorStop(0.25, `rgba(255, 180, 80, ${0.12 * corePulse * (0.3 + amp * 0.7)})`);
+    haloGrd.addColorStop(0.5, `rgba(180, 120, 200, ${0.04 * corePulse * (0.3 + amp * 0.7)})`);
+    haloGrd.addColorStop(1, 'transparent');
+    ctx.beginPath();
+    ctx.arc(cx, cy, haloR, 0, TAU);
+    ctx.fillStyle = haloGrd;
+    ctx.fill();
+
+    // The singularity itself — impossibly small and bright
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreR, 0, TAU);
+    ctx.fillStyle = `rgba(255, 252, 245, ${0.6 + amp * 0.4})`;
+    ctx.fill();
+
+    // Corona spikes — 5 asymmetric rays (not uniform = more natural)
+    if (amp > 0.03) {
+        const spikeCount = 5;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(now * 0.00008);
+        for (let sp = 0; sp < spikeCount; sp++) {
+            const spAngle = (sp / spikeCount) * TAU + sp * 0.3; // irregular spacing
+            const spLen = (15 + amp * 30) * (0.6 + Math.sin(now * 0.003 + sp * 1.7) * 0.4);
+            const spOp = (0.03 + amp * 0.08) * corePulse;
+            const spGrd = ctx.createLinearGradient(0, 0,
+                Math.cos(spAngle) * spLen,
+                Math.sin(spAngle) * spLen
+            );
+            spGrd.addColorStop(0, `rgba(255, 240, 200, ${spOp})`);
+            spGrd.addColorStop(1, 'transparent');
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(
+                Math.cos(spAngle) * spLen,
+                Math.sin(spAngle) * spLen
+            );
+            ctx.strokeStyle = spGrd;
+            ctx.lineWidth = 1.5 + amp * 1;
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // LAYER 6 — ALPHA SHIMMER (Subliminal)
+    // A 10Hz flicker at the VERY edge of the glow.
+    // The conscious eye cannot track 10Hz, but the visual cortex
+    // DOES process it, and it primes alpha brainwave states
+    // (relaxed alertness). This is the key to the "felt" effect.
+    // ═══════════════════════════════════════════════════════════
+    const alphaPhase = Math.sin(now * TAU * ALPHA_HZ / 1000);
+    const alphaOp = (0.008 + amp * 0.015) * (alphaPhase * 0.5 + 0.5);
+    if (alphaOp > 0.003) {
+        const alphaR = 130 + amp * 60;
+        const alphaGrd = ctx.createRadialGradient(cx, cy, alphaR * 0.7, cx, cy, alphaR);
+        alphaGrd.addColorStop(0, 'transparent');
+        alphaGrd.addColorStop(0.5, `rgba(200, 180, 255, ${alphaOp})`);
+        alphaGrd.addColorStop(1, 'transparent');
+        ctx.beginPath();
+        ctx.arc(cx, cy, alphaR, 0, TAU);
+        ctx.fillStyle = alphaGrd;
+        ctx.fill();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // LAYER 7 — GRAVITATIONAL LENSING BEAMS
+    // The connection to circles is NOT a straight line.
+    // It curves, like light bending around a massive object.
+    // This makes the orb feel like it has MASS, GRAVITY, PRESENCE.
+    // The curve follows a cubic bezier with control points that
+    // drift slowly, creating an organic "reaching" motion.
+    // ═══════════════════════════════════════════════════════════
+    if (nodes && nodes.length > 0 && amp > 0.02) {
+        nodes.forEach((node, idx) => {
+            const dx = node.x - cx;
+            const dy = node.y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+            // Beam intensity — closer = stronger (inverse square)
+            const beamBase = amp * 0.12 * Math.min(1, 400 / (dist + 100));
+            const beamPulse = 0.5 + heartWave * 0.5;
+            const beamOp = beamBase * beamPulse;
+            if (beamOp < 0.005) return;
+
+            // Perpendicular vector for curve
+            const perpX = -dy / dist;
+            const perpY = dx / dist;
+            // Curve amount oscillates slowly — like the beam is "searching"
+            const curveAmt = Math.sin(now * 0.0006 + idx * 2.1) * (40 + amp * 20);
+
+            // Control points for cubic bezier
+            const cp1x = cx + dx * 0.3 + perpX * curveAmt;
+            const cp1y = cy + dy * 0.3 + perpY * curveAmt;
+            const cp2x = cx + dx * 0.7 - perpX * curveAmt * 0.5;
+            const cp2y = cy + dy * 0.7 - perpY * curveAmt * 0.5;
+
+            // Multi-stroke for soft glow effect
+            const [nr, ng, nb] = parseHex(node.color);
+            for (let stroke = 0; stroke < 3; stroke++) {
+                const w = [4, 2, 0.8][stroke];
+                const a = [beamOp * 0.2, beamOp * 0.4, beamOp * 0.8][stroke];
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, node.x, node.y);
+                ctx.strokeStyle = `rgba(${nr}, ${ng}, ${nb}, ${a})`;
+                ctx.lineWidth = w;
+                ctx.stroke();
+            }
+
+            // Travelling light pulse along the beam
+            const travelT = (now * 0.0005 + idx * 0.33) % 1.0;
+            // Cubic bezier point at t
+            const t1 = 1 - travelT;
+            const px = t1*t1*t1*cx + 3*t1*t1*travelT*cp1x + 3*t1*travelT*travelT*cp2x + travelT*travelT*travelT*node.x;
+            const py = t1*t1*t1*cy + 3*t1*t1*travelT*cp1y + 3*t1*travelT*travelT*cp2y + travelT*travelT*travelT*node.y;
+            const pulseGrd = ctx.createRadialGradient(px, py, 0, px, py, 8);
+            pulseGrd.addColorStop(0, `rgba(${nr}, ${ng}, ${nb}, ${beamOp * 1.5})`);
+            pulseGrd.addColorStop(1, 'transparent');
+            ctx.beginPath();
+            ctx.arc(px, py, 8, 0, TAU);
+            ctx.fillStyle = pulseGrd;
+            ctx.fill();
         });
     }
 };
@@ -509,23 +779,41 @@ const drawDivineOrb = (ctx, canvasWidth, canvasHeight, nodes, amp, now) => {
 const updateOrbParticles = (ctx, particles, now) => {
     const alive = [];
     particles.forEach(p => {
+        // Spiral motion instead of linear drift
+        p.spiralPhase += 0.02;
+        const spiralForce = 0.05;
+        p.vx += Math.cos(p.spiralPhase) * spiralForce * 0.3;
+        p.vy += Math.sin(p.spiralPhase) * spiralForce * 0.3;
+        // Gentle upward drift — ascending to the cosmos
+        p.vy -= 0.006;
+        // Damping — particles slow down gracefully
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+
         p.x += p.vx;
         p.y += p.vy;
-        p.vy -= 0.003; // slight upwards drift
         p.life -= p.decay;
         if (p.life <= 0) return;
 
-        const alpha = p.life * 0.8;
+        // Fade follows a perceptual curve (not linear)
+        const alpha = Math.pow(p.life, 1.5) * 0.6;
+        const h = p.hue;
+        const size = p.size * (0.3 + p.life * 0.7);
+
+        // Main particle — warm stardust
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 215, 80, ${alpha})`;
+        ctx.arc(p.x, p.y, size, 0, TAU);
+        ctx.fillStyle = `hsla(${h}, 80%, 75%, ${alpha})`;
         ctx.fill();
 
-        // Tiny sparkle highlight
-        if (p.life > 0.5 && p.size > 1.5) {
+        // Micro-halo around each particle
+        if (size > 0.8) {
+            const microGrd = ctx.createRadialGradient(p.x, p.y, size, p.x, p.y, size * 3);
+            microGrd.addColorStop(0, `hsla(${h}, 70%, 70%, ${alpha * 0.3})`);
+            microGrd.addColorStop(1, 'transparent');
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size * 0.3, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
+            ctx.arc(p.x, p.y, size * 3, 0, TAU);
+            ctx.fillStyle = microGrd;
             ctx.fill();
         }
 
@@ -533,6 +821,48 @@ const updateOrbParticles = (ctx, particles, now) => {
     });
     return alive;
 };
+
+// ══════════════════════════════════════════════════════════════
+// SUBLIMINAL CANVAS LAYER — "The Felt Background"
+// Drawn ONCE per frame, BEHIND everything.
+// Activates pattern recognition without conscious detection.
+// ══════════════════════════════════════════════════════════════
+const drawSubliminLayer = (ctx, canvasWidth, canvasHeight, now) => {
+    // Peripheral vision engagement — very faint glow at screen edges
+    // Human peripheral vision is MORE sensitive to motion than central
+    // vision. This creates a feeling of "living space" without being seen.
+    const edgeOp = 0.008 + Math.sin(now * 0.0005) * 0.004;
+
+    // Top edge — cool (sky)
+    const topGrd = ctx.createLinearGradient(0, 0, 0, canvasHeight * 0.15);
+    topGrd.addColorStop(0, `rgba(100, 120, 200, ${edgeOp})`);
+    topGrd.addColorStop(1, 'transparent');
+    ctx.fillStyle = topGrd;
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight * 0.15);
+
+    // Bottom edge — warm (earth)
+    const botGrd = ctx.createLinearGradient(0, canvasHeight * 0.85, 0, canvasHeight);
+    botGrd.addColorStop(0, 'transparent');
+    botGrd.addColorStop(1, `rgba(180, 120, 60, ${edgeOp})`);
+    ctx.fillStyle = botGrd;
+    ctx.fillRect(0, canvasHeight * 0.85, canvasWidth, canvasHeight * 0.15);
+
+    // Left/right edges — breathing glow
+    const sidePhase = Math.sin(now * 0.0003);
+    const sideOp = 0.005 + sidePhase * 0.003;
+    const leftGrd = ctx.createLinearGradient(0, 0, canvasWidth * 0.08, 0);
+    leftGrd.addColorStop(0, `rgba(150, 100, 200, ${sideOp})`);
+    leftGrd.addColorStop(1, 'transparent');
+    ctx.fillStyle = leftGrd;
+    ctx.fillRect(0, 0, canvasWidth * 0.08, canvasHeight);
+
+    const rightGrd = ctx.createLinearGradient(canvasWidth, 0, canvasWidth * 0.92, 0);
+    rightGrd.addColorStop(0, `rgba(150, 100, 200, ${sideOp})`);
+    rightGrd.addColorStop(1, 'transparent');
+    ctx.fillStyle = rightGrd;
+    ctx.fillRect(canvasWidth * 0.92, 0, canvasWidth * 0.08, canvasHeight);
+};
+
 
 const TIMELINE_INTERVAL_MS = 12000;
 const TIMELINE_MAX_POINTS = 12;
@@ -553,7 +883,7 @@ const drawTimeline = (ctx, timeline, nodes, canvasWidth, canvasHeight) => {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    const colors = { 1: '#00F5FF', 2: '#00FF41', 3: '#FF00E5' };
+    const colors = { 1: '#38B2D8', 2: '#2ECC71', 3: '#9B59B6' };
     const nodeIds = [1, 2, 3];
     nodeIds.forEach(nid => {
         const color = colors[nid];
@@ -636,10 +966,12 @@ const updateNodesPhysics = (nodes, draggingNode, canvasWidth, canvasHeight, minX
         if (!draggingNode || draggingNode !== node.id) {
             node.x += node.velocity.x;
             node.y += node.velocity.y;
+            const TOP_MARGIN = 80;    // keep circles below top bar area
+            const BOTTOM_MARGIN = 80; // keep circles above achievement bar
             if (node.x - node.radius < minX || node.x + node.radius > maxX) node.velocity.x *= -1;
-            if (node.y - node.radius < 0 || node.y + node.radius > canvasHeight) node.velocity.y *= -1;
+            if (node.y - node.radius < TOP_MARGIN || node.y + node.radius > canvasHeight - BOTTOM_MARGIN) node.velocity.y *= -1;
             node.x = Math.max(minX + node.radius, Math.min(maxX - node.radius, node.x));
-            node.y = Math.max(node.radius, Math.min(canvasHeight - node.radius, node.y));
+            node.y = Math.max(TOP_MARGIN + node.radius, Math.min(canvasHeight - BOTTOM_MARGIN - node.radius, node.y));
         }
     });
 };
@@ -715,17 +1047,17 @@ const drawConnections = (ctx, nodes, dashOffsetRef, reducedMotion = false) => {
 // الواقع (id=3) → diamond (solid, grounded, factual)
 
 const drawBlob = (ctx, cx, cy, r, f, time) => {
-    // Organic amoeba shape — exaggerated for id=1 "أنت"
+    // Gentle pebble shape — organic but not spiky, human & alive
     ctx.beginPath();
     const steps = 80;
     for (let i = 0; i <= steps; i++) {
         const theta = (i / steps) * Math.PI * 2;
-        // Always has organic character (not just when fluidity>0.5)
-        const baseWave = 0.18 + f * 0.22; // 0.18..0.40
+        // Subtle organic character — feels alive, not chaotic
+        const baseWave = 0.08 + f * 0.10; // 0.08..0.18 (was 0.18..0.40)
         let wr = r;
-        wr += Math.sin(theta * 5 + time * 0.0028) * r * baseWave;
-        wr += Math.cos(theta * 3 - time * 0.0021) * r * 0.12;
-        wr += Math.sin(theta * 7 + time * 0.0015) * r * 0.06;
+        wr += Math.sin(theta * 3 + time * 0.0020) * r * baseWave;         // primary slow wave
+        wr += Math.cos(theta * 2 - time * 0.0015) * r * (baseWave * 0.5); // secondary
+        wr += Math.sin(theta * 5 + time * 0.0010) * r * 0.025;            // micro texture
         const x = cx + Math.cos(theta) * wr;
         const y = cy + Math.sin(theta) * wr;
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
@@ -974,7 +1306,7 @@ const drawNodes = (ctx, nodes, now, reducedMotion = false) => {
 
         // Main fill — identity shape
         drawNodeShape(ctx, node, node.x, node.y, currentRadius, f, drawTime);
-        ctx.fillStyle = hexToRgba(node.color, 0.6);
+        ctx.fillStyle = hexToRgba(node.color, 0.72);
         ctx.fill();
 
         // ── NEURAL NETWORK TEXTURE — internal pathways ──────
@@ -1024,29 +1356,34 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
     const DEBUG_CANVAS = false;
     const paletteRef = useRef({
         background: '#04040f',
-        awareness: '#00F5FF',
-        knowledge: '#00FF41',
-        truth: '#FF00E5',
+        awareness: '#38B2D8',
+        knowledge: '#2ECC71',
+        truth: '#9B59B6',
     });
     const canvasRef = useRef(null);
     const isAr = props.lang === 'ar';
     const initPanelW = typeof window !== 'undefined' && window.innerWidth > 768 ? PANEL_WIDTH : 0;
     const initW = typeof window !== 'undefined' ? window.innerWidth : 1024;
     const initH = typeof window !== 'undefined' ? window.innerHeight : 768;
-    const initMinX = isAr ? 0 : initPanelW;
-    const initMaxX = isAr ? initW - initPanelW : initW;
+    const INIT_SAFE_MARGIN = 120;
+    // AR: transcript on LEFT → circles on RIGHT side
+    // EN: transcript on RIGHT → circles on LEFT side
+    const initMinX = isAr ? initPanelW + INIT_SAFE_MARGIN : INIT_SAFE_MARGIN;
+    const initMaxX = isAr ? initW - INIT_SAFE_MARGIN : initW - initPanelW - INIT_SAFE_MARGIN;
     const initRange = initMaxX - initMinX;
 
     const nodesRef = useRef([
-        { id: 1, x: initMinX + initRange * 0.25, y: initH / 2, radius: 70, targetRadius: 70, color: '#00F5FF', targetColor: '#00F5FF', label: isAr ? 'أنت' : 'You', subtitle: isAr ? 'إدراكك' : 'your perception', pulse: 0, velocity: { x: 0.2, y: 0.1 }, fluidity: 0.6, targetFluidity: 0.6 },
-        { id: 2, x: initMinX + initRange * 0.5, y: initH / 2, radius: 85, targetRadius: 85, color: '#00FF41', targetColor: '#00FF41', label: isAr ? 'العلم' : 'Science', subtitle: isAr ? 'ما وصل له العلم' : 'what science knows', pulse: 0, velocity: { x: -0.15, y: 0.25 }, fluidity: 0.2, targetFluidity: 0.2 },
-        { id: 3, x: initMinX + initRange * 0.75, y: initH / 2, radius: 95, targetRadius: 95, color: '#FF00E5', targetColor: '#FF00E5', label: isAr ? 'الواقع' : 'Reality', subtitle: isAr ? 'ما هو موجود فعلاً' : 'what actually is', pulse: 0, velocity: { x: 0.1, y: -0.2 }, fluidity: 0.15, targetFluidity: 0.15 },
+        { id: 1, x: initMinX + initRange * 0.25, y: initH * 0.5, radius: 70, targetRadius: 70, color: '#38B2D8', targetColor: '#38B2D8', label: isAr ? 'أنت' : 'You', subtitle: isAr ? 'إدراكك' : 'your perception', pulse: 0, velocity: { x: 0.2, y: 0.1 }, fluidity: 0.3, targetFluidity: 0.3 },
+        { id: 2, x: initMinX + initRange * 0.5, y: initH * 0.5, radius: 85, targetRadius: 85, color: '#2ECC71', targetColor: '#2ECC71', label: isAr ? 'العلم' : 'Science', subtitle: isAr ? 'ما وصل له العلم' : 'what science knows', pulse: 0, velocity: { x: -0.15, y: 0.25 }, fluidity: 0.2, targetFluidity: 0.2 },
+        { id: 3, x: initMinX + initRange * 0.75, y: initH * 0.5, radius: 95, targetRadius: 95, color: '#9B59B6', targetColor: '#9B59B6', label: isAr ? 'الواقع' : 'Reality', subtitle: isAr ? 'ما هو موجود فعلاً' : 'what actually is', pulse: 0, velocity: { x: 0.1, y: -0.2 }, fluidity: 0.15, targetFluidity: 0.15 },
     ]);
     const satellitesRef = useRef([]);          // live orbital topic nodes
     const timelineRef = useRef([]);             // session state snapshots
     const lastTimelineSnapRef = useRef(0);      // timestamp of last timeline snapshot
     // Add voice-breathing amplitude support + clarity bloom refs
-    const voiceAmplitudeRef = useRef(0);    // 0..1, updated externally
+    const voiceAmplitudeRef = useRef(0);    // 0..1, user mic level for circle breathing
+    const agentAudioAmplitudeRef = useRef(0); // 0..1, agent voice level for Divine Orb
+    const smoothAgentAmpRef = useRef(0);      // smoothed agent amp for rendering
     const bloomRef = useRef(null);           // { startTime } or null
     const agentSpeakingRef = useRef(false);   // true when Dawayir is speaking
     const orbParticlesRef = useRef([]);       // Divine Orb gold particles
@@ -1059,9 +1396,9 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
 
 
     useEffect(() => {
-        const awareness = getCssVar('--ds-circle-awareness', '#00F5FF');
-        const knowledge = getCssVar('--ds-circle-knowledge', '#00FF41');
-        const truth = getCssVar('--ds-circle-truth', '#FF00E5');
+        const awareness = getCssVar('--ds-circle-awareness', '#38B2D8');
+        const knowledge = getCssVar('--ds-circle-knowledge', '#2ECC71');
+        const truth = getCssVar('--ds-circle-truth', '#9B59B6');
         paletteRef.current = {
             background: getCssVar('--ds-bg-deep', '#04040f'),
             awareness,
@@ -1202,6 +1539,14 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
         // ── DIVINE VOICE ORB ─────────────────────────────────────
         setAgentSpeaking: (speaking) => {
             agentSpeakingRef.current = Boolean(speaking);
+            // When agent stops speaking, start amplitude decay
+            if (!speaking) {
+                agentAudioAmplitudeRef.current = 0;
+            }
+        },
+        // Set agent audio amplitude (from PCM playback analysis)
+        setAgentAudioAmplitude: (amp) => {
+            agentAudioAmplitudeRef.current = props.reducedMotion ? 0 : Math.max(0, Math.min(1, amp));
         },
 
         // ── THE OTHER PERSON CIRCLE ─────────────────────────────
@@ -1268,8 +1613,13 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
 
             const isAr = props.lang === 'ar';
             const currentPanelWidth = canvasWidth > 768 ? PANEL_WIDTH : 0;
-            const minX = isAr ? 0 : currentPanelWidth;
-            const maxX = isAr ? canvasWidth - currentPanelWidth : canvasWidth;
+            // AR: transcript is on LEFT side → circles must stay on RIGHT side [PANEL_WIDTH, canvasWidth]
+            // EN: transcript is on RIGHT side → circles must stay on LEFT side [0, canvasWidth - PANEL_WIDTH]
+            // SAFE_MARGIN: extra buffer from screen edges to keep circles clearly visible
+            const SAFE_MARGIN = 120;
+            const minX = isAr ? currentPanelWidth + SAFE_MARGIN : SAFE_MARGIN;
+            const maxX = isAr ? canvasWidth - SAFE_MARGIN : canvasWidth - currentPanelWidth - SAFE_MARGIN;
+
 
             const now = Date.now();
             const reducedMotion = Boolean(props.reducedMotion);
@@ -1277,6 +1627,8 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
             drawBackground(ctx, canvasWidth, canvasHeight, paletteRef.current.background, currentNodes);
             if (!reducedMotion) {
                 drawParticles(ctx, particlesRef.current, canvasWidth, canvasHeight, currentNodes);
+                // Subliminal peripheral vision layer — felt, not seen
+                drawSubliminLayer(ctx, canvasWidth, canvasHeight, now);
             }
 
             // ── FEATURE 5: VOICE BREATHING ──────────────────────────
@@ -1309,13 +1661,20 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
                 if (!result) otherNodeRef.current = null; // fully faded
             }
 
-            // ── DIVINE VOICE ORB — drawn on top of circles ──────────
-            if (!reducedMotion && agentSpeakingRef.current) {
-                const orbAmp = voiceAmplitudeRef.current;
+            // ── DIVINE VOICE ORB — synchronized with agent voice ──────
+            // Smooth the agent amplitude for fluid visual transitions
+            const targetAgentAmp = agentSpeakingRef.current ? agentAudioAmplitudeRef.current : 0;
+            const ampLerp = targetAgentAmp > smoothAgentAmpRef.current ? 0.25 : 0.08; // fast attack, slow decay
+            smoothAgentAmpRef.current += (targetAgentAmp - smoothAgentAmpRef.current) * ampLerp;
+            const orbAmp = smoothAgentAmpRef.current;
+
+            if (!reducedMotion && (agentSpeakingRef.current || orbAmp > 0.01)) {
                 const cx = canvasWidth / 2;
                 const cy = canvasHeight * 0.42;
                 drawDivineOrb(ctx, canvasWidth, canvasHeight, currentNodes, orbAmp, now);
-                orbParticlesRef.current = spawnOrbParticles(orbParticlesRef.current, cx, cy, now);
+                if (orbAmp > 0.02) {
+                    orbParticlesRef.current = spawnOrbParticles(orbParticlesRef.current, cx, cy, now);
+                }
                 orbParticlesRef.current = updateOrbParticles(ctx, orbParticlesRef.current, now);
             } else if (orbParticlesRef.current.length > 0) {
                 // Fade out remaining particles after speech stops
@@ -1452,8 +1811,8 @@ const DawayirCanvas = memo(forwardRef((props, ref) => {
             height={window.innerHeight}
             role="img"
             aria-label={props.lang === 'ar'
-                ? 'خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة'
-                : 'Dawayir mental map with three circles: awareness, knowledge, and truth'}
+                ? 'خريطة دوائر الذهنية بثلاث دوائر: أنت والعلم والواقع'
+                : 'Dawayir cognitive map with three circles: You, Science, and Reality'}
             tabIndex={0}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}

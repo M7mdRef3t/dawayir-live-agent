@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import Modal from './ui/Modal';
 
-const NODE_COLORS = { 1: '#00F5FF', 2: '#00FF41', 3: '#FF00E5' };
+const NODE_COLORS = { 1: '#38B2D8', 2: '#2ECC71', 3: '#9B59B6' };
 const WEATHER_ICONS = { storm: '🌪️', rain: '🌧️', cloudy: '☁️', partly: '⛅', sunny: '☀️' };
 
 function CognitiveDNACard({
@@ -15,7 +15,7 @@ function CognitiveDNACard({
   onClose,
 }) {
   const cardRef = useRef(null);
-  const dominantColor = NODE_COLORS[dominantNodeId] || '#FF00E5';
+  const dominantColor = NODE_COLORS[dominantNodeId] || '#9B59B6';
 
   const exportCard = () => {
     const card = cardRef.current;

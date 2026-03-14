@@ -17,10 +17,13 @@
     "ci:check": "npm run lint && npm run build && npm run perf:budget && npm run a11y:smoke && npm run test:unit"
   },
   "dependencies": {
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@axe-core/react": "^4.11.1",
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.54.2",
     "@testing-library/jest-dom": "^6.8.0",
@@ -33,6 +36,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jest-axe": "^10.0.0",
     "jsdom": "^26.1.0",
     "vite": "^7.3.1",
     "vitest": "^3.2.4"

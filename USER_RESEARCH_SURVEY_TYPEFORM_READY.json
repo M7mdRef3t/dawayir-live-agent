@@ -1,0 +1,78 @@
+{
+  "title": "Dawayir User Research Survey v1",
+  "language": "ar",
+  "questions": [
+    {
+      "id": "q1",
+      "type": "rating",
+      "title_ar": "آخر 7 أيام: كم مرة حصل تشوش منعك تتحرك؟",
+      "title_en": "In the last 7 days, how many times did mental overload block you from acting?",
+      "scale": { "from": 0, "to": 7 }
+    },
+    {
+      "id": "q2",
+      "type": "multiple_choice",
+      "title_ar": "أول رد فعل عند التشوش؟",
+      "title_en": "What is your first reaction when overloaded?",
+      "choices_ar": ["أؤجل", "أتكلم مع شخص", "أكتب ملاحظات", "أتشتت في السوشيال", "غير ذلك"],
+      "choices_en": ["I delay", "I talk to someone", "I write notes", "I distract myself on social media", "Other"]
+    },
+    {
+      "id": "q3",
+      "type": "rating",
+      "title_ar": "الحل الحالي يساعدني آخذ خطوة واضحة.",
+      "title_en": "My current solution helps me take a clear next step.",
+      "scale": { "from": 1, "to": 5 }
+    },
+    {
+      "id": "q4",
+      "type": "multiple_choice",
+      "title_ar": "أكثر شيء تكرهه في الحل الحالي؟",
+      "title_en": "What do you dislike most about your current solution?",
+      "choices_ar": ["عام جدًا", "بطيء", "غير عملي", "مرهق ذهنيًا", "مخاوف خصوصية"],
+      "choices_en": ["Too generic", "Too slow", "Not actionable", "Mentally draining", "Privacy concerns"]
+    },
+    {
+      "id": "q5",
+      "type": "rating",
+      "title_ar": "أثق أن أداة رقمية يمكنها فهم سياقي الفعلي.",
+      "title_en": "I trust that a digital tool can understand my real context.",
+      "scale": { "from": 1, "to": 5 }
+    },
+    {
+      "id": "q6",
+      "type": "rating",
+      "title_ar": "أفضل نتيجة بالنسبة لي: خطوة واحدة قابلة للتنفيذ الآن.",
+      "title_en": "My ideal outcome is one actionable next step right now.",
+      "scale": { "from": 1, "to": 5 }
+    },
+    {
+      "id": "q7",
+      "type": "multiple_choice",
+      "title_ar": "الوسيط المفضل وقت الضغط؟",
+      "title_en": "Preferred mode under pressure?",
+      "choices_ar": ["صوت", "نص", "مختلط"],
+      "choices_en": ["Voice", "Text", "Hybrid"]
+    },
+    {
+      "id": "q8",
+      "type": "rating",
+      "title_ar": "لو حصلت على خطوة دقيقة خلال 10 دقائق، سأستخدم الأداة أسبوعيًا.",
+      "title_en": "If I get a precise next step within 10 minutes, I would use this weekly.",
+      "scale": { "from": 1, "to": 5 }
+    },
+    {
+      "id": "q9",
+      "type": "rating",
+      "title_ar": "أحتاج متابعة بعد الجلسة (تذكير/تتبع تنفيذ).",
+      "title_en": "I need post-session follow-up (reminders/action tracking).",
+      "scale": { "from": 1, "to": 5 }
+    },
+    {
+      "id": "q10",
+      "type": "short_text",
+      "title_ar": "ما الجملة التي لو سمعتها بعد الجلسة ستقول: هذا ما أحتاجه؟",
+      "title_en": "What sentence after a session would make you say: this is exactly what I needed?"
+    }
+  ]
+}

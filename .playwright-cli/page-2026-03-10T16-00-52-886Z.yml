@@ -1,0 +1,118 @@
+- application "Dawayir live session application" [ref=e3]:
+  - link "تخطي إلى المحتوى الرئيسي" [ref=e4] [cursor=pointer]:
+    - /url: "#main-canvas-content"
+  - complementary "لوحة التحكم":
+    - heading "الجلسة الحية" [active] [level=2]
+    - generic:
+      - generic:
+        - generic:
+          - img "Dawayir"
+          - generic: دواير
+          - generic: حوّل اللي جواك لصورة أوضح.
+        - generic:
+          - generic "الأفكار متشابكة":
+            - img "عاصفة": 🌪️
+            - generic: عاصفة
+          - button "Switch to English": EN
+      - status: الجلسة شغالة
+      - generic: دواير بيفتتح الجلسة...
+    - generic:
+      - generic:
+        - generic:
+          - generic: ١. التشتت
+        - generic:
+          - generic: ٢. التركيز
+        - generic:
+          - generic: ٣. الوضوح
+      - generic: اتكلم براحتك — بسمعك...
+      - generic:
+        - generic:
+          - generic "بصمتك الإدراكية الخاصة":
+            - img "بصمتك الإدراكية الخاصة"
+            - paragraph: بصمتك الإدراكية
+            - button "⬇ احفظها كصورة"
+        - generic:
+          - generic: هادي دلوقتي
+          - img "شكل موجة الصوت"
+        - generic:
+          - generic: 🌀
+          - generic: بتستوعب بهدوء
+        - generic:
+          - generic:
+            - button "إغلاق": ✕
+            - paragraph: ...
+            - paragraph: السكوت جزء من الرحلة، خد وقتك
+        - generic:
+          - generic:
+            - generic: التوازن
+            - generic: 60%
+          - generic:
+            - generic: الضغط
+            - generic: 0%
+          - generic:
+            - generic: الوضوح Δ
+            - generic: +0%
+        - generic "معنى الدوائر الحالية":
+          - generic:
+            - generic: 🔮
+            - generic: دواير اللحظة دي
+          - generic:
+            - generic:
+              - generic: أنت
+              - paragraph: وعيك بنفسك مرتفع دلوقتي — كيف بتدرك اللي بيحصل معاك.
+          - generic:
+            - generic:
+              - meter "أنت"
+              - generic: أنت
+            - generic:
+              - meter "العلم"
+              - generic: العلم
+            - generic:
+              - meter "الواقع"
+              - generic: الواقع
+      - generic:
+        - generic:
+          - button "شغّل الكاميرا": شغّل الكاميرا
+        - button "ايقاف الديمو"
+        - button "أنهي الجلسة": أنهي الجلسة
+  - region "الدردشة" [ref=e60]:
+    - button "▼ المحادثة" [expanded] [ref=e61] [cursor=pointer]
+    - log [ref=e63]:
+      - generic [ref=e64]:
+        - generic [ref=e65]: دواير
+        - generic [ref=e66]: ٠٥:٥٨ م
+        - generic [ref=e67]: أهلاً بيك، احنا معاك
+  - toolbar "أدوات الجلسة" [ref=e68]:
+    - button "إظهار اللوحة" [ref=e69] [cursor=pointer]
+    - button "المحادثة" [ref=e70] [cursor=pointer]
+    - button "أنهي الجلسة" [ref=e71] [cursor=pointer]
+  - status "الإنجازات":
+    - generic [ref=e72]: 1/11
+    - list:
+      - listitem "أول كلمة — بدأت الجلسة" [ref=e73]:
+        - generic [ref=e74]: 🎤
+      - listitem "أول رد — دواير جاوبت" [ref=e75]:
+        - generic [ref=e76]: 🗣️
+      - listitem "الوعي اتحرك — دايرة الوعي اتبدلت" [ref=e77]:
+        - generic [ref=e78]: 🔵
+      - listitem "العلم اتحرك — دايرة العلم اتبدلت" [ref=e79]:
+        - generic [ref=e80]: 🟢
+      - listitem "الحقيقة اتحركت — دايرة الحقيقة اتبدلت" [ref=e81]:
+        - generic [ref=e82]: 🟣
+      - listitem "محادثة عميقة — أكتر من ٥ ردود" [ref=e83]:
+        - generic [ref=e84]: 💬
+      - listitem "تحول في الإحساس — الألوان اتغيرت مع حالتك" [ref=e85]:
+        - generic [ref=e86]: 💡
+      - listitem "مقاطعة ناجحة — وقفت دواير في وقتها" [ref=e87]:
+        - generic [ref=e88]: ✋
+      - listitem "قراءة بالصورة — دواير قرأت حالتك من الصورة" [ref=e89]:
+        - generic [ref=e90]: 👁️
+      - listitem "أمر صوتي — حرّكت الدواير بصوتك" [ref=e91]:
+        - generic [ref=e92]: 🎯
+      - listitem "رجع الاتصال — الجلسة كملت تلقائي" [ref=e93]:
+        - generic [ref=e94]: 🔄
+  - generic: جاري مراقبة سبب أي تقطيع...
+  - main "مساحة الدوائر":
+    - heading "تطبيق دواير للجلسات الصوتية" [level=1] [ref=e20]
+    - 'img "خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة" [ref=e21]'
+  - status [ref=e22]: تم الانتقال إلى الجلسة الحية

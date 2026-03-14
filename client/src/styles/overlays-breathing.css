@@ -1,0 +1,257 @@
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘  â€” BREATHING GUIDE OVERLAY
+   Full-screen gentle overlay with animated breath circle
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.breathing-guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 4, 20, 0.75);
+  backdrop-filter: blur(16px);
+  animation: breathe-overlay-in 0.5s ease;
+  pointer-events: none;
+}
+
+@keyframes breathe-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.breathing-guide-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 36px 48px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  text-align: center;
+  backdrop-filter: blur(20px);
+}
+
+.cognitive-fingerprint-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(155, 89, 182, 0.15);
+  transition: box-shadow 0.3s ease;
+}
+
+.cognitive-fingerprint-wrapper:hover {
+  box-shadow: 0 0 24px rgba(155, 89, 182, 0.2);
+}
+
+/* Shared dismiss button for auto-triggered overlays (I2) */
+.overlay-dismiss-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  transition: background 0.2s, color 0.2s;
+}
+.overlay-dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.breathing-guide-hint {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+  letter-spacing: 0.05em;
+}
+
+.breathing-circle-wrap {
+  position: relative;
+}
+
+.breathing-phase-label {
+  font-size: 20px;
+  font-weight: 600;
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+  transition: color 0.5s ease;
+  letter-spacing: 0.04em;
+}
+
+.breathing-phase-seconds {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘¡ â€” SACRED PAUSE OVERLAY
+   Appears after 5s silence â€” makes the pause meaningful
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.sacred-pause-overlay {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8888;
+  pointer-events: none;
+  animation: sacred-in 0.8s ease;
+}
+
+@keyframes sacred-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.sacred-pause-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 32px;
+  background: rgba(10, 10, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  backdrop-filter: blur(20px);
+  text-align: center;
+}
+
+.sacred-pause-card.reduced-motion,
+.sacred-pause-card.reduced-motion .sacred-pause-main,
+.sacred-pause-card.reduced-motion .sacred-orb {
+  animation: none !important;
+}
+
+.sacred-orbs {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.sacred-orb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: sacred-orb-pulse 3s ease-in-out infinite;
+}
+
+.sacred-orb-awareness {
+  background: #38B2D8;
+  animation-delay: 0s;
+}
+
+.sacred-orb-knowledge {
+  background: #2ECC71;
+  animation-delay: 0.8s;
+}
+
+.sacred-orb-truth {
+  background: #9B59B6;
+  animation-delay: 1.6s;
+}
+
+@keyframes sacred-orb-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.6);
+    opacity: 1;
+  }
+}
+
+.sacred-pause-main {
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.3);
+  margin: 0;
+  letter-spacing: 0.3em;
+  animation: ellipsis-breathe 2s ease-in-out infinite;
+}
+
+@keyframes ellipsis-breathe {
+
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.sacred-pause-sub {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+  max-width: 260px;
+  line-height: 1.5;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘¤ â€” FINGERPRINT EXPORT BUTTON
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.fingerprint-export-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  margin-top: 4px;
+  background: rgba(155, 89, 182, 0.08);
+  border: 1px solid rgba(155, 89, 182, 0.25);
+  border-radius: 20px;
+  color: rgba(155, 89, 182, 0.85);
+  font-size: 11px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  letter-spacing: 0.03em;
+}
+
+.fingerprint-export-btn:hover {
+  background: rgba(155, 89, 182, 0.18);
+  border-color: rgba(155, 89, 182, 0.6);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(155, 89, 182, 0.3);
+  transform: translateY(-1px);
+}
+

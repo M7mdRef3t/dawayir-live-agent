@@ -56,6 +56,20 @@ function SettingsModal({ lang, settings = DEFAULT_APP_SETTINGS, onClose, onLangu
               <span className="ds-toggle__track" aria-hidden="true"><span className="ds-toggle__thumb" /></span>
               <span className="ds-toggle__label">{lang === 'ar' ? 'تقليل الحركة' : 'Reduced motion'}</span>
             </label>
+            <label className="ds-toggle">
+              <input type="checkbox" className="ds-toggle__input" role="switch"
+                checked={!!document.fullscreenElement}
+                onChange={() => {
+                  if (document.fullscreenElement) {
+                    document.exitFullscreen().catch(() => {});
+                  } else {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                  }
+                }}
+              />
+              <span className="ds-toggle__track" aria-hidden="true"><span className="ds-toggle__thumb" /></span>
+              <span className="ds-toggle__label">{lang === 'ar' ? 'وضع ملء الشاشة' : 'Immersive Fullscreen'}</span>
+            </label>
           </div>
         </div>
 

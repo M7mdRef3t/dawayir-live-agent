@@ -1,0 +1,80 @@
+- generic [ref=e1]:
+  - application "Dawayir live session application" [ref=e3]:
+    - link "تخطي إلى المحتوى الرئيسي" [ref=e4] [cursor=pointer]:
+      - /url: "#main-canvas-content"
+    - complementary "لوحة التحكم" [ref=e22]:
+      - heading "تجهيز الجلسة" [level=2] [ref=e23]
+      - generic [ref=e24]:
+        - generic [ref=e25]:
+          - generic [ref=e26]:
+            - img "Dawayir" [ref=e27]
+            - generic [ref=e28]: دواير
+            - generic [ref=e29]: صوتك يتحوّل إلى رؤية حيّة.
+          - generic [ref=e30]:
+            - button "Switch to English" [ref=e31] [cursor=pointer]: EN
+            - button "الإعدادات" [ref=e32] [cursor=pointer]: ⚙
+            - button "بنك الذاكرة" [ref=e33] [cursor=pointer]: 💾
+        - status [ref=e34]: لسه مش متصل
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic [ref=e39]:
+            - strong [ref=e40]: مراية لعقلك — في الوقت الحقيقي
+            - paragraph [ref=e41]: اتكلم براحتك عن أي حاجة بتضغط عليك. الدوائر هتتغير أمامك وتعكس رحلتك من الفوضى للوضوح. التقاط الصورة اختياري تماماً.
+          - generic [ref=e43]:
+            - button "اقرأ حالتي" [ref=e44] [cursor=pointer]:
+              - img [ref=e45]
+              - text: اقرأ حالتي
+            - button "ادخل في السكون" [ref=e48] [cursor=pointer]:
+              - img [ref=e49]
+              - text: ادخل في السكون
+          - button "تخطي ← ابدأ بالصوت فقط" [ref=e54] [cursor=pointer]
+        - button "تشغيل الديمو الهجين" [ref=e56] [cursor=pointer]
+    - main "مساحة الدوائر":
+      - heading "تطبيق دواير للجلسات الصوتية" [level=1] [ref=e19]
+      - 'img "خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة" [ref=e20]'
+    - status [ref=e21]: تم الانتقال إلى تجهيز الجلسة
+  - dialog "الإعدادات" [ref=e71]:
+    - generic [ref=e72]:
+      - heading "الإعدادات" [level=2] [ref=e73]
+      - button "إغلاق" [active] [ref=e74] [cursor=pointer]:
+        - img [ref=e76]
+    - generic [ref=e79]:
+      - generic [ref=e80]:
+        - generic [ref=e81]: اللغة
+        - generic [ref=e82]:
+          - button "العربية" [ref=e83] [cursor=pointer]:
+            - generic [ref=e84]: العربية
+          - button "English" [ref=e85] [cursor=pointer]:
+            - generic [ref=e86]: English
+      - generic [ref=e87]:
+        - generic [ref=e88]: العرض
+        - generic [ref=e89]:
+          - generic [ref=e90] [cursor=pointer]:
+            - switch "تباين مرتفع"
+            - generic [ref=e93]: تباين مرتفع
+          - generic [ref=e94] [cursor=pointer]:
+            - switch "تقليل الحركة"
+            - generic [ref=e97]: تقليل الحركة
+      - generic [ref=e98]:
+        - generic [ref=e99]: التجربة
+        - generic [ref=e100] [cursor=pointer]:
+          - switch "تذكر إرشادات البداية" [checked]
+          - generic [ref=e103]: تذكر إرشادات البداية
+        - generic [ref=e104] [cursor=pointer]:
+          - switch "تفعيل وضع ملء الشاشة (إخفاء الواجهة)" [checked]
+          - generic [ref=e107]: تفعيل وضع ملء الشاشة (إخفاء الواجهة)
+        - generic [ref=e108]:
+          - generic [ref=e109]: "تخصيص العناصر المعروضة أثناء الجلسة:"
+          - generic [ref=e110] [cursor=pointer]:
+            - switch "إظهار اللوحة الجانبية والمؤشرات"
+            - generic [ref=e113]: إظهار اللوحة الجانبية والمؤشرات
+          - generic [ref=e114] [cursor=pointer]:
+            - switch "إظهار شريط الرحلة"
+            - generic [ref=e117]: إظهار شريط الرحلة
+          - generic [ref=e118] [cursor=pointer]:
+            - switch "إظهار حالة الذكاء الاصطناعي"
+            - generic [ref=e121]: إظهار حالة الذكاء الاصطناعي
+          - generic [ref=e122] [cursor=pointer]:
+            - switch "إظهار أدوات التحكم السفلية"
+            - generic [ref=e125]: إظهار أدوات التحكم السفلية
+        - paragraph [ref=e126]: "اختصارات: Space أو M لإظهار/إخفاء المحادثة، و Escape لإغلاق النوافذ."

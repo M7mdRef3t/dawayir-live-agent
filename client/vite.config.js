@@ -12,4 +12,24 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('html2canvas')) {
+              return 'vendor-html2canvas';
+            }
+            if (id.includes('jspdf')) {
+              return 'vendor-jspdf';
+            }
+            if (id.includes('@google/genai')) {
+              return 'vendor-ai';
+            }
+            // Remove the catch-all 'vendor' to let Vite's smart chunker handle the rest without circular deps
+          }
+        }
+      }
+    }
+  }
 })

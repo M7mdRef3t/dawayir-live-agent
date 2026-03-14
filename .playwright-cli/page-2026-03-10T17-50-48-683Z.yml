@@ -1,0 +1,47 @@
+- application "Dawayir live session application" [ref=e3]:
+  - link "تخطي إلى المحتوى الرئيسي" [ref=e4] [cursor=pointer]:
+    - /url: "#main-canvas-content"
+  - complementary "لوحة التحكم" [ref=e23]:
+    - heading "تجهيز الجلسة" [level=2] [ref=e24]
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e27]:
+          - img "Dawayir" [ref=e28]
+          - generic [ref=e29]: دواير
+          - generic [ref=e30]: صوتك... يتحوّل رؤية.
+        - generic [ref=e31]:
+          - button "Switch to English" [ref=e32] [cursor=pointer]: EN
+          - button "الإعدادات" [ref=e33] [cursor=pointer]: ⚙
+          - button "بنك الذاكرة" [ref=e34] [cursor=pointer]: 💾
+      - status [ref=e35]: لسه مش متصل
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - generic [ref=e40]:
+          - strong [ref=e41]: مراية لعقلك — في الوقت الحقيقي
+          - paragraph [ref=e42]: اتكلم براحتك عن أي حاجة بتضغط عليك. الدوائر هتتغير أمامك وتعكس رحلتك من الفوضى للوضوح. التقاط الصورة اختياري تماماً.
+        - generic [ref=e43]:
+          - generic [ref=e44]:
+            - generic [ref=e45]:
+              - strong [ref=e46]: مواضيعك السابقة
+              - paragraph [ref=e47]: اختَر موضوعًا قديمًا لو عايز دواير يكمل من آخر نقطة وقفتم عندها.
+            - button "جلسة جديدة" [ref=e81] [cursor=pointer]
+          - generic [ref=e82]:
+            - generic [ref=e83]: "هتكمل موضوع: ضغط الشغل والبيت"
+            - generic [ref=e84]: "آخر وضع وصفه المستخدم: \"أنا هقفل موبايل الشغل بعد الساعة تمانية\". آخر تثبيت من دواير: \"واضح إن حدود الشغل دخلت البيت.\". الخطوة العملية الأخيرة: \"أنا هقفل موبايل الشغل بعد الساعة تمانية\"."
+          - 'button "ضغط الشغل والبيت ١٠ مارس · 1 جلسات آخر وضع وصفه المستخدم: \"أنا هقفل موبايل الشغل بعد الساعة تمانية\". آخر تثبيت من دواير: \"واضح إن حدود الشغل دخلت البيت.\". الخطوة العملية الأخيرة: \"أنا هقفل موبايل الشغل بعد الساعة تمانية\"." [active] [ref=e49] [cursor=pointer]':
+            - generic [ref=e50]: ضغط الشغل والبيت
+            - generic [ref=e51]: ١٠ مارس · 1 جلسات
+            - generic [ref=e52]: "آخر وضع وصفه المستخدم: \"أنا هقفل موبايل الشغل بعد الساعة تمانية\". آخر تثبيت من دواير: \"واضح إن حدود الشغل دخلت البيت.\". الخطوة العملية الأخيرة: \"أنا هقفل موبايل الشغل بعد الساعة تمانية\"."
+        - generic [ref=e54]:
+          - button "اقرأ حالتي" [ref=e55] [cursor=pointer]:
+            - img [ref=e56]
+            - text: اقرأ حالتي
+          - button "ادخل في السكون" [ref=e59] [cursor=pointer]:
+            - img [ref=e60]
+            - text: ادخل في السكون
+        - button "تخطي ← ابدأ بالصوت فقط" [ref=e65] [cursor=pointer]
+      - button "تشغيل الديمو الهجين" [ref=e67] [cursor=pointer]
+  - main "مساحة الدوائر":
+    - heading "تطبيق دواير للجلسات الصوتية" [level=1] [ref=e20]
+    - 'img "خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة" [ref=e21]'
+  - status [ref=e22]: تم الانتقال إلى تجهيز الجلسة

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import DawayirCanvas from './components/DawayirCanvas';
 
 // ══════════════════════════════════════════════════
@@ -12,10 +12,12 @@ const triggerHaptic = (pattern = [30]) => {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
 };
 const HAPTIC_PATTERNS = {
-  circleShift: [25],           // short tap for circle update
-  insightMoment: [40, 30, 40], // double tap for insight
+  circleShift: [12],                  // whisper tap — subliminal
+  insightMoment: [40, 30, 40],        // double tap for insight
   clarityBloom: [60, 40, 60, 40, 80], // crescendo for clarity
-  otherSpawn: [20, 20, 20],    // triple light tap for person
+  otherSpawn: [20, 20, 20],           // triple light tap for person
+  cosmicPresence: [8, 833, 8],        // heartbeat ghost-tap — 1.2Hz matches visual pulse
+  somaticAnchor: [5, 200, 5],         // "going inward" — barely there hold
 };
 
 // ══════════════════════════════════════════════════
@@ -45,7 +47,7 @@ const getSessionHistory = () => {
 // Creates a subtle harmonic drone using Web Audio API
 // that plays when the agent is speaking.
 // ══════════════════════════════════════════════════
-const createAmbientDrone = () => {
+const createAmbientDrone = (existingCtx) => {
   let ctx = null;
   let gainNode = null;
   let oscs = [];
@@ -54,7 +56,10 @@ const createAmbientDrone = () => {
   const start = () => {
     if (isPlaying) return;
     try {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      ctx = existingCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
       gainNode = ctx.createGain();
       gainNode.gain.setValueAtTime(0, ctx.currentTime);
       gainNode.gain.linearRampToValueAtTime(0.04, ctx.currentTime + 2); // very quiet
@@ -94,7 +99,8 @@ const createAmbientDrone = () => {
       setTimeout(() => {
         oscs.forEach(o => { try { o.osc.stop(); o.lfo.stop(); } catch {} });
         oscs = [];
-        try { ctx.close(); } catch {}
+        // Only close context if WE created it (not the shared one)
+        if (!existingCtx) { try { ctx.close(); } catch {} }
         ctx = null;
         isPlaying = false;
       }, 2000);
@@ -106,9 +112,15 @@ const createAmbientDrone = () => {
 
 import ConnectProgressCard from './components/ConnectProgressCard';
 import OnboardingModal from './components/OnboardingModal';
-import EndSessionConfirmModal from './components/EndSessionConfirmModal';
-import SettingsModal from './components/SettingsModal';
-import DashboardView from './components/DashboardView';
+import TranscriptPanel from './components/TranscriptPanel';
+
+// Lazy load heavy views for performance (Code Splitting)
+const WelcomeScreen = lazy(() => import('./components/WelcomeScreen'));
+const SessionCompleteScreen = lazy(() => import('./components/SessionCompleteScreen'));
+const SessionOverlayPanel = lazy(() => import('./components/SessionOverlayPanel'));
+const EndSessionConfirmModal = lazy(() => import('./components/EndSessionConfirmModal'));
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const DashboardView = lazy(() => import('./components/DashboardView'));
 import Visualizer from './components/Visualizer';
 import VoiceToneBadge from './components/VoiceToneBadge';
 import BreathingGuide from './components/BreathingGuide';
@@ -123,6 +135,9 @@ import CognitiveDNACard from './components/CognitiveDNACard';
 import CognitiveFingerprint from './components/CognitiveFingerprint';
 import CircleMeaningPanel from './components/CircleMeaningPanel';
 import CircleFirstShiftTooltip from './components/CircleFirstShiftTooltip';
+import ErrorBoundary from './components/ErrorBoundary';
+import NeuralTopicGraph from './components/NeuralTopicGraph';
+const UiShowcasePage = lazy(() => import('./design-system/UiShowcasePage'));
 import { playTransitionSound, playInsightSound, playSessionCompleteSound } from './features/session/soundDesign';
 import logoCognitiveTrinity from './assets/dawayir-logo-cognitive-trinity.svg';
 
@@ -263,44 +278,45 @@ const AUTO_DEMO_SCRIPT = {
 
 const AUTO_DEMO_COPY = {
   ar: {
-    start: 'تشغيل الديمو الهجين',
-    stop: 'ايقاف الديمو',
-    booting: 'جاري تجهيز الديمو الهجين...',
+    start: 'شاهد التجربة (عينة محاكاة)',
+    stop: 'ايقاف التجربة',
+    booting: 'جاري تجهيز محاكاة الجلسة...',
     waitingSession: 'بانتظر اتصال Gemini Live...',
     opening: 'دواير بيفتتح الجلسة...',
     running: 'وكيل المستخدم شغال',
-    completed: 'الديمو اكتمل بنجاح',
-    canceled: 'تم ايقاف الديمو',
-    failed: 'تعذر بدء الديمو: تأكد من الاتصال',
+    completed: 'التجربة اكتملت بنجاح',
+    canceled: 'تم ايقاف التجربة',
+    failed: 'تعذر بدء التجربة: تأكد من الاتصال',
   },
   en: {
-    start: 'Start Hybrid Demo',
-    stop: 'Stop Demo',
-    booting: 'Preparing hybrid demo...',
+    start: 'Watch the Experience (Simulation)',
+    stop: 'Stop Experience',
+    booting: 'Preparing session simulation...',
     waitingSession: 'Waiting for Gemini Live connection...',
     opening: 'Dawayir is opening the session...',
     running: 'User agent running',
-    completed: 'Hybrid demo completed',
-    canceled: 'Demo stopped',
-    failed: 'Demo failed: check connection',
+    completed: 'Simulation completed',
+    canceled: 'Experience stopped',
+    failed: 'Experience failed: check connection',
   },
 };
 
 const ONE_CLICK_DEMO_COPY = {
   ar: {
-    start: 'تشغيل العرض المباشر',
-    launching: 'جاري تجهيز العرض...',
-    helper: 'يفتح الجلسة الحية ويشغل الديمو الهجين تلقائيًا للمحكمين.',
+    start: 'شاهد التجربة',
+    launching: 'بيتفتح...',
+    helper: 'يفتح التجربة فورًا ويورّيك كيف يتحوّل الصوت إلى رؤية.',
   },
   en: {
-    start: 'Run Live Demo',
-    launching: 'Preparing live demo...',
-    helper: 'Opens the live session and starts the hybrid demo automatically.',
+    start: 'Watch the Experience',
+    launching: 'Opening...',
+    helper: 'Opens the experience instantly and shows how voice becomes vision.',
   },
 };
 
 function App() {
   const [isCinematicReady, setIsCinematicReady] = useState(false);
+  const [isSacredOnboarding, setIsSacredOnboarding] = useState(false);
   const [appSettings, setAppSettings] = useState(() => readStoredAppSettings());
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(
     () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
@@ -345,7 +361,7 @@ function App() {
   const [isTranscriptVisible, setIsTranscriptVisible] = useState(true);
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
   const ambientDroneRef = useRef(null);
-  if (!ambientDroneRef.current) ambientDroneRef.current = createAmbientDrone();
+  const reverbNodesRef = useRef([]); // Track reverb delay nodes for cleanup
   const [isAutoDemoRunning, setIsAutoDemoRunning] = useState(false);
   const [isWelcomeDemoLaunching, setIsWelcomeDemoLaunching] = useState(false);
   const [autoDemoStatus, setAutoDemoStatus] = useState('');
@@ -431,7 +447,7 @@ function App() {
   const speechResetTimerRef = useRef(null);
 
   // ── FEATURE ① + ⑥: Dominant Circle Color for Acoustic Mirror + VoiceTone ──
-  const [dominantColor, setDominantColor] = useState('#00F5FF');
+  const [dominantColor, setDominantColor] = useState('#38B2D8');
   const dominantNodeRef = useRef(1); // id of currently dominant node
 
   // ── FEATURE ①: Breathing Regulator ────────────────────────────────────────
@@ -569,7 +585,7 @@ function App() {
       .map((node) => ({
         id: Number(node.id),
         radius: Math.round(Number(node.radius) || 0),
-        color: typeof node.color === 'string' ? node.color : '#00F5FF',
+        color: typeof node.color === 'string' ? node.color : '#38B2D8',
         label: String(node.label || fallbackLabels[String(node.id)] || ''),
       }))
       .filter((node) => Number.isFinite(node.id))
@@ -694,6 +710,10 @@ function App() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [journeyStage, setJourneyStage] = useState('Overwhelmed');
+  const [latestTruthContract, setLatestTruthContract] = useState(null);
+  const markTruthContractDone = useCallback(() => {
+    setLatestTruthContract((prev) => prev ? { ...prev, status: 'completed' } : prev);
+  }, []);
   const onboardingSteps = ONBOARDING_STEPS[lang];
   const connectSteps = CONNECT_PROGRESS[lang];
 
@@ -714,6 +734,7 @@ function App() {
   const videoRef = useRef(null);
   const wsRef = useRef(null);
   const micStreamRef = useRef(null);
+  const userKeyRef = useRef(null);
   const micContextRef = useRef(null);
   const transcriptEndRef = useRef(null);
   const micSourceRef = useRef(null);
@@ -817,11 +838,9 @@ function App() {
     }
   }, [announce, focusViewHeading, lang, t.viewHeadings]);
 
-  useEffect(() => {
-    if (!isConnected && !isStarting && appView === 'live') {
-      goToView(hasSessionStarted ? 'complete' : 'setup');
-    }
-  }, [appView, goToView, hasSessionStarted, isConnected, isStarting]);
+  const openUiShowcase = useCallback(() => goToView('ui-showcase'), [goToView]);
+
+
 
   useEffect(() => {
     isMicActiveRef.current = isMicActive;
@@ -862,6 +881,42 @@ function App() {
 
     announce(getTranscriptAnnouncement(lang, latestEntry));
   }, [announce, appView, isTranscriptVisible, lang, transcript]);
+
+  // FEATURE ⑯: SUBLIMINAL HEARTBEAT (Ghost-Tap + Audio Pulse)
+  // When Equilibrium > 85%, pulse gently every 833ms (72 BPM) to entrain parasympathetic calmness.
+  // Uses navigator.vibrate on mobile + an audio "thump" on desktop.
+  useEffect(() => {
+    let intervalId;
+    let hasLoggedFirstPulse = false;
+    if (appView === 'live' && isConnected && cognitiveMetrics.equilibriumScore > 0.85) {
+      console.log('[Heartbeat] 💓 Subliminal heartbeat ACTIVE (Eq > 85%, 72 BPM)');
+      intervalId = setInterval(() => {
+        // Mobile vibration (Android only)
+        try { if (navigator.vibrate) navigator.vibrate(2); } catch {}
+        // Desktop audio pulse — low "thump" via shared AudioContext
+        try {
+          const ctx = speakerContextRef.current;
+          if (ctx && ctx.state === 'running') {
+            if (!hasLoggedFirstPulse) {
+              console.log('[Heartbeat] 🔊 First audio pulse fired (ctx.state=' + ctx.state + ')');
+              hasLoggedFirstPulse = true;
+            }
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(150, ctx.currentTime); // 150 Hz — audible on laptop speakers
+            gain.gain.setValueAtTime(0.12, ctx.currentTime);     // noticeable but still subtle
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.1); // 100ms pulse
+          }
+        } catch {}
+      }, 833); // 72 Beats Per Minute
+    }
+    return () => clearInterval(intervalId);
+  }, [appView, isConnected, cognitiveMetrics.equilibriumScore]);
 
   useEffect(() => {
     if (appView !== 'live' || !isConnected) {
@@ -1294,6 +1349,12 @@ function App() {
 
     speakerContextRef.current = ctx;
     nextPlaybackTimeRef.current = ctx.currentTime;
+    
+    // Initialize ambient drone with the shared, resumed AudioContext
+    if (!ambientDroneRef.current) {
+      ambientDroneRef.current = createAmbientDrone(ctx);
+    }
+    
     return ctx;
   }, [formatAppError]);
 
@@ -1322,9 +1383,13 @@ function App() {
             console.log('[Audio] Agent finished speaking (worklet drained)');
             setIsAgentSpeaking(false);
             isAgentSpeakingRef.current = false;
+            canvasRef.current?.setAgentSpeaking?.(false);
           }
           speakingDebounceRef.current = null;
         }, 500);
+      } else if (e.data.type === 'amplitude') {
+        // Forward agent voice amplitude to canvas for Divine Voice Orb sync
+        canvasRef.current?.setAgentAudioAmplitude?.(e.data.rms);
       }
     };
     pcmWorkletRef.current = workletNode;
@@ -1899,7 +1964,7 @@ function App() {
         } else if (call.name === 'spawn_other') {
           // ── THE OTHER PERSON ────────────────────────────────
           const otherName = String(args.name || '').slice(0, 8);
-          if (!otherName.trim()) { console.warn('[spawn_other] Empty name, skipping'); }
+          if (!otherName.trim()) { console.warn('[spawn_other] Empty name, skipping'); continue; }
           const otherTension = Math.max(0, Math.min(1, Number(args.tension) || 0.5));
           const otherColor = String(args.color || '#FFD700');
           console.log(`[App] Spawning other: ${otherName}, tension=${otherTension}`);
@@ -1908,7 +1973,7 @@ function App() {
         } else if (call.name === 'spawn_topic') {
           // ── TOPIC CIRCLE ────────────────────────────────────
           const topicName = String(args.topic || '').slice(0, 8);
-          if (!topicName.trim()) { console.warn('[spawn_topic] Empty topic, skipping'); }
+          if (!topicName.trim()) { console.warn('[spawn_topic] Empty topic, skipping'); continue; }
           const topicWeight = Math.max(0.3, Math.min(1, Number(args.weight) || 0.5));
           const topicColor = String(args.color || '#FF8C00');
           console.log(`[App] Spawning topic: ${topicName}, weight=${topicWeight}`);
@@ -1967,8 +2032,8 @@ function App() {
             },
           });
           continue;
-        } else if (call.name === 'save_mental_map' || call.name === 'generate_session_report' || call.name === 'get_expert_insight') {
-          // These are now resolved server-side; skip silently on client
+        } else if (call.name === 'get_expert_insight') {
+          // Resolved server-side; skip silently on client
           console.log(`[App] Tool ${call.name} handled server-side, skipping client handler`);
           continue;
         } else {
@@ -2069,7 +2134,7 @@ function App() {
         text: cleaned,
         time: timeStr,
         finished: true,
-        cogColor: dominantNodeRef.current === 2 ? '#00FF41' : dominantNodeRef.current === 3 ? '#FF00E5' : '#00F5FF',
+        cogColor: dominantNodeRef.current === 2 ? '#2ECC71' : dominantNodeRef.current === 3 ? '#9B59B6' : '#38B2D8',
       }];
       return next.slice(-6);
     });
@@ -2577,9 +2642,15 @@ function App() {
     );
     if (shouldPreferHybridSocket) {
       wsUrl.searchParams.set('mode', 'hybrid');
+      wsUrl.searchParams.set('demoToken', 'dawayir-demo-2026');
+      console.log('[DEBUG] shouldPreferHybridSocket is TRUE due to:', {
+        autoDemoPendingStart: autoDemoPendingStartRef.current,
+        isAutoDemoRunning: isAutoDemoRunningRef.current,
+        oneClickDemoPending: oneClickDemoPendingRef.current
+      });
     }
     const wsUrlString = wsUrl.toString();
-    // console.log('[Connect] Opening WebSocket to', wsUrlString);
+    console.log('[Connect] Opening WebSocket with mode hybrid?', shouldPreferHybridSocket);
     const socket = new WebSocket(wsUrlString);
     socket.binaryType = 'arraybuffer';
     wsRef.current = socket;
@@ -2700,7 +2771,7 @@ function App() {
               if (!found) {
                 const timeStr = new Date().toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' });
                 // ── Feature ③: Stamp cognitive color at time of speech ──
-                next.push({ role: 'user', text: bufferedUserTextRef.current, time: timeStr, finished: !!dt.finished, cogColor: dominantNodeRef.current === 2 ? '#00FF41' : dominantNodeRef.current === 3 ? '#FF00E5' : '#00F5FF' });
+                next.push({ role: 'user', text: bufferedUserTextRef.current, time: timeStr, finished: !!dt.finished, cogColor: dominantNodeRef.current === 2 ? '#2ECC71' : dominantNodeRef.current === 3 ? '#9B59B6' : '#38B2D8' });
               }
               if (next.length >= 5) unlockAchievement('deepConvo');
               return next.slice(-6);
@@ -2728,6 +2799,13 @@ function App() {
           // Keep output transcript visible, but throttled to avoid UI jank.
           setIsAgentSpeaking(true);
           isAgentSpeakingRef.current = true;
+          // ── DIVINE VOICE ORB + AMBIENT DRONE ─────────────────────────
+          // Notify canvas that agent is now speaking so the Orb activates.
+          // Also start the ambient singing-bowl drone if not already running.
+          if (speaker === 'dawayir') {
+            canvasRef.current?.setAgentSpeaking?.(true);
+            try { ambientDroneRef.current?.start?.(); } catch { /* ignore */ }
+          }
 
           const isNewTurn = outputBufferRef.current.trim() === '';
           outputBufferRef.current = `${outputBufferRef.current} ${dt.text}`.trim();
@@ -2739,7 +2817,7 @@ function App() {
           if (shouldUpdateAgentTranscript) {
             transcriptThrottleRef.current[throttleKey] = now;
             upsertTranscriptBubble(role, outputBufferRef.current, !!dt.finished, {
-              cogColor: dominantNodeRef.current === 2 ? '#00FF41' : dominantNodeRef.current === 3 ? '#FF00E5' : '#00F5FF',
+              cogColor: dominantNodeRef.current === 2 ? '#2ECC71' : dominantNodeRef.current === 3 ? '#9B59B6' : '#38B2D8',
             });
           }
           if (dt.finished) {
@@ -2924,21 +3002,46 @@ function App() {
                 }
               }
 
-              const bootstrapText = autoDemoPendingStartRef.current
-                ? (lang === 'ar'
+              // FEATURE ⑱: SAGE MEMORY RECALL & SACRED ONBOARDING
+              const isRealSession = !autoDemoPendingStartRef.current && !oneClickDemoPendingRef.current;
+              const isFirstEverSession = localStorage.getItem('dawayir_ftue_complete') !== 'true' && isRealSession;
+
+              if (isFirstEverSession) {
+                localStorage.setItem('dawayir_ftue_complete', 'true');
+                setIsSacredOnboarding(true);
+              } else if (isRealSession) {
+                // If not first session, inject past memories!
+                const pastTimelines = JSON.parse(localStorage.getItem('dawayir-saved-timelines') || '[]');
+                if (pastTimelines.length > 0) {
+                  const recent = pastTimelines.slice(-3); // Last 3 sessions
+                  const summary = recent.map(r => `Session on ${new Date(r.timestamp).toLocaleDateString()}: Ended with Equilibrium ${r.metrics?.equilibriumScore?.toFixed(2) || 0}, Main Theme: ${r.nodes?.[0]?.label || 'General'}`).join(' | ');
+                  parts.push({ text: `[System Memory Recall: User's recent past sessions: ${summary}. You may casually reference this continuity if relevant to show you remember them.]` });
+                }
+              }
+
+              let bootstrapText = '';
+              if (isFirstEverSession) {
+                bootstrapText = lang === 'ar'
+                  ? 'System Directive: This is the user\'s very first session (Sacred Onboarding). You must say EXACTLY one welcoming sentence, e.g., "أهلاً بيك. شايف الدواير؟ اتكلم عشان نبدأ رحلتنا." Then you MUST STOP. DO NOT generate the user\'s response. DO NOT simulate a conversation. STOP immediately after the greeting.'
+                  : 'System Directive: This is the user\'s very first session. You must say EXACTLY one welcoming sentence: "Welcome. See the circles? Speak to begin our journey." Then you MUST STOP. DO NOT simulate the user\'s response. STOP immediately.';
+              } else if (autoDemoPendingStartRef.current) {
+                bootstrapText = lang === 'ar'
                   ? (capturedImage
                     ? 'دي صورتي دلوقتي كمرجع بصري. افتح الجلسة بترحيب مصري حقيقي من 6 إلى 10 كلمات فيه طمأنة خفيفة وإحساس إنك معايا، من غير سؤال أو علامة استفهام.'
                     : 'ابدأ الجلسة بترحيب مصري حقيقي من 6 إلى 10 كلمات فيه طمأنة خفيفة وإحساس إنك معايا، من غير سؤال أو علامة استفهام.')
                   : (capturedImage
                     ? 'This is my photo as visual context. Open the session with a real warm welcome of about 6 to 10 words, calm and human, with no question mark.'
-                    : 'Open the session with a real warm welcome of about 6 to 10 words, calm and human, with no question mark.'))
-                : (lang === 'ar'
+                    : 'Open the session with a real warm welcome of about 6 to 10 words, calm and human, with no question mark.');
+              } else {
+                bootstrapText = lang === 'ar'
                   ? (capturedImage
-                    ? 'دي صورتي دلوقتي. اقرأ حالتي النفسية من الصورة ونادي update_node عشان تغيّر radius وcolor لكل دايرة على حسب قرايتك. استخدم id وradius وcolor بس.'
-                    : 'ابدأ معايا بترحيب مصري قصير وبعدين خيط واضح.')
+                    ? 'System Directive: User just joined. This is my photo. Read my emotional state from the image and call update_node to change radius and color for each circle. Use only id, radius, and color. Say a brief, 4-word welcome and STOP. DO NOT simulate the user.'
+                    : 'System Directive: User just joined. Start with a warm, 4-word welcome and STOP. DO NOT simulate the user.')
                   : (capturedImage
-                    ? 'This is my photo. Read my emotional state from the image and call update_node to change radius and color for each circle based on your reading. Use only id, radius, and color.'
-                    : 'Start with a warm welcome, then a grounded first line.'));
+                    ? 'System Directive: User just joined. This is my photo. Read my emotional state from the image and call update_node to change radius and color. Say a brief, 4-word welcome and STOP. DO NOT simulate the user.'
+                    : 'System Directive: User just joined. Start with a warm, 4-word welcome and STOP. DO NOT simulate the user.');
+              }
+              
               parts.push({ text: bootstrapText });
 
               wsRef.current.send(JSON.stringify({
@@ -3098,6 +3201,15 @@ function App() {
 
       // Capture text for context preservation and live transcript
       const textParts = Array.isArray(parts) ? parts.filter(p => p.text).map(p => p.text) : [];
+
+      // Start ambient drone when agent is actively producing content (audio or text)
+      if (directAudioBlobs.length > 0 || textParts.length > 0) {
+        setIsAgentSpeaking(true);
+        isAgentSpeakingRef.current = true;
+        canvasRef.current?.setAgentSpeaking?.(true);
+        ambientDroneRef.current?.start();
+      }
+
       if (textParts.length > 0) {
         const contextualText = textParts.join(' ');
         sessionContextRef.current = [
@@ -3106,10 +3218,6 @@ function App() {
             ? `${lang === 'ar' ? 'وكيل المستخدم' : 'User agent'}: ${contextualText}`
             : contextualText,
         ].slice(-6);
-        setIsAgentSpeaking(true);
-        isAgentSpeakingRef.current = true;
-        canvasRef.current?.setAgentSpeaking?.(true);
-    ambientDroneRef.current?.start();
 
         if (!hasLiveOutputTranscription && !shouldSkipLocalTranscriptFallback) {
           const appendedText = textParts.join(' ');
@@ -3171,6 +3279,7 @@ function App() {
     socket.onerror = () => {
       if (wsRef.current !== socket) return;
       console.error('[Connect] WebSocket error');
+      triggerHaptic([100, 50, 100]);
       setStatus('Error');
       setErrorMessage(formatAppError('websocketRetrying'));
       setIsStarting(false);
@@ -3350,6 +3459,16 @@ function App() {
   });
 
   useEffect(() => {
+    if (!isConnected && !isStarting && appView === 'live') {
+      if (hasSessionStarted) {
+        goToView('complete');
+      } else {
+        connect();
+      }
+    }
+  }, [appView, connect, goToView, hasSessionStarted, isConnected, isStarting]);
+
+  useEffect(() => {
     if (!oneClickDemoPendingRef.current) return;
     if (appView !== 'setup' && appView !== 'live') return;
 
@@ -3369,639 +3488,140 @@ function App() {
     autoDemoShouldRestoreMicRef.current = false;
   }, [clearAutoDemoTimer, stopSyntheticUserSpeech]);
 
+  const userHasSpoken = transcript.some(t => t.role === 'user');
+  const isSacredOpaque = isSacredOnboarding && !userHasSpoken && !_isUserSpeaking;
+
   return (
-    <div className={`App ${isCinematicReady ? 'cinematic-in' : 'cinematic-prep'}`} role="application" aria-label="Dawayir live session application">
+    <div className={`App ${isCinematicReady ? 'cinematic-in' : 'cinematic-prep'} ${isSacredOpaque ? 'sacred-onboarding-active' : ''}`} role="application" aria-label="Dawayir live session application">
       <a className="skip-link" href="#main-canvas-content">
         {lang === 'ar' ? 'تخطي إلى المحتوى الرئيسي' : 'Skip to main content'}
       </a>
 
       {appView === 'welcome' && (
-        <div className={`welcome-screen ${isTransitioningToSetup ? 'exiting' : ''}`}>
-          <h2 className="visually-hidden" data-view-heading="welcome" tabIndex={-1}>
-            {t.viewHeadings.welcome}
-          </h2>
-          {/* Animated background orbs */}
-          <div className="welcome-orbs" aria-hidden="true">
-            <div className="welcome-orb welcome-orb-1" />
-            <div className="welcome-orb welcome-orb-2" />
-            <div className="welcome-orb welcome-orb-3" />
-          </div>
-          {/* Constellation particles */}
-          <div className="welcome-particles" aria-hidden="true">
-            {Array.from({ length: 20 }).map((_, i) => (
-              <div key={i} className="welcome-particle" style={{
-                left: `${4 + (i * 4.8) % 90}%`,
-                top: `${6 + (i * 7.1) % 82}%`,
-                animationDelay: `${(i * 0.4).toFixed(1)}s`,
-                width: `${2 + i % 3}px`,
-                height: `${2 + i % 3}px`,
-              }} />
-            ))}
-          </div>
-
-          <img src={logoCognitiveTrinity} alt="Dawayir" className="welcome-logo ds-slide-up-fade" />
-          <div className="brand-name-large ds-slide-up-fade">{t.brandName}</div>
-          <div className="brand-subtitle ds-slide-up-fade-delay">{t.brandSub}</div>
-          <div className="brand-hook ds-slide-up-fade-delay"
-            style={{ fontSize: '15px', opacity: 0.55, marginTop: '-8px', marginBottom: '4px', fontWeight: 400 }}
-          >{t.brandHook}</div>
-
-          {/* Three micro-circles preview */}
-          <div className="welcome-circles-preview ds-slide-up-fade-delay" aria-hidden="true">
-            <div className="wcp wcp-awareness" />
-            <div className="wcp wcp-knowledge" />
-            <div className="wcp wcp-truth" />
-          </div>
-
-          {/* CTA with glow ring */}
-          <div className="welcome-cta-wrap ds-slide-up-fade-delay-more">
-            <div className="welcome-cta-ring" aria-hidden="true" />
-            <div className="welcome-cta-stack">
-              <button
-                className="primary-btn welcome-cta welcome-demo-cta"
-                onClick={handleLaunchOneClickDemo}
-                disabled={isWelcomeDemoLaunching}
-              >
-                {isWelcomeDemoLaunching ? oneClickDemoCopy.launching : oneClickDemoCopy.start}
-              </button>
-              <button
-                className="secondary welcome-secondary-cta"
-                onClick={handleEnterSetup}
-                disabled={isWelcomeDemoLaunching}
-              >
-                {t.enterSpace}
-              </button>
-              <div className="welcome-demo-helper">{oneClickDemoCopy.helper}</div>
-            </div>
-          </div>
-
-          <div className="lang-toggle-container ds-slide-up-fade-delay-more">
-            <button className={`icon-btn lang-toggle ${lang === 'ar' ? 'active' : ''}`} onClick={() => setLang('ar')}>{lang === 'ar' ? 'عربى' : 'AR'}</button>
-            <button className={`icon-btn lang-toggle ${lang === 'en' ? 'active' : ''}`} onClick={() => setLang('en')}>{lang === 'en' ? 'English' : 'EN'}</button>
-          </div>
-        </div>
+        <Suspense fallback={<div className="loading-glow-overlay" />}>
+          <WelcomeScreen
+            lang={lang}
+            t={t}
+            isTransitioningToSetup={isTransitioningToSetup}
+            isWelcomeDemoLaunching={isWelcomeDemoLaunching}
+            oneClickDemoCopy={oneClickDemoCopy}
+            logoSrc={logoCognitiveTrinity}
+            onLaunchOneClickDemo={handleLaunchOneClickDemo}
+            onEnterSetup={handleEnterSetup}
+            onOpenUiShowcase={openUiShowcase}
+            onSetLang={setLang}
+          />
+        </Suspense>
       )}
 
 
-      {(appView === 'dashboard' || appView === 'setup' || appView === 'live') && (
-        <aside
-          className={`overlay ${isSetupIntro ? 'overlay-enter' : ''} ${appView === 'dashboard' ? 'overlay-dashboard' : ''} ${appView === 'live' && isBreathingRoom ? 'overlay-collapsed' : ''}`}
-          role="complementary"
-          aria-label={lang === 'ar' ? 'لوحة التحكم' : 'Control panel'}
-        >
-          {appView === 'dashboard' ? (
-            <DashboardView
-              lang={lang}
-              emptyLogoSrc={logoCognitiveTrinity}
-              onBack={() => goToView('welcome')}
-              reducedMotion={effectiveReducedMotion}
-              viewHeadingProps={{ 'data-view-heading': 'dashboard', tabIndex: -1 }}
-            />
-          ) : (
-            <>
-              {appView === 'setup' && (
-                <h2 className="visually-hidden" data-view-heading="setup" tabIndex={-1}>
-                  {t.viewHeadings.setup}
-                </h2>
-              )}
-              {appView === 'live' && (
-                <h2 className="visually-hidden" data-view-heading="live" tabIndex={-1}>
-                  {t.viewHeadings.live}
-                </h2>
-              )}
-              {/* Brand Header */}
-              <div className="brand-header">
-                <div className="brand-logo-row">
-                  <div>
-                    <img src={logoCognitiveTrinity} alt="Dawayir" className="brand-mark" />
-                    <div className="brand-name">{t.brandName}</div>
-                    <div className="brand-arabic">{t.brandSub}</div>
-                  </div>
-                  <div className="header-actions">
-                    {/* ── Feature ┃: EMOTIONAL WEATHER ── */}
-                    {isConnected && (
-                      <EmotionalWeather
-                        dominantNodeId={dominantNodeRef.current}
-                        transitionCount={transitionCount}
-                        sessionStartTime={sessionStartTime}
-                        lang={lang}
-                        isConnected={isConnected}
-                      />
-                    )}
-                    <button aria-label={lang === 'en' ? 'Switch to Arabic' : 'Switch to English'} className="icon-btn lang-toggle" onClick={() => setLang(l => l === 'en' ? 'ar' : 'en')} title="Toggle Language">
-                      {lang === 'en' ? 'AR' : 'EN'}
-                    </button>
-                    {!isConnected && !isStarting && (
-                      <>
-                        <button aria-label={lang === 'ar' ? 'الإعدادات' : 'Settings'} className="icon-btn" onClick={() => setShowSettings((current) => !current)} title={lang === 'ar' ? 'الإعدادات' : 'Settings'}>
-                          {'\u2699'}
-                        </button>
-                        <button aria-label={t.memoryBank} className="icon-btn" onClick={() => goToView('dashboard')} title={t.memoryBank}>
-                          {t.dashboardBtn}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <StatusBadge
-                  className={statusClass}
-                  text={isConnected ? t.statusActive : status === 'Disconnected' ? t.statusDisconnected : status}
-                />
-                {isStarting && (
-                  <ConnectProgressCard steps={connectSteps} stage={connectStage} />
-                )}
-                <div className="debug-status-line" title="setup/mic/retries/tools/last/rt" style={{ display: 'none' }}>
-                  {debugLineText}
-                </div>
-                {autoDemoStatus && (
-                  <div className={`auto-demo-status-line ${isAutoDemoRunning ? 'running' : ''}`}>
-                    {autoDemoStatus}
-                  </div>
-                )}
-                {whyNowLine && (
-                  <div className={`why-now-line ${whyNowLine.tone || 'neutral'}`} role="status" aria-live="polite">
-                    {whyNowLine.text}
-                  </div>
-                )}
-              </div>
-
-              {/* Main Controls - SETUP SCREEN ONLY */}
-              {(appView === 'setup') && (
-                <div className="section">
-                  <div className="camera-setup">
-                    <div className="setup-hint-card">
-                      <img src={logoCognitiveTrinity} alt="" className="inline-logo" />
-                      <div>
-                        <strong>{lang === 'ar' ? 'مراية لعقلك — في الوقت الحقيقي' : 'A real-time mirror for your mind'}</strong>
-                        <p>{lang === 'ar' ? 'اتكلم براحتك عن أي حاجة بتضغط عليك. الدوائر هتتغير أمامك وتعكس رحلتك من الفوضى للوضوح. التقاط الصورة اختياري تماماً.' : 'Speak freely about anything weighing on you. The circles will shift in real-time, mapping your journey from chaos to clarity. Camera is completely optional.'}</p>
-                      </div>
-                    </div>
-                    <video ref={videoRef} autoPlay playsInline muted className="visually-hidden" />
-
-                    {!isCameraActive && !capturedImage ? (
-                      <>
-                        <div className="setup-actions-row">
-                          <button className="primary-btn outline-btn flex-center setup-action-btn" onClick={startCamera}>
-                            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                            {t.captureBtn}
-                          </button>
-                          <button className="primary-btn flex-center setup-action-btn" onClick={connect} disabled={isConnected || isStarting}>
-                            {isStarting ? (
-                              <div className="loading-container">
-                                <span className="loading-text">{t.connecting}</span>
-                                <div className="spinner"><div className="spinner-ring"></div></div>
-                              </div>
-                            ) : (
-                              <>
-                                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"></path><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"></path></svg>
-                                {t.enterSpace}
-                              </>
-                            )}
-                          </button>
-                        </div>
-                        <button
-                          className="secondary setup-skip-btn"
-                          style={{ marginTop: '8px', width: '100%', fontSize: '13px', opacity: 0.7 }}
-                          onClick={connect}
-                          disabled={isConnected || isStarting}
-                        >
-                          {t.skipCamera}
-                        </button>
-                      </>
-                    ) : isCameraActive ? (
-                      <div className="video-capture-flow">
-                        <div className="video-container">
-                          <video autoPlay playsInline muted
-                            ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
-                            style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                        </div>
-                        <div className="camera-actions-row">
-                          <button className="capture-btn" onClick={captureSnapshot}>{t.capture}</button>
-                          <button className="cancel-btn" onClick={stopCamera}>{t.cancel}</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="captured-preview-container">
-                        <div className="preview-heading">{t.initialState}</div>
-                        <img src={capturedImage} className="pulse-preview-large" alt="Captured" />
-                        <button className="retake-btn" onClick={() => { setCapturedImage(null); setTimeout(() => setIsCameraActive(true), 50); setTimeout(startCamera, 100); }}>
-                          {t.retake}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {(isCameraActive || capturedImage) && (
-                    <button
-                      className={`primary-btn flex-center setup-connect-btn ${isConnected ? 'secure-link' : ''}`}
-                      onClick={connect}
-                      disabled={isConnected || isStarting}
-                    >
-                      {isStarting ? (
-                        <div className="loading-container">
-                          <span className="loading-text">{t.connecting}</span>
-                          <div className="spinner"><div className="spinner-ring"></div></div>
-                        </div>
-                      ) : (
-                        <>
-                          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"></path><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"></path></svg>
-                          {capturedImage ? t.enterSpaceVision : t.enterSpace}
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  <div className="setup-auto-demo-row">
-                    <button
-                      className={`secondary setup-auto-demo-btn ${isAutoDemoRunning ? 'is-active' : ''}`}
-                      onClick={handleAutoDemoToggle}
-                      disabled={isStarting && !isAutoDemoRunning}
-                    >
-                      {isAutoDemoRunning ? autoDemoCopy.stop : autoDemoCopy.start}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ── FEATURE ④: COGNITIVE TRANSITION TOAST ────────────────── */}
-              {transitionToast && (
-                <div className="cognitive-transition-toast" key={transitionToast}>
-                  {transitionToast}
-                </div>
-              )}
-
-              {/* Connected Activity - LIVE SCREEN ONLY */}
-              {appView === 'live' && isConnected && (
-                <div className="section">
-                  <video ref={videoRef} autoPlay playsInline muted className="visually-hidden" />
-
-                  <div className="timeline-overlay">
-                    {[
-                      { key: 'Overwhelmed', en: '1. Overwhelmed', ar: '١. التشتت' },
-                      { key: 'Focus', en: '2. Focus', ar: '٢. التركيز' },
-                      { key: 'Clarity', en: '3. Clarity', ar: '٣. الوضوح' },
-                    ].map((stage, idx, arr) => {
-                      const stageKey = stage.key;
-                      const isCompleted = arr.findIndex(s => s.key === journeyStage) > idx;
-                      const isActive = stageKey === journeyStage;
-                      const nodeClass = isActive ? 'active' : isCompleted ? 'completed' : '';
-                      return (
-                        <div key={stageKey} className={`timeline-node ${nodeClass}`}>
-                          <div className="node-dot"></div>
-                          <span className="node-label">{lang === 'ar' ? stage.ar : stage.en}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className={`ai-state-bar ${isAgentSpeaking ? 'speaking' : 'idle'}`}>
-                    <div className="wave">
-                      <span></span><span></span><span></span><span></span><span></span>
-                    </div>
-                    {isAgentSpeaking ? t.agentSpeaking : t.agentIdle}
-                  </div>
-
-                  <div className="visual-feedback">
-                    {/* FEATURE ② + ⑤: Cognitive Fingerprint Live Sync */}
-                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px', position: 'relative', zIndex: 10 }}>
-                      <CognitiveFingerprint
-                        sessionId="live-session-temp"
-                        reportContent={transcript.map(t => t.text).join(' ')}
-                        lang={lang}
-                        size={160}
-                        liveState={isAgentSpeaking ? 'speaking' : _isUserSpeaking ? 'listening' : 'thinking'}
-                        voiceTone={voiceTone}
-                      />
-                    </div>
-                    <Visualizer
-                      stream={micStreamRef.current}
-                      isConnected={isConnected}
-                      lang={lang}
-                      onStressLevelChange={handleBioStateChange}
-                      dominantColor={dominantColor}
-                      reducedMotion={effectiveReducedMotion}
-                    />
-
-                    {/* ── Feature ┄: COGNITIVE VELOCITY ── */}
-                    <CognitiveVelocity
-                      dominantNodeId={dominantNodeRef.current}
-                      dominantRadius={(() => {
-                        const nodes = canvasRef.current?.getNodes?.() || [];
-                        return nodes.find(n => n.id === dominantNodeRef.current)?.radius || 80;
-                      })()}
-                      isConnected={isConnected}
-                      lang={lang}
-                    />
-
-                    {/* ── Feature ①: VOICE TONE BADGE + Breathing Trigger ── */}
-                    <VoiceToneBadge
-                      stream={micStreamRef.current}
-                      isConnected={isConnected}
-                      lang={lang}
-                      canvasRef={canvasRef}
-                      onToneChange={(tone) => {
-                        setVoiceTone(tone);
-                        // Map tone to node color for Acoustic Mirror (Feature ⑥)
-                        const colorMap = { tense: '#FF5032', excited: '#FFC800', calm: '#FF00E5', focused: '#00FF41' };
-                        if (colorMap[tone]) setDominantColor(colorMap[tone]);
-
-                        // Feature ①: Breathing Regulator — trigger after 3s of tense
-                        if (tone === 'tense') {
-                          if (!tenseStartRef.current) {
-                            tenseStartRef.current = Date.now();
-                            clearTimeout(tenseTimerRef.current);
-                            tenseTimerRef.current = setTimeout(() => {
-                              setShowBreathing(true);
-                              tenseStartRef.current = null;
-                            }, 3000); // TENSE_TRIGGER_MS replaced directly to be safe
-                          }
-                        } else {
-                          tenseStartRef.current = null;
-                          clearTimeout(tenseTimerRef.current);
-                        }
-                      }}
-                    />
-
-                    {/* ── Feature ⑦: THE SACRED PAUSE ── */}
-                    {/* Joins user in silence and dims interface if quiet for 5+ seconds */}
-                    <SacredPause
-                      tone={voiceTone}
-                      isConnected={isConnected}
-                      lang={lang}
-                      isAgentSpeaking={isAgentSpeaking}
-                      reducedMotion={effectiveReducedMotion}
-                      onPauseTriggered={() => {
-                        if (
-                          isAutoDemoRunningRef.current
-                          || autoDemoPendingStartRef.current
-                          || oneClickDemoPendingRef.current
-                        ) {
-                          return;
-                        }
-                        // Secret instruction to Gemini when sacred pause starts
-                        const socket = wsRef.current;
-                        if (socket && socket.readyState === WebSocket.OPEN) {
-                          socket.send(JSON.stringify({
-                            clientContent: {
-                              turns: [{ role: 'user', parts: [{ text: lang === 'ar' ? '(إشارة صمت: المستخدم يتأمل في صمت الآن وتظهر له تعويذة الصمت المريحة. بادله الصمت ولا تتحدث إلا إذا كان لديك شيء عميق جدا تضيفه للمساحة، أو انتظره.)' : '(Silence detected: User is reflecting. Hold space with them. Do not speak unless necessary or requested, embrace the silence.)' }] }],
-                              turnComplete: false,
-                            },
-                          }));
-                          setLastEvent('sacred_pause_triggered');
-                        }
-                      }}
-                    />
-
-
-                    {/* Cognitive OS Metrics Overlay */}
-                    <div className="cognitive-metrics-overlay">
-                      <div className="metric-item">
-                        <span className="metric-label">{lang === 'ar' ? 'التوازن' : 'Equilibrium'}</span>
-                        <span className="metric-value">{(cognitiveMetrics.equilibriumScore * 100).toFixed(0)}%</span>
-                      </div>
-                      <div className="metric-item">
-                        <span className="metric-label">{lang === 'ar' ? 'الضغط' : 'Overload'}</span>
-                        <span className="metric-value">{(cognitiveMetrics.overloadIndex * 100).toFixed(0)}%</span>
-                      </div>
-                      <div className="metric-item">
-                        <span className="metric-label">{lang === 'ar' ? 'الوضوح Δ' : 'Clarity Δ'}</span>
-                        <span className={`metric-value ${cognitiveMetrics.clarityDelta >= 0 ? 'positive' : 'negative'}`}>
-                          {cognitiveMetrics.clarityDelta >= 0 ? '+' : ''}{(cognitiveMetrics.clarityDelta * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Circle Meaning Panel: Real-time personal interpretation */}
-                    <CircleMeaningPanel
-                      nodes={canvasRef.current?.getNodes?.() || []}
-                      dominantNodeId={dominantNodeRef.current}
-                      lang={lang}
-                      isConnected={isConnected}
-                      sessionTurnCount={transcript.length}
-                    />
-
-                    {capturedImage && (
-                      <div className="snapshot-preview">
-                        <img src={capturedImage} alt="Pulse Snapshot" />
-                        <span>{t.initialState}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="connected-actions">
-                    {!isCameraActive ? (
-                      <div style={{ display: "flex", gap: "8px" }}>
-                        <button className="retake-live-btn flex-center" onClick={handleLookAtMe} style={{ flex: 1, gap: '6px', background: "rgba(255, 209, 102, 0.15)", color: "#FFD700", borderColor: "rgba(255, 209, 102, 0.4)" }}>
-                          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                          {capturedImage ? t.updateVisual : t.lookAtMe}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="live-camera-mini">
-                        <div className="video-container-mini">
-                          <video autoPlay playsInline muted
-                            ref={(el) => { if (el && videoRef.current?.srcObject) el.srcObject = videoRef.current.srcObject; }}
-                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                          />
-                        </div>
-                        <div className="mini-camera-actions">
-                          <button className="mini-capture-btn" onClick={captureSnapshot}>{t.capture}</button>
-                          <button className="mini-cancel-btn" onClick={stopCamera}>{t.cancel}</button>
-                        </div>
-                      </div>
-                    )}
-                    <button
-                      className={`secondary auto-demo-live-btn ${isAutoDemoRunning ? 'is-active' : ''}`}
-                      onClick={handleAutoDemoToggle}
-                    >
-                      {isAutoDemoRunning ? autoDemoCopy.stop : autoDemoCopy.start}
-                    </button>
-                    <button className="secondary disconnect-btn flex-center" onClick={() => setShowEndSessionConfirm(true)}>
-                      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
-                      {t.endSession}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Circle Control Panel */}
-              {appView === 'live' && isConnected && (
-                <div className="circle-controls">
-                  {/* Text command input (hidden for demo) */}
-                  <form className="command-input-form command-input-hidden" onSubmit={(e) => {
-                    e.preventDefault();
-                    handleTextCommand(commandText);
-                    setCommandText('');
-                  }}>
-                    <input
-                      type="text"
-                      className="command-input"
-                      value={commandText}
-                      onChange={(e) => setCommandText(e.target.value)}
-                      placeholder={lang === 'ar' ? 'اكتب أمر... مثال: صغّر دايرة الوعي' : 'Type command... e.g. shrink awareness circle'}
-                      dir={lang === 'ar' ? 'rtl' : 'ltr'}
-                    />
-                    <button type="submit" className="command-send-btn" disabled={!commandText.trim()}>
-                      {lang === 'ar' ? 'نفّذ' : 'Send'}
-                    </button>
-                  </form>
-                </div>
-              )}
-
-              {errorMessage && <p className="error-message">&#x26A0;&#xFE0F; {errorMessage}</p>}
-            </>
-          )}
-        </aside>
-      )}
+      <Suspense fallback={null}>
+        <SessionOverlayPanel
+          appView={appView}
+          isSetupIntro={isSetupIntro}
+          lang={lang}
+          t={t}
+          isConnected={isConnected}
+          isStarting={isStarting}
+          status={status}
+          statusClass={statusClass}
+        connectSteps={connectSteps}
+        connectStage={connectStage}
+        logoCognitiveTrinity={logoCognitiveTrinity}
+        userKeyRef={userKeyRef}
+        dominantNodeRef={dominantNodeRef}
+        transitionCount={transitionCount}
+        sessionStartTime={sessionStartTime}
+        autoDemoStatus={autoDemoStatus}
+        isAutoDemoRunning={isAutoDemoRunning}
+        autoDemoCopy={autoDemoCopy}
+        whyNowLine={whyNowLine}
+        latestTruthContract={latestTruthContract}
+        debugLineText={debugLineText}
+        transitionToast={transitionToast}
+        errorMessage={errorMessage}
+        isCameraActive={isCameraActive}
+        capturedImage={capturedImage}
+        videoRef={videoRef}
+        journeyStage={journeyStage}
+        cognitiveMetrics={cognitiveMetrics}
+        voiceTone={voiceTone}
+        isAgentSpeaking={isAgentSpeaking}
+        _isUserSpeaking={_isUserSpeaking}
+        transcript={transcript}
+        dominantColor={dominantColor}
+        effectiveReducedMotion={effectiveReducedMotion}
+        canvasRef={canvasRef}
+        micStreamRef={micStreamRef}
+        commandText={commandText}
+        wsRef={wsRef}
+        isAutoDemoRunningRef={isAutoDemoRunningRef}
+        autoDemoPendingStartRef={autoDemoPendingStartRef}
+        oneClickDemoPendingRef={oneClickDemoPendingRef}
+        tenseStartRef={tenseStartRef}
+        tenseTimerRef={tenseTimerRef}
+        goToView={goToView}
+        setLang={setLang}
+        setShowSettings={setShowSettings}
+        openUiShowcase={openUiShowcase}
+        connect={connect}
+        startCamera={startCamera}
+        stopCamera={stopCamera}
+        captureSnapshot={captureSnapshot}
+        handleLookAtMe={handleLookAtMe}
+        handleAutoDemoToggle={handleAutoDemoToggle}
+        setShowEndSessionConfirm={setShowEndSessionConfirm}
+        handleTextCommand={handleTextCommand}
+        setCommandText={setCommandText}
+        markTruthContractDone={markTruthContractDone}
+        setLastEvent={setLastEvent}
+        setVoiceTone={setVoiceTone}
+        setDominantColor={setDominantColor}
+        setShowBreathing={setShowBreathing}
+        handleBioStateChange={handleBioStateChange}
+        setCapturedImage={setCapturedImage}
+        appSettings={appSettings}
+      />
+      </Suspense>
 
       {/* Session Complete Screen */}
       {appView === 'complete' && (
-        <div className="complete-screen complete-overlay">
-          {isSandMandalaActive && (
-            <style>{`
-              @keyframes sand-shatter {
-                0% { transform: scale(1); filter: blur(0) grayscale(0); opacity: 1; }
-                20% { transform: scale(1.05) translateY(-5px); filter: blur(2px) grayscale(0.5); opacity: 0.8; }
-                50% { transform: scale(1.1) translateY(-20px); filter: blur(15px) sepia(1) hue-rotate(-50deg); opacity: 0.5; letter-spacing: 12px; }
-                100% { transform: scale(1.5) translateY(-80px); filter: blur(40px) opacity(0); opacity: 0; letter-spacing: 30px; }
-              }
-              .sand-mandala-active {
-                animation: sand-shatter 3.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-                pointer-events: none;
-              }
-            `}</style>
-          )}
-          <div className={`complete-card ${isSandMandalaActive ? 'sand-mandala-active' : ''}`}>
-            <div className="success-icon-container">
-              <svg aria-hidden="true" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 10px rgba(0, 255, 65, 0.4))' }}>
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-              </svg>
-            </div>
-            <h2 className="complete-title" data-view-heading="complete" tabIndex={-1}>
-              {lang === 'ar' ? 'رحلة اكتملت' : 'Journey Complete'}
-            </h2>
+        <Suspense fallback={null}>
+          <SessionCompleteScreen
+            lang={lang}
+            isSandMandalaActive={isSandMandalaActive}
+            cognitiveMetrics={cognitiveMetrics}
+            journeyPath={journeyPath}
+            transitionCount={transitionCount}
+            sessionStartTime={sessionStartTime}
+            dominantNodeId={dominantNodeRef.current}
+            showDNACard={showDNACard}
+            onSetShowDNACard={setShowDNACard}
+            onGoToView={goToView}
+            onSandMandala={handleSandMandala}
+          />
+        </Suspense>
+      )}
 
-            {/* ── Feature ┄: MIRROR SENTENCE ── */}
-            <MirrorSentence
-              journeyPath={journeyPath}
-              transitionCount={transitionCount}
-              lang={lang}
-              visible={true}
-            />
-            <p className="complete-subtitle">
-              {lang === 'ar' ? 'لقد انتهت جلستك، وتم حفظ مسارك المعرفي في بنك الذاكرة.' : 'Your session has ended, and your cognitive path is saved in the Memory Bank.'}
-            </p>
-
-            {/* Journey Timeline */}
-            <JourneyTimeline
-              journeyPath={journeyPath}
-              transitionCount={transitionCount}
-              sessionDurationMs={sessionStartTime ? Date.now() - sessionStartTime : 0}
-              lang={lang}
-            />
-            <div className="complete-stats-table">
-              <div className="complete-stat-row complete-stat-row-divider">
-                <span className="complete-stat-label">{lang === 'ar' ? 'التوازن النهائي' : 'Equilibrium'}</span>
-                <span className="complete-stat-value complete-stat-success">{(cognitiveMetrics.equilibriumScore * 100).toFixed(0)}%</span>
-              </div>
-              <div className="complete-stat-row complete-stat-row-divider">
-                <span className="complete-stat-label">{lang === 'ar' ? 'مستوى الضغط' : 'Overload'}</span>
-                <span className="complete-stat-value complete-stat-info">{(cognitiveMetrics.overloadIndex * 100).toFixed(0)}%</span>
-              </div>
-              <div className="complete-stat-row">
-                <span className="complete-stat-label">{lang === 'ar' ? 'نسبة الوضوح' : 'Clarity Δ'}</span>
-                <span className={`complete-stat-value ${cognitiveMetrics.clarityDelta >= 0 ? 'complete-stat-success' : 'complete-stat-magenta'}`}>
-                  {cognitiveMetrics.clarityDelta >= 0 ? '+' : ''}{(cognitiveMetrics.clarityDelta * 100).toFixed(0)}%
-                </span>
-              </div>
-            </div>
-
-            {/* Session Action Card */}
-            {(() => {
-              const dominant = dominantNodeRef.current;
-              const clarity = cognitiveMetrics.clarityDelta;
-              const overload = cognitiveMetrics.overloadIndex;
-              let action = '';
-              let meaning = '';
-              if (lang === 'ar') {
-                if (dominant === 3 || clarity > 0.05) {
-                  action = 'خد قرار واحد صغير دلوقتي — اكتبه أو قوله لحد تاني.';
-                  meaning = 'دايرة الواقع كانت نشطة — اللي بيحصل فعلاً واضح ليك.';
-                } else if (dominant === 1 || overload > 0.5) {
-                  action = 'قبل ما تعمل أي حاجة — خد 5 دقايق تحس بنفسك.';
-                  meaning = 'مشاعرك كانت واخدة مساحة — خليها تستقر الأول.';
-                } else {
-                  action = 'اكتب جملة واحدة عن أكتر حاجة اتوضحت ليك النهارده.';
-                  meaning = 'عقلك التحليلي كان شغال — الورقة والقلم بيساعدوك تكمل.';
-                }
-              } else {
-                if (dominant === 3 || clarity > 0.05) {
-                  action = 'Make one small decision right now — write it or say it to someone.';
-                  meaning = 'Your Reality circle was active — what is actually happening is clear to you.';
-                } else if (dominant === 1 || overload > 0.5) {
-                  action = 'Before doing anything — give yourself 5 minutes to just feel.';
-                  meaning = 'Your feelings took up space — let them settle first.';
-                } else {
-                  action = 'Write one sentence about the clearest thing from today.';
-                  meaning = 'Your analytical mind was active — paper and pen will help.';
-                }
-              }
-              return (
-                <div className="session-action-card">
-                  <div className="sac-header">
-                    <span className="sac-icon">✅</span>
-                    <span className="sac-title">
-                      {lang === 'ar' ? 'اعمل حاجة واحدة دلوقتي' : 'One action right now'}
-                    </span>
-                  </div>
-                  <p className="sac-body">{action}</p>
-                  <p className="sac-meaning">{meaning}</p>
-                </div>
-              );
-            })()}
-
-            <div className="complete-actions-row">
-              <button className="primary-btn complete-action-btn" onClick={() => goToView('setup')}>
-                {lang === 'ar' ? 'جلسة جديدة' : 'New Session'}
-              </button>
-              <button className="primary-btn complete-action-btn complete-action-secondary" onClick={() => goToView('dashboard')}>
-                {lang === 'ar' ? 'بنك الذاكرة' : 'Memory Bank'}
-              </button>
-              {/* DNA Card share button */}
-              <button
-                className="dna-share-trigger-btn"
-                onClick={() => setShowDNACard(true)}
-                title={lang === 'ar' ? 'شارك رحلتك' : 'Share your journey'}
-              >
-                {lang === 'ar' ? '✦ شارك رحلتك' : '✦ Share Journey'}
-              </button>
-
-              {/* Feature 10: Sand Mandala (Let Go) */}
-              <button
-                className="primary-btn outline-btn complete-action-btn"
-                onClick={handleSandMandala}
-                style={{ width: '100%', marginTop: '8px', opacity: 0.8, color: '#ffb347', borderColor: 'rgba(255, 179, 71, 0.3)' }}
-                title={lang === 'ar' ? 'انسف الماندالا وامسح البيانات' : 'Blow away the Mandala (Erase Data)'}
-              >
-                {lang === 'ar' ? '💨 التخلي (مسح)' : '💨 Detach & Erase'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* UI Showcase Page */}
+      {appView === 'ui-showcase' && (
+        <Suspense fallback={<div className="loading-glow-overlay" />}>
+          <UiShowcasePage onBack={() => goToView('welcome')} />
+        </Suspense>
       )}
 
       {showSettings && !isConnected && (
-        <SettingsModal
-          lang={lang}
-          settings={appSettings}
-          onClose={() => setShowSettings(false)}
-          onLanguageChange={setLang}
-          onSettingsChange={updateAppSettings}
-          selectedMicId={selectedMicId}
-          onMicChange={setSelectedMicId}
-        />
+        <Suspense fallback={null}>
+          <SettingsModal
+            lang={lang}
+            settings={appSettings}
+            onClose={() => setShowSettings(false)}
+            onLanguageChange={setLang}
+            onSettingsChange={updateAppSettings}
+            selectedMicId={selectedMicId}
+            onMicChange={setSelectedMicId}
+          />
+        </Suspense>
       )}
 
       {showOnboarding && (appView === 'setup' || appView === 'live') && (
@@ -4016,63 +3636,41 @@ function App() {
       )}
 
       {showEndSessionConfirm && (
-        <EndSessionConfirmModal
-          lang={lang}
-          onCancel={() => setShowEndSessionConfirm(false)}
-          onConfirm={() => {
-            setShowEndSessionConfirm(false);
-            disconnect();
-          }}
-        />
+        <Suspense fallback={null}>
+          <EndSessionConfirmModal
+            lang={lang}
+            onCancel={() => setShowEndSessionConfirm(false)}
+            onConfirm={() => {
+              setShowEndSessionConfirm(false);
+              disconnect();
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Live Transcript Overlay */}
-      {appView === 'live' && isConnected && transcript.length > 0 && (
-        <section className={`transcript-container ${isTranscriptVisible ? 'open' : 'closed'}`} aria-label={lang === 'ar' ? 'الدردشة' : 'Live transcript'}>
-          <button
-            className="transcript-toggle-btn"
-            onClick={() => setIsTranscriptVisible(!isTranscriptVisible)}
-            aria-expanded={isTranscriptVisible}
-            aria-controls="live-transcript"
-            title={isTranscriptVisible
-              ? (lang === 'ar' ? 'إخفاء المحادثة' : 'Hide transcript')
-              : (lang === 'ar' ? 'إظهار المحادثة' : 'Show transcript')}
-          >
-            {isTranscriptVisible ? '▼ ' + t.liveChat : '💬 ' + t.liveChat}
-          </button>
+      {appView === 'live' && isConnected && (
+        <NeuralTopicGraph
+          transcript={transcript}
+          lang={lang}
+          reducedMotion={effectiveReducedMotion}
+        />
+      )}
 
-          <div className="transcript-overlay" style={{ display: isTranscriptVisible ? 'flex' : 'none' }}>
-            <div
-              className="transcript-messages"
-              id="live-transcript"
-              role="log"
-              aria-live="polite"
-              aria-relevant="additions text"
-            >
-              {transcript.map((entry, idx) => (
-                <div
-                  key={idx}
-                  className={`transcript-entry transcript-${entry.role}`}
-                  style={entry.cogColor ? {
-                    /* ── Feature ③: COGNITIVE TRANSCRIPT COLORING ── */
-                    borderLeft: entry.role === 'user' || entry.role === 'user_agent' ? `2px solid ${entry.cogColor}` : undefined,
-                    borderRight: entry.role === 'agent' ? `2px solid ${entry.cogColor}` : undefined,
-                    background: `${entry.cogColor}08`,
-                  } : undefined}
-                >
-                  <span className="transcript-speaker">{getTranscriptSpeakerLabel(entry.role)}</span>
-                  <span className="transcript-time">{entry.time}</span>
-                  <span className="transcript-text">{entry.text}</span>
-                </div>
-              ))}
-              <div ref={transcriptEndRef} />
-            </div>
-          </div>
-        </section>
+      {appView === 'live' && isConnected && transcript.length > 0 && (
+        <TranscriptPanel
+          ref={transcriptEndRef}
+          lang={lang}
+          t={t}
+          transcript={transcript}
+          isTranscriptVisible={isTranscriptVisible}
+          setIsTranscriptVisible={setIsTranscriptVisible}
+          getTranscriptSpeakerLabel={getTranscriptSpeakerLabel}
+        />
       )}
 
       {appView === 'live' && isConnected && (
-        <div className="breathing-hud" role="toolbar" aria-label={lang === 'ar' ? 'أدوات الجلسة' : 'Session tools'}>
+        <div className={`breathing-hud ${appSettings.fullScreenSession && !appSettings.fsShowControls ? 'session-fullscreen-hidden' : ''}`} role="toolbar" aria-label={lang === 'ar' ? 'أدوات الجلسة' : 'Session tools'}>
           <button className="secondary" onClick={() => setIsBreathingRoom((current) => !current)}>
             {isBreathingRoom ? (lang === 'ar' ? 'إظهار اللوحة' : 'Show Panel') : (lang === 'ar' ? 'إخفاء اللوحة' : 'Hide Panel')}
           </button>
@@ -4089,7 +3687,7 @@ function App() {
         <AchievementBar achievements={achievements} lang={lang} />
       )}
 
-      {appView === 'live' && isConnected && (
+      {appView === 'live' && isConnected && audioDiag.className && (
         <div className={`audio-diagnostic-badge ${audioDiag.className}`}>
           {audioDiag.text}
         </div>
@@ -4105,7 +3703,9 @@ function App() {
 
       <main id="main-canvas-content" className="app-canvas-main" role="main" aria-label={lang === 'ar' ? 'مساحة الدوائر' : 'Circle canvas'}>
         <h1 className="visually-hidden">{lang === 'ar' ? 'تطبيق دواير للجلسات الصوتية' : 'Dawayir live voice session app'}</h1>
-        <DawayirCanvas ref={canvasRef} lang={lang} reducedMotion={effectiveReducedMotion} />
+        <ErrorBoundary name="DawayirCanvas" lang={lang} minHeight="100vh">
+          <DawayirCanvas ref={canvasRef} lang={lang} reducedMotion={effectiveReducedMotion} />
+        </ErrorBoundary>
       </main>
 
       <div className="visually-hidden" ref={srAnnouncerRef} role="status" aria-live="polite" aria-atomic="true" />
@@ -4136,4 +3736,3 @@ function App() {
 }
 
 export default App;
-

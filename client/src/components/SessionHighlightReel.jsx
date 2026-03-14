@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from 'react';
+import React, { useMemo } from 'react';
 
 const NODE_NAMES = {
   ar: { 1: 'الوعي', 2: 'العلم', 3: 'الحقيقة' },
@@ -6,9 +6,9 @@ const NODE_NAMES = {
 };
 
 const NODE_COLORS = {
-  1: '#00F5FF',
-  2: '#00FF41',
-  3: '#FF00E5',
+  1: '#38B2D8',
+  2: '#2ECC71',
+  3: '#9B59B6',
 };
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -159,7 +159,7 @@ const drawHighlightSheet = ({ width, height, lang, reportName, highlights }) => 
       ctx.fillStyle = 'rgba(214,227,255,0.58)';
       ctx.font = '500 15px Arial';
       ctx.fillText(metric.label, boxX + 18, top + 320);
-      ctx.fillStyle = metricIndex === 0 ? '#FF00E5' : metricIndex === 1 ? '#00F5FF' : '#FF7D96';
+      ctx.fillStyle = metricIndex === 0 ? '#9B59B6' : metricIndex === 1 ? '#38B2D8' : '#FF7D96';
       ctx.font = '700 24px Arial';
       ctx.fillText(metric.value, boxX + 18, top + 344);
     });

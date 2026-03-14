@@ -59,7 +59,7 @@ function GrowthArc({ lang = 'ar' }) {
     return `${x},${y}`;
   }).join(' ');
 
-  const deltaColor = (delta) => (delta > 0 ? '#00FF41' : delta < 0 ? '#FF5032' : '#888');
+  const deltaColor = (delta) => (delta > 0 ? '#2ECC71' : delta < 0 ? '#FF5032' : '#888');
   const deltaSign = (delta) => (delta > 0 ? '↑' : delta < 0 ? '↓' : '→');
 
   return (
@@ -97,9 +97,9 @@ function GrowthArc({ lang = 'ar' }) {
           />
           <defs>
             <linearGradient id="spark-grad" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#00F5FF" />
-              <stop offset="50%" stopColor="#00FF41" />
-              <stop offset="100%" stopColor="#FF00E5" />
+              <stop offset="0%" stopColor="#38B2D8" />
+              <stop offset="50%" stopColor="#2ECC71" />
+              <stop offset="100%" stopColor="#9B59B6" />
             </linearGradient>
           </defs>
           {sparkPoints.length > 0 && (
@@ -107,7 +107,7 @@ function GrowthArc({ lang = 'ar' }) {
               cx={width}
               cy={height - ((sparkPoints[sparkPoints.length - 1].v - minValue) / range) * height}
               r="4"
-              fill="#FF00E5"
+              fill="#9B59B6"
             />
           )}
         </svg>

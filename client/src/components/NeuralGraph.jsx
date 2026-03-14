@@ -13,9 +13,9 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
  */
 
 const CIRCLE_COLORS = {
-    awareness: { main: '#00F5FF', glow: 'rgba(0,245,255,0.3)', label: 'الوعي', labelEn: 'Awareness' },
-    knowledge: { main: '#00FF41', glow: 'rgba(0,255,65,0.3)', label: 'العلم', labelEn: 'Knowledge' },
-    truth: { main: '#FF00E5', glow: 'rgba(255,0,229,0.3)', label: 'الحقيقة', labelEn: 'Truth' },
+    awareness: { main: '#38B2D8', glow: 'rgba(56,178,216,0.3)', label: 'الوعي', labelEn: 'Awareness' },
+    knowledge: { main: '#2ECC71', glow: 'rgba(46,204,113,0.3)', label: 'العلم', labelEn: 'Knowledge' },
+    truth: { main: '#9B59B6', glow: 'rgba(155,89,182,0.3)', label: 'الحقيقة', labelEn: 'Truth' },
 };
 
 // Generate a demo neural graph from session report content

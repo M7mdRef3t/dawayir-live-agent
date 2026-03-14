@@ -107,9 +107,9 @@ Creative Direction & Strategy Document
 **Detailed Description:**
 - 3 دوائر بنفس الحجم (قطر 40px في الرمز الصغير)
 - مرتبة في تكوين مثلثي مع تداخل 30% بين كل اثنين
-- الدائرة العلوية: Cyan (#00F5FF) — الوعي
-- الدائرة اليمنى السفلية: Green (#00FF41) — العلم
-- الدائرة اليسرى السفلية: Magenta (#FF00E5) — الحقيقة
+- الدائرة العلوية: Ocean Blue (#38B2D8) — الوعي
+- الدائرة اليمنى السفلية: Forest Green (#2ECC71) — العلم
+- الدائرة اليسرى السفلية: Amethyst (#9B59B6) — الحقيقة
 - مناطق التداخل: blend mode = screen (تنتج ألوان أفتح)
 - الخط: "Outfit" Bold للاتينية، "Noto Kufi Arabic" Bold للعربية
 - الكلمة "دواير" تحت الرمز بخط 600 weight
@@ -135,9 +135,9 @@ Creative Direction & Strategy Document
 **Detailed Description:**
 - حرف "د" عربي مكبّر ومبسّط هندسياً
 - السمك: 4px stroke (outline style, not filled)
-- لون الـ stroke: gradient من Cyan لـ Magenta (135deg)
+- لون الـ stroke: gradient من Ocean Blue لـ Amethyst (135deg)
 - داخل المنحنى: خط رفيع (1px) يعكس الشكل الخارجي بـ opacity 30% — كأنه reflection
-- نقطة الدال: دائرة صغيرة بلون Cyan (#00F5FF) — تمثل نقطة البداية
+- نقطة الدال: دائرة صغيرة بلون Ocean Blue (#38B2D8) — تمثل نقطة البداية
 - الكلمة "دواير" بجانب الرمز بخط Outfit Semibold
 
 **Strategic Justification:**
@@ -153,10 +153,10 @@ Creative Direction & Strategy Document
 - كلمة "دواير" بخط عربي مخصص (custom lettering based on Noto Kufi Arabic)
 - كل الحروف ثابتة ماعدا الياء — اللي بيتحول ذيلها لـ 3 موجات صوتية
 - الموجات: 3 قمم بارتفاعات مختلفة (تمثل الدواير الثلاثة)
-- الموجة الأولى (أقصر) = Cyan
-- الموجة التانية (متوسطة) = Green
-- الموجة التالتة (أطول) = Magenta
-- نقطة الياء: دائرة مضيئة بلون Cyan (glow effect في الديجيتال)
+- الموجة الأولى (أقصر) = Ocean Blue (#38B2D8)
+- الموجة التانية (متوسطة) = Forest Green (#2ECC71)
+- الموجة التالتة (أطول) = Amethyst (#9B59B6)
+- نقطة الياء: دائرة مضيئة بلون Ocean Blue (glow effect في الديجيتال)
 
 **Recommended Direction: A (الثلاث دواير)**
 **Rationale:** الاتجاه A هو الأقوى لأنه:
@@ -168,24 +168,24 @@ Creative Direction & Strategy Document
 
 ### 2.2 Color System — Psychology & Culture
 
-**Primary Color: Cyan (#00F5FF)**
+**Primary Color: Ocean Blue (#38B2D8)**
 Why this color — psychologically:
-- Cyan يقع بين الأزرق (الثقة والهدوء) والأخضر (النمو والتوازن)
-- في علم نفس الألوان: cyan = clarity of thought + emotional calm
-- مش أزرق corporate (cold) ومش أخضر طبي (clinical)
+- Ocean Blue يقع بين الأزرق الداكن (الثقة والعمق) والسماوي (الانفتاح والوضوح)
+- في علم نفس الألوان: ocean blue = clarity of thought + emotional calm
+- مش أزرق corporate (cold) ومش أزرق فاتح (naïve)
 - يوحي بالمياه والسماء — عناصر طبيعية مرتبطة بالتأمل
 
 Why this color — culturally:
-- في الثقافة المصرية: اللون الفيروزي (turquoise) موجود من أيام الفراعنة — حجر الفيروز كان يرمز للحماية والشفاء
+- في الثقافة المصرية: اللون الأزرق الفيروزي موجود من أيام الفراعنة — يرمز للحماية والشفاء
 - مش مرتبط بالدين أو السياسة (محايد ثقافياً)
 - مميز في سوق الـ wellness apps (معظمها بينفسجي أو أخضر)
-- يشتغل على الخلفيات الداكنة بشكل ممتاز (contrast ratio 12.8:1)
+- يشتغل على الخلفيات الداكنة بشكل ممتاز
 
-**Secondary Color: Magenta (#FF00E5)**
-Psychology: Magenta = transformation. يجمع بين حرارة الأحمر وعمق البنفسجي. يرمز لـ "الحقيقة" — اللحظة اللي بتوصل فيها لقرار. في نظرية الألوان: magenta مش موجود في الطيف الطبيعي — العقل بيخلقه. مناسب جداً لدائرة "الحقيقة" اللي هي construction ذهنية.
+**Secondary Color: Amethyst (#9B59B6)**
+Psychology: Amethyst = transformation. يجمع بين حرارة البنفسجي الدافئ وعمق الليلكي. يرمز لـ "الحقيقة" — اللحظة اللي بتوصل فيها لقرار. في نظرية الألوان: الأميثيست = الحكمة والتحوّل.
 
-**Complementary Color: Green (#00FF41)**
-Psychology: الأخضر النيون = المعرفة الحية. مش أخضر طبيعي (ده مش تطبيق نباتات) — ده أخضر رقمي يوحي بالذكاء الاصطناعي والتحليل. يرمز لدائرة "العلم" — التفكير المنطقي.
+**Complementary Color: Forest Green (#2ECC71)**
+Psychology: الأخضر الطبيعي = المعرفة الحية. مش أخضر نيون رقمي — ده أخضر أرضي يوحي بالنمو والتوازن. يرمز لدائرة "العلم" — التفكير المتجذّر.
 
 **Neutral Colors:**
 - Deep Space `#020508`: Primary background — عمق مش سواد. فيه لمسة زرقاء خفية توحي بالسماء ليلاً
@@ -238,7 +238,7 @@ Clinical settings, Groups, Forced smiles, Nature/outdoors, Food/lifestyle, Child
 | :--- | :--- | :--- |
 | Name (دواير) | Arabic only, never translated | محلي أولاً — الهوية مصرية |
 | Logo (3 circles) | Matches product directly | الشعار = المنتج = الفلسفة |
-| Cyan primary | Turquoise heritage + clarity psychology | ثقافي + نفسي |
+| Ocean Blue primary | Turquoise heritage + clarity psychology | ثقافي + نفسي |
 | Dark theme only | Safe space + night-time usage | الجمهور بيستخدم بالليل |
 | Outfit font | Geometric = circles | كل حاجة دواير |
 | Noto Kufi Arabic | Geometric Arabic = modern roots | أصالة بدون تقليدية |

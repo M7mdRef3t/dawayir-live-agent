@@ -1,0 +1,842 @@
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘° â€” JOURNEY TIMELINE
+   Horizontal story strip in session complete screen
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.journey-timeline-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  margin: 10px 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  animation: timeline-in 0.6s ease;
+}
+
+@keyframes timeline-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.journey-timeline-title {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+  letter-spacing: 0.05em;
+}
+
+.journey-timeline-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.journey-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.journey-node-icon {
+  font-size: 18px;
+  color: var(--node-color, #fff);
+  filter: drop-shadow(0 0 4px var(--node-color, #fff));
+  transition: color 0.3s ease;
+}
+
+.journey-node-label {
+  font-size: 9px;
+  color: var(--node-color, rgba(255, 255, 255, 0.5));
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.journey-node-time {
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.3);
+  font-family: 'Outfit', sans-serif;
+}
+
+.journey-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+}
+
+.journey-connector-line {
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.15));
+  margin-bottom: 2px;
+}
+
+.journey-connector-time {
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.25);
+  font-family: 'Outfit', sans-serif;
+  white-space: nowrap;
+}
+
+.journey-timeline-sub {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+  text-align: center;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘± â€” COGNITIVE DNA CARD
+   Full-screen shareable card modal
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.dna-card-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  background: rgba(4, 4, 20, 0.85);
+  backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: dna-overlay-in 0.4s ease;
+}
+
+.dna-card-modal {
+  width: auto;
+  max-width: min(92vw, 380px);
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+@keyframes dna-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.dna-card-container {
+  position: relative;
+  width: 340px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: linear-gradient(160deg, #080820 0%, #0d0d2a 60%, #080820 100%);
+  border: 1px solid color-mix(in srgb, var(--dominant-color, #9B59B6) 30%, transparent);
+  border-radius: 28px;
+  padding: 28px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 0 60px color-mix(in srgb, var(--dominant-color, #9B59B6) 15%, transparent);
+  animation: dna-card-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes dna-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.88) translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.dna-card-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.dna-card-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.dna-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.dna-card-brand {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+}
+
+.dna-card-subtitle {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.05em;
+}
+
+.dna-weather-orb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 90px;
+  height: 90px;
+}
+
+.dna-weather-emoji {
+  font-size: 56px;
+  position: relative;
+  z-index: 1;
+  animation: weather-float 3s ease-in-out infinite;
+}
+
+.dna-weather-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0.15;
+  filter: blur(20px);
+}
+
+.dna-mirror-sentence {
+  font-size: 14px;
+  font-family: 'Outfit', sans-serif;
+  color: rgba(255, 255, 255, 0.88);
+  text-align: center;
+  line-height: 1.7;
+  margin: 0;
+  font-style: italic;
+  max-width: 280px;
+  border-left: none;
+  quotes: none;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dna-journey-strip {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.dna-journey-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dna-journey-dot-label {
+  position: absolute;
+  top: 20px;
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Outfit', sans-serif;
+  white-space: nowrap;
+}
+
+.dna-journey-line {
+  width: 24px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 2px;
+}
+
+.dna-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  width: 100%;
+  justify-content: space-around;
+  margin-top: 8px;
+}
+
+.dna-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.dna-stat-val {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+}
+
+.dna-stat-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'Outfit', sans-serif;
+}
+
+.dna-stat-divider {
+  width: 1px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dna-card-footer {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.15);
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.1em;
+}
+
+.dna-export-btn {
+  width: 100%;
+  padding: 12px;
+  background: color-mix(in srgb, var(--dominant-color, #9B59B6) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dominant-color, #9B59B6) 35%, transparent);
+  border-radius: 14px;
+  color: var(--dominant-color, #9B59B6);
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.dna-export-btn:hover {
+  background: color-mix(in srgb, var(--dominant-color, #9B59B6) 22%, transparent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--dominant-color, #9B59B6) 25%, transparent);
+  transform: translateY(-1px);
+}
+
+/* DNA Share trigger button on complete screen */
+.dna-share-trigger-btn {
+  padding: 10px 18px;
+  background: linear-gradient(135deg, rgba(255, 200, 0, 0.1), rgba(255, 0, 229, 0.1));
+  border: 1px solid rgba(255, 200, 0, 0.3);
+  border-radius: 14px;
+  color: rgba(255, 200, 0, 0.9);
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  letter-spacing: 0.03em;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.dna-share-trigger-btn:hover {
+  background: linear-gradient(135deg, rgba(255, 200, 0, 0.18), rgba(255, 0, 229, 0.15));
+  border-color: rgba(255, 200, 0, 0.6);
+  box-shadow: 0 0 16px rgba(255, 200, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+/* ============================
+   CIRCLE MEANING PANEL
+   ============================ */
+.circle-meaning-panel {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: cmp-fade-in 0.5s ease both;
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes cmp-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.cmp-header { display: flex; align-items: center; gap: 6px; }
+.cmp-icon { font-size: 13px; line-height: 1; }
+.cmp-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: rgba(255,255,255,0.35);
+}
+
+.cmp-dominant-insight {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 12px;
+  border-inline-start: 2px solid var(--cmp-color, #38B2D8);
+  animation: cmp-insight-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+
+@keyframes cmp-insight-pop {
+  from { opacity: 0; transform: scale(0.96) translateX(-4px); }
+  to   { opacity: 1; transform: scale(1) translateX(0); }
+}
+
+.cmp-dominant-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  margin-top: 4px; animation: ds-blink 2.5s ease-in-out infinite;
+}
+
+.cmp-dominant-text { display: flex; flex-direction: column; gap: 3px; }
+
+.cmp-dominant-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--cmp-color, #38B2D8); opacity: 0.8;
+}
+
+.cmp-dominant-sentence {
+  margin: 0; font-size: 13px; line-height: 1.55;
+  color: rgba(255,255,255,0.88); font-weight: 500;
+}
+
+.cmp-circles-bar { display: flex; flex-direction: column; gap: 6px; }
+.cmp-bar-item { display: flex; align-items: center; gap: 8px; }
+.cmp-bar-fill {
+  height: 3px; border-radius: 99px;
+  transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1), opacity 0.4s ease;
+}
+.cmp-bar-item--active .cmp-bar-fill { height: 4px; }
+.cmp-bar-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
+  white-space: nowrap; transition: color 0.4s ease; min-width: 52px;
+}
+
+/* ============================
+   SESSION CLOSE ACTION CARD (Consolidated)
+   ============================ */
+.session-action-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 178, 216, 0.4);
+  background: linear-gradient(135deg, rgba(56, 178, 216, 0.15), rgba(126, 87, 194, 0.1));
+}
+
+.sac-header { 
+  display: flex; 
+  align-items: center; 
+  gap: 10px; 
+  margin-bottom: 12px;
+}
+
+.sac-title {
+  font-size: 12px; 
+  font-weight: 700; 
+  letter-spacing: 1.2px;
+  text-transform: uppercase; 
+  color: var(--ds-circle-awareness);
+  text-shadow: 0 0 10px var(--ds-circle-awareness-glow);
+}
+
+.sac-body {
+  font-size: 15px; 
+  line-height: 1.6; 
+  color: #fff;
+  font-weight: 600; 
+  margin: 0;
+}
+
+.sac-meaning {
+  font-size: 13px; 
+  color: rgba(180, 165, 240, 0.6);
+  font-style: italic; 
+  margin-top: 8px; 
+  line-height: 1.5;
+}
+
+/* ============================
+   CIRCLE FIRST SHIFT TOOLTIP
+   One-time onboarding overlay
+   ============================ */
+.cfsf-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 24px;
+  pointer-events: none;
+  animation: cfsf-appear 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes cfsf-appear {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.cfsf-backdrop.cfsf-exiting {
+  animation: cfsf-disappear 0.4s ease-out forwards;
+}
+
+@keyframes cfsf-disappear {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(0.96) translateY(12px); }
+}
+
+.cfsf-card {
+  position: relative;
+  width: 320px;
+  background: rgba(8, 12, 26, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,0.04);
+  pointer-events: all;
+  animation: cfsf-slide-up 0.5s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes cfsf-slide-up {
+  from { opacity: 0; transform: translateY(32px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Decorative rings */
+.cfsf-rings {
+  position: absolute;
+  top: -48px;
+  right: -48px;
+  width: 160px;
+  height: 160px;
+  pointer-events: none;
+}
+
+.cfsf-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 245, 255, 0.12);
+  animation: cfsf-ring-spin 12s linear infinite;
+}
+
+.cfsf-ring-1 { animation-duration: 12s; scale: 0.6; border-color: rgba(255, 215, 0, 0.15); }
+.cfsf-ring-2 { animation-duration: 18s; animation-direction: reverse; scale: 0.8; border-color: rgba(0, 206, 209, 0.12); }
+.cfsf-ring-3 { animation-duration: 24s; border-color: rgba(0, 255, 127, 0.1); }
+
+@keyframes cfsf-ring-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.cfsf-content {
+  position: relative;
+  z-index: 1;
+  padding: 22px 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cfsf-headline {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.cfsf-subline {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.5;
+}
+
+.cfsf-circles-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cfsf-circle-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cfsf-circle-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: ds-blink 3s ease-in-out infinite;
+}
+
+.cfsf-circle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cfsf-circle-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.cfsf-circle-desc {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+}
+
+.cfsf-dismiss-btn {
+  margin-top: 4px;
+  padding: 10px 18px;
+  background: rgba(56, 178, 216, 0.1);
+  border: 1px solid rgba(56, 178, 216, 0.25);
+  border-radius: 12px;
+  color: var(--ds-cyan-500, #38B2D8);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+}
+
+.cfsf-dismiss-btn:hover {
+  background: rgba(56, 178, 216, 0.18);
+  border-color: rgba(56, 178, 216, 0.5);
+  transform: translateY(-1px);
+}
+
+.cfsf-dismiss-btn:active {
+  transform: translateY(0);
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘° â€” JOURNEY TIMELINE (Complete Screen)
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.journey-timeline-wrap {
+  margin: 28px 0;
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.journey-timeline-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 1.5px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.journey-timeline-track {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  overflow-x: auto;
+  padding: 10px 0 20px;
+}
+
+.journey-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  min-width: 60px;
+  transition: all 0.3s ease;
+}
+
+.journey-node-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--node-color, #fff);
+  color: #000;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 0 15px var(--node-color, #fff);
+  margin: 0 auto;
+}
+
+.journey-node-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+
+.journey-node-time {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.3);
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.journey-connector {
+  flex: 1;
+  min-width: 32px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 -4px 16px;
+  position: relative;
+}
+
+.journey-connector-time {
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: rgba(180, 165, 240, 0.5);
+  font-style: italic;
+}
+
+.journey-timeline-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  margin-top: 12px;
+  font-weight: 500;
+}
+
+.cognitive-callout-card {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cognitive-callout-card strong {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.96);
+  letter-spacing: 0.02em;
+}
+
+.cognitive-callout-card p {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.84);
+  line-height: 1.45;
+}
+
+.cognitive-callout-card .callout-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.cognitive-callout-card.truth-contract {
+  border-color: rgba(0, 255, 127, 0.35);
+}
+
+.cognitive-callout-card.moment-no-return {
+  border-color: rgba(255, 0, 229, 0.35);
+}
+
+.truth-reminder-banner {
+  position: absolute;
+  inset-inline-end: 18px;
+  bottom: 92px;
+  z-index: 24;
+  width: min(460px, calc(100vw - 36px));
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 255, 127, 0.35);
+  background: linear-gradient(150deg, rgba(10, 26, 20, 0.9), rgba(5, 10, 22, 0.92));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.truth-reminder-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.truth-reminder-copy strong {
+  font-size: 12px;
+  color: rgba(188, 255, 216, 0.96);
+}
+
+.truth-reminder-copy span {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.truth-reminder-copy em {
+  font-style: normal;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.66);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.truth-reminder-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+

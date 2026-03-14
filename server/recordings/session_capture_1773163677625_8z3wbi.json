@@ -1,0 +1,36 @@
+{
+  "sessionId": "session_capture_1773163677625_8z3wbi",
+  "mode": "live",
+  "startedAt": "2026-03-10T17:27:57.625Z",
+  "savedAt": "2026-03-10T17:27:57.724Z",
+  "reason": "manual_disconnect",
+  "profileId": "profile_demo_resume_utf8",
+  "resumeTopicId": null,
+  "topicThread": {
+    "id": "topic_thread_1773163677671_s00cd4",
+    "key": "work_home_spillover",
+    "title": "ضغط الشغل والبيت",
+    "summary": "الموضوع يدور حول ضغط الشغل والبيت. بدأ الضغط عند \"الشغل والبيت داخلين في بعض وموبايل الشغل مش سايبني\". وآخر نقطة ثبتها دواير كانت \"واضح إن حدود الشغل دخلت البيت.\". والخطوة العملية الأخيرة كانت \"أنا هقفل موبايل الشغل بعد الساعة تمانية\".",
+    "checkpoint": "آخر وضع وصفه المستخدم: \"أنا هقفل موبايل الشغل بعد الساعة تمانية\". آخر تثبيت من دواير: \"واضح إن حدود الشغل دخلت البيت.\". الخطوة العملية الأخيرة: \"أنا هقفل موبايل الشغل بعد الساعة تمانية\".",
+    "actionStep": "أنا هقفل موبايل الشغل بعد الساعة تمانية",
+    "updatedAt": "2026-03-10T17:27:57.671Z",
+    "createdAt": "2026-03-10T17:27:57.671Z",
+    "sessionCount": 1,
+    "lastSessionId": "session_capture_1773163677625_8z3wbi",
+    "keywords": [
+      "شغل",
+      "الشغل",
+      "بيت",
+      "البيت",
+      "home",
+      "work",
+      "job",
+      "office"
+    ],
+    "lastUserLine": "أنا هقفل موبايل الشغل بعد الساعة تمانية",
+    "lastDawayirLine": "واضح إن حدود الشغل دخلت البيت."
+  },
+  "audioFilename": "",
+  "transcriptFilename": "session_capture_1773163677625_8z3wbi.md",
+  "transcriptCount": 0
+}

@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import dotenv from 'dotenv';
@@ -12,6 +12,25 @@ import { fileURLToPath } from 'url';
 import { isValidReportFilename } from './report-filename.js';
 
 dotenv.config();
+
+// ── Startup Guard: GEMINI_API_KEY ────────────────────────────────────────────
+if (!process.env.GEMINI_API_KEY) {
+  console.error('\n\x1b[31m╔══════════════════════════════════════════════════════╗');
+  console.error('║         GEMINI_API_KEY غير موجود / Missing          ║');
+  console.error('╠══════════════════════════════════════════════════════╣');
+  console.error('║  1. أنشئ ملف .env في مجلد server/                  ║');
+  console.error('║     Create a .env file in the server/ directory     ║');
+  console.error('║                                                      ║');
+  console.error('║  2. أضف: GEMINI_API_KEY=your_key_here               ║');
+  console.error('║     Add:  GEMINI_API_KEY=your_key_here              ║');
+  console.error('║                                                      ║');
+  console.error('║  3. احصل على مفتاح مجاني من:                        ║');
+  console.error('║     Get a free key at: https://aistudio.google.com  ║');
+  console.error('╚══════════════════════════════════════════════════════╝\x1b[0m\n');
+  process.exit(1);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -550,6 +569,7 @@ const defaultDawayirTools = buildToolBundle(DEFAULT_DAWAYIR_TOOL_NAMES);
 const hybridDawayirTools = buildToolBundle(HYBRID_DAWAYIR_TOOL_NAMES);
 
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
+const DEMO_TOKEN = process.env.DEMO_TOKEN || '';
 
 const systemInstructionStandard = `أنت "دواير" (Dawayir) — أول نظام تشغيل إدراكي (Cognitive OS).
 أنت لست معالجاً نفسياً، بل أنت "حكيم" (Sage) و"ساحر" (Magician) لعقل المستخدم.
@@ -612,10 +632,10 @@ const systemInstructionStandard = `أنت "دواير" (Dawayir) — أول نظ
   افعل: اسأل عن الدور الشخصي.
   مثال: "الصورة واضحة — بس ايه دورك في إن الأمور تبقى كده؟"
 
-[حالة 4] التلتة متقاربة ومرتفعة (كل radius>55) — بُعد الإمكان:
-  المعنى: وضوح حقيقي يقترب — الثلاثة في حوار معاً.
-  افعل: سؤال الإمكان (البُعد الرابع الخفي).
-  مثال: "لو حصل تغيير واحد صغير دلوقتي — إيه ده يكون؟"
+[حالة 4] التلتة متقاربة ومرتفعة (كل radius>55) — لحظة الدمج (Integration Moment):
+  المعنى: وضوح حقيقي واقتراب للوعي مع الواقع والعلم. هذه لحظة فلسفية عميقة.
+  افعل: قدم تأملاً فلسفياً أو استعارة عميقة تربط بين رؤية المستخدم، وحقيقة الموقف، والحكمة الإنسانية. لا تسأل سؤالاً هنا، بل اعكس الحكمة.
+  مثال: "زي الشجرة اللي جذورها في الأرض وفروعها في السماء.. إنت دلوقتي شايف الصورة كاملة، وعيك متصل بتجربتك."
 
 [حالة 5] التلتة صغيرة (كل radius<42) — إنكار أو تجنب:
   المعنى: المستخدم مش قادر يشوف من أي زاوية.
@@ -1317,6 +1337,9 @@ wss.on('connection', (ws, req) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const isFirstSession = url.searchParams.get('firstSession') === 'true';
     const isHybridSessionRequested = url.searchParams.get('mode') === 'hybrid';
+    // Per-connection demo authorization (independent of global DEMO_MODE flag)
+    const clientDemoToken = url.searchParams.get('demoToken') || '';
+    const clientIsAuthorizedForDemo = DEMO_TOKEN.length > 0 && clientDemoToken === DEMO_TOKEN;
 
     const authToken = process.env.DAWAYIR_AUTH_TOKEN;
     if (authToken) {
@@ -2202,6 +2225,17 @@ const buildInitialHybridState = () => ({
             return;
         }
 
+        // ── SERVER-SIDE DEMO AUTHORIZATION ───────────────────────────
+        // Allow hybrid only for connections that presented a valid DEMO_TOKEN.
+        // This lets the demo button work while keeping live sessions clean.
+        if (!clientIsAuthorizedForDemo) {
+            logInfo('[Hybrid] BLOCKED: hybrid start refused — no valid demoToken');
+            sendHybridStatus('failed', {
+                message: 'Hybrid demo requires a valid demo token.',
+            });
+            return;
+        }
+
         if (!session) {
             sendHybridStatus('failed', {
                 message: 'Primary Dawayir session is not ready yet.',
@@ -2551,27 +2585,31 @@ ${replayComment}
         connectingSession = true;
 
         activeLiveModel = pickLiveModel(reconnectAttempt);
-        let currentSystemInstruction = systemInstruction;
+        // Use hybrid lean mode only for connections that presented a valid DEMO_TOKEN
+        const useHybridLeanMode = clientIsAuthorizedForDemo && (hybridState.active || isHybridSessionRequested);
 
-        if (isFirstSession) {
+        let currentSystemInstruction = {
+            parts: [{ text: useHybridLeanMode ? systemInstructionDemo : systemInstructionStandard }]
+        };
+
+        if (isFirstSession && !useHybridLeanMode) {
             logInfo('First session detected via query parameter. Injecting welcome prompt.');
             const welcomePrompt = `\n\n[GUIDANCE OVERRIDE - FIRST SESSION]
 المستخدم يفتح التطبيق لأول مرة. كُن "المرآة الإدراكية". رحب به بلطف شديد (أقل من 15 كلمة).
 قل شيئاً مثل: "أهلاً بيك في دواير... أنا هنا عشان أسمعك، تحب تبدأ بإيه؟"`;
             currentSystemInstruction = {
-                parts: [{ text: systemInstruction.parts[0].text + welcomePrompt }]
+                parts: [{ text: currentSystemInstruction.parts[0].text + welcomePrompt }]
             };
         }
 
         try {
-            const useHybridLeanMode = hybridState.active || isHybridSessionRequested;
             const useRecoveryLeanMode = hybridState.active && reconnectAttempt > 0;
             const selectedDawayirTools = useHybridLeanMode ? hybridDawayirTools : defaultDawayirTools;
             const selectedMaxOutputTokens = useRecoveryLeanMode
                 ? HYBRID_DAWAYIR_RECOVERY_MAX_OUTPUT_TOKENS
                 : (useHybridLeanMode
                     ? HYBRID_DAWAYIR_MAX_OUTPUT_TOKENS
-                    : (DEMO_MODE ? 90 : 350));
+                    : (clientIsAuthorizedForDemo ? 90 : 350));
             logInfo(
                 `[LiveConfig] hybrid=${useHybridLeanMode} recovery=${useRecoveryLeanMode} tools=${selectedDawayirTools[0]?.functionDeclarations?.map((tool) => tool.name).join(',') || 'none'} maxOutputTokens=${selectedMaxOutputTokens}`
             );

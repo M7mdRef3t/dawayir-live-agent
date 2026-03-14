@@ -1,0 +1,876 @@
+/* Welcome screen mobile */
+@media (max-width: 480px) {
+
+  .welcome-screen,
+  .complete-screen {
+    padding: 24px;
+  }
+
+  .lang-toggle-container {
+    top: calc(env(safe-area-inset-top, 0px) + 16px);
+    inset-inline-end: 24px;
+    gap: 8px;
+    padding: 5px;
+  }
+
+  .lang-toggle-container .icon-btn {
+    padding: 7px 14px;
+    min-width: 52px;
+  }
+
+  .welcome-sacred-ring {
+    top: 46px;
+    width: min(82vw, 320px);
+  }
+
+  .welcome-logo {
+    width: 88px;
+    height: 88px;
+  }
+
+  .welcome-screen .brand-name-large {
+    font-size: 48px;
+    letter-spacing: -1px;
+  }
+
+  [lang="ar"] .welcome-screen .brand-name-large {
+    font-size: 60px;
+  }
+
+  .welcome-screen .brand-subtitle {
+    font-size: 15px;
+  }
+
+  .welcome-hook {
+    font-size: 13px;
+    max-width: 290px;
+  }
+
+  .welcome-trinity {
+    width: min(78vw, 236px);
+    height: 78px;
+    margin: 20px 0 6px;
+  }
+
+  .wt-circle {
+    width: 60px;
+    height: 60px;
+  }
+
+  .wt-knowledge {
+    width: 72px;
+    height: 72px;
+  }
+
+  .welcome-cta {
+    margin-top: 24px;
+  }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .lang-toggle-container {
+    top: calc(env(safe-area-inset-top, 0px) + 14px);
+  }
+
+  .welcome-sacred-ring {
+    top: 28px;
+    width: min(34vw, 250px);
+  }
+
+  .welcome-logo {
+    width: 72px;
+    height: 72px;
+    margin-bottom: 8px;
+  }
+
+  .welcome-screen .brand-name-large {
+    font-size: 40px;
+  }
+
+  [lang="ar"] .welcome-screen .brand-name-large {
+    font-size: 52px;
+  }
+
+  .welcome-cta {
+    margin-top: 16px;
+  }
+}
+
+/* AI State Bar â€” duplicate overrides removed, handled by base styles above */
+/* Legacy: idle static bars */
+.ai-state-bar.idle .wave span {
+  animation: none !important;
+  height: 3px !important;
+  opacity: 0.3;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* AI Speaking â€” ocean blue cosmic glow */
+.ai-state-bar.speaking {
+  border-color: rgba(56, 178, 216, 0.3) !important;
+  color: rgba(210, 235, 255, 0.95) !important;
+  animation: ai-speaking-pulse 2.5s ease-in-out infinite;
+}
+
+.ai-state-bar.speaking .wave span {
+  background: var(--ds-circle-awareness);
+  box-shadow: 0 0 10px var(--ds-circle-awareness);
+}
+
+@keyframes ai-speaking-pulse {
+  0%, 100% { box-shadow: 0 4px 24px rgba(56, 178, 216, 0.08), inset 0 1px 0 rgba(56, 178, 216, 0.08); }
+  50% { box-shadow: 0 4px 32px rgba(56, 178, 216, 0.2), inset 0 1px 0 rgba(56, 178, 216, 0.14); }
+}
+
+
+@keyframes ds-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================
+   ACHIEVEMENT BAR & TOASTS
+   ============================ */
+
+/* --- Toast notifications (top center) --- */
+.achievement-toast-container {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  z-index: 300;
+  pointer-events: none;
+}
+
+.achievement-toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  border-radius: 16px;
+  background: rgba(8, 8, 18, 0.85);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(56, 178, 216, 0.3);
+  box-shadow: 0 0 24px rgba(56, 178, 216, 0.12), 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: toastIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+    toastOut 0.4s cubic-bezier(0.7, 0, 0.84, 0) 2.5s forwards;
+  white-space: nowrap;
+}
+
+.achievement-toast-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.achievement-toast-text {
+  font-size: 15px;
+  font-weight: 500;
+  color: #f0f4ff;
+  letter-spacing: 0.3px;
+}
+
+.achievement-toast-check {
+  font-size: 16px;
+  font-weight: 700;
+  color: #38B2D8;
+  flex-shrink: 0;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+  }
+}
+
+/* --- Bottom dot bar --- */
+.achievement-bar {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 100px;
+  background: rgba(8, 8, 18, 0.55);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  z-index: 60;
+  animation: achievementBarIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.achievement-dots-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.achievement-counter {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(56, 178, 216, 0.7);
+  padding-inline-end: 4px;
+  border-inline-end: 1px solid rgba(255, 255, 255, 0.1);
+  margin-inline-end: 2px;
+  letter-spacing: 0.5px;
+  pointer-events: auto;
+}
+
+@keyframes achievementBarIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.achievement-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto;
+  cursor: default;
+}
+
+.achievement-icon {
+  font-size: 13px;
+  filter: grayscale(1) brightness(0.35);
+  transition: filter 0.5s ease;
+}
+
+.achievement-dot.unlocked {
+  background: rgba(56, 178, 216, 0.08);
+  border-color: rgba(56, 178, 216, 0.25);
+  box-shadow: 0 0 12px rgba(56, 178, 216, 0.15);
+}
+
+.achievement-dot.unlocked .achievement-icon {
+  filter: grayscale(0) brightness(1);
+}
+
+@media (max-width: 480px) {
+  .achievement-bar {
+    gap: 6px;
+    padding: 6px 12px;
+  }
+
+  .achievement-dot {
+    width: 24px;
+    height: 24px;
+  }
+
+  .achievement-icon {
+    font-size: 11px;
+  }
+
+  .achievement-toast {
+    padding: 10px 16px;
+    border-radius: 12px;
+  }
+
+  .achievement-toast-text {
+    font-size: 13px;
+  }
+}
+
+/* ---- Runtime diagnostics and accessibility overrides ---- */
+.debug-status-line {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(5, 10, 24, 0.55);
+  color: rgba(220, 232, 255, 0.75);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.3;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.auto-demo-status-line {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 245, 255, 0.2);
+  background: rgba(2, 18, 28, 0.55);
+  color: rgba(176, 237, 255, 0.9);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.auto-demo-status-line.running {
+  border-color: rgba(0, 255, 148, 0.35);
+  color: rgba(164, 255, 212, 0.95);
+}
+
+.why-now-line {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(125, 224, 255, 0.18);
+  background: linear-gradient(135deg, rgba(6, 16, 29, 0.82), rgba(7, 31, 44, 0.72));
+  color: rgba(221, 241, 255, 0.92);
+  font-size: 11px;
+  line-height: 1.45;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+}
+
+.why-now-line.direct {
+  border-color: rgba(0, 245, 255, 0.28);
+  color: rgba(185, 249, 255, 0.96);
+}
+
+.why-now-line.bio {
+  border-color: rgba(255, 174, 0, 0.28);
+  color: rgba(255, 226, 160, 0.96);
+}
+
+.why-now-line.ground {
+  border-color: rgba(255, 122, 122, 0.3);
+  color: rgba(255, 210, 210, 0.95);
+}
+
+.why-now-line.balance {
+  border-color: rgba(80, 255, 199, 0.28);
+  color: rgba(190, 255, 228, 0.95);
+}
+
+.why-now-line.clarity {
+  border-color: rgba(255, 0, 229, 0.28);
+  color: rgba(255, 203, 247, 0.95);
+}
+
+.why-now-line.focus {
+  border-color: rgba(125, 155, 255, 0.28);
+  color: rgba(214, 224, 255, 0.96);
+}
+
+/* audio-diagnostic-badge stays at bottom-left as originally defined */
+
+@media (max-width: 768px) {
+  .audio-diagnostic-badge {
+    top: 16px !important;
+    right: 16px !important;
+    left: 16px !important;
+    bottom: auto !important;
+  }
+
+  .debug-status-line {
+    white-space: normal;
+  }
+}
+
+html.prefers-high-contrast {
+  --panel-border: rgba(255, 255, 255, 0.78);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.92);
+}
+
+html.prefers-high-contrast .overlay,
+html.prefers-high-contrast .transcript-text,
+html.prefers-high-contrast .audio-diagnostic-badge,
+html.prefers-high-contrast .debug-status-line,
+html.prefers-high-contrast .why-now-line,
+html.prefers-high-contrast .status-badge {
+  border-color: rgba(255, 255, 255, 0.85) !important;
+  box-shadow: none !important;
+}
+
+html.prefers-high-contrast .ds-btn {
+  border-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+html.prefers-reduced-motion *,
+html.prefers-reduced-motion *::before,
+html.prefers-reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mic-level-dot,
+  .voice-tone-dot,
+  .cognitive-fingerprint-svg,
+  .cognitive-coach-card::before,
+  .sacred-orb,
+  .sacred-pause-main,
+  .weather-icon,
+  .journey-timeline-wrap,
+  .welcome-nebula,
+  .welcome-orb,
+  .welcome-particle,
+  .welcome-sacred-ring::before,
+  .welcome-ring-inner,
+  .wt-circle,
+  .wt-glow,
+  .welcome-cta-ring,
+  .welcome-logo,
+  .breathing-guide-overlay,
+  .brand-mark,
+  .loading-text {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+html.prefers-reduced-motion .mic-level-dot,
+html.prefers-reduced-motion .voice-tone-dot,
+html.prefers-reduced-motion .cognitive-fingerprint-svg,
+html.prefers-reduced-motion .cognitive-coach-card::before,
+html.prefers-reduced-motion .sacred-orb,
+html.prefers-reduced-motion .sacred-pause-main,
+html.prefers-reduced-motion .weather-icon,
+html.prefers-reduced-motion .journey-timeline-wrap,
+html.prefers-reduced-motion .welcome-nebula,
+html.prefers-reduced-motion .welcome-orb,
+html.prefers-reduced-motion .welcome-particle,
+html.prefers-reduced-motion .welcome-sacred-ring::before,
+html.prefers-reduced-motion .welcome-ring-inner,
+html.prefers-reduced-motion .wt-circle,
+html.prefers-reduced-motion .wt-glow,
+html.prefers-reduced-motion .welcome-cta-ring,
+html.prefers-reduced-motion .welcome-logo,
+html.prefers-reduced-motion .breathing-guide-overlay,
+html.prefers-reduced-motion .brand-mark,
+html.prefers-reduced-motion .loading-text {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘  â€” VOICE TONE BADGE
+   Real-time voice tone indicator next to the waveform.
+   Colors shift: cyan=calm, green=focused, red=tense, gold=excited
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.voice-tone-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 30px;
+  font-size: 12px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(10px);
+  transition: all 0.5s ease;
+  margin-top: 6px;
+  cursor: default;
+  user-select: none;
+}
+
+.voice-tone-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: tone-pulse 1.8s ease-in-out infinite;
+}
+
+.voice-tone-label {
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+}
+
+@keyframes tone-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.4);
+    opacity: 0.7;
+  }
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘£ â€” COGNITIVE TRANSITION TOAST
+   Celebratory message when dominant circle changes
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.cognitive-transition-toast {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  background: rgba(10, 10, 30, 0.92);
+  border: 1px solid rgba(255, 0, 229, 0.4);
+  border-radius: 16px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-family: 'Outfit', sans-serif;
+  color: #fff;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 0 32px rgba(255, 0, 229, 0.25), 0 8px 32px rgba(0, 0, 0, 0.4);
+  text-align: center;
+  max-width: 420px;
+  animation: toast-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    toast-out 0.5s ease 3.5s forwards;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px) scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px) scale(0.95);
+  }
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘¡ â€” COGNITIVE FINGERPRINT
+   Unique SVG pattern generated per session
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.cognitive-fingerprint-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 0, 229, 0.15);
+  transition: box-shadow 0.3s ease;
+}
+
+.cognitive-fingerprint-wrapper:hover {
+  box-shadow: 0 0 24px rgba(255, 0, 229, 0.2);
+}
+
+.cognitive-fingerprint-svg {
+  animation: fingerprint-rotate 60s linear infinite;
+}
+
+@keyframes fingerprint-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fingerprint-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘¢ â€” CROSS-SESSION GROWTH ARC
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.growth-arc-panel {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 255, 65, 0.15);
+  border-radius: 20px;
+  padding: 20px;
+  margin: 16px 0;
+  backdrop-filter: blur(12px);
+}
+
+.growth-arc-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  margin: 12px 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  font-family: 'Outfit', sans-serif;
+}
+
+.growth-arc-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.growth-arc-icon {
+  font-size: 22px;
+}
+
+.growth-arc-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+}
+
+.growth-arc-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 2px 0 0;
+  font-family: 'Outfit', sans-serif;
+}
+
+.growth-sparkline-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.growth-sparkline {
+  border-radius: 8px;
+  overflow: visible;
+}
+
+.sparkline-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.04em;
+}
+
+.growth-deltas {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.growth-delta-card {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gdelta-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Outfit', sans-serif;
+}
+
+.gdelta-val {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+}
+
+.growth-insight {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: 'Outfit', sans-serif;
+  line-height: 1.5;
+  margin: 0;
+  padding: 10px;
+  background: rgba(0, 255, 65, 0.04);
+  border-radius: 10px;
+  border-left: 2px solid rgba(0, 255, 65, 0.3);
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘¦ â€” COGNITIVE COACH CARD
+   One behavioral suggestion after each session
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.cognitive-coach-card {
+  background: linear-gradient(135deg, rgba(0, 245, 255, 0.05), rgba(0, 255, 65, 0.05));
+  border: 1px solid rgba(0, 245, 255, 0.2);
+  border-radius: 20px;
+  padding: 20px 24px;
+  margin: 16px 0;
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+}
+
+.cognitive-coach-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #38B2D8, #2ECC71, #9B59B6);
+  background-size: 200% 100%;
+  animation: coach-shimmer 3s linear infinite;
+}
+
+@keyframes coach-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.coach-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.coach-icon {
+  font-size: 24px;
+}
+
+.coach-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+}
+
+.coach-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 3px 0 0;
+  font-family: 'Outfit', sans-serif;
+}
+
+.coach-insight {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: 'Outfit', sans-serif;
+  line-height: 1.7;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  border-right: 3px solid rgba(0, 245, 255, 0.4);
+  quotes: none;
+  font-style: normal;
+}
+
+[dir="rtl"] .coach-insight {
+  border-right: none;
+  border-left: 3px solid rgba(0, 245, 255, 0.4);
+}
+
+.coach-footer {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.coach-tag {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(0, 245, 255, 0.08);
+  border: 1px solid rgba(0, 245, 255, 0.2);
+  color: rgba(0, 245, 255, 0.8);
+  font-family: 'Outfit', sans-serif;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   FEATURE â‘¤ â€” SHARE SESSION BUTTON
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.share-session-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: rgba(255, 0, 229, 0.08);
+  border: 1px solid rgba(255, 0, 229, 0.25);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(8px);
+}
+
+.share-session-btn:hover {
+  background: rgba(255, 0, 229, 0.15);
+  border-color: rgba(255, 0, 229, 0.5);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(255, 0, 229, 0.2);
+}
+

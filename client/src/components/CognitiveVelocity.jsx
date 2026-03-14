@@ -7,9 +7,9 @@ import React, { useEffect, useRef, useState } from 'react';
 
 const VELOCITY_STATES = {
   accelerating: { icon: '⚡', ar: 'الوضوح بيزيد بسرعة', en: 'Accelerating to clarity', color: '#FFC800' },
-  moving: { icon: '➡️', ar: 'ماشي لقدّام', en: 'Moving forward', color: '#00FF41' },
-  stable: { icon: '🌀', ar: 'بتستوعب بهدوء', en: 'Deep processing', color: '#00F5FF' },
-  retreating: { icon: '↩️', ar: 'رجوع بسيط وده طبيعي', en: 'One step back — normal', color: '#FF00E5' },
+  moving: { icon: '➡️', ar: 'ماشي لقدّام', en: 'Moving forward', color: '#2ECC71' },
+  stable: { icon: '🌀', ar: 'بتستوعب بهدوء', en: 'Deep processing', color: '#38B2D8' },
+  retreating: { icon: '↩️', ar: 'رجوع بسيط وده طبيعي', en: 'One step back — normal', color: '#9B59B6' },
 };
 
 function CognitiveVelocity({ dominantNodeId = 1, dominantRadius = 80, isConnected = false, lang = 'ar' }) {

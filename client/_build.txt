@@ -1,0 +1,43 @@
+﻿[36mvite v7.3.1 [32mbuilding client environment for development...[36m[39m
+transforming...
+[32m✓[39m 3 modules transformed.
+node.exe : [31m✗[39m Build failed in 416ms
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\moham\AppData\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([31m✗[39m Build failed in 416ms 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[31merror during build:
+[31m[vite:esbuild] Transform failed with 1 error:
+C:/Users/moham/Downloads/dawayir-live-agent/client/src/App.jsx:344:37: ERROR: 
+Expected ":" but found "�"[31m
+file: 
+[36mC:/Users/moham/Downloads/dawayir-live-agent/client/src/App.jsx:344:37[31m
+[33m
+[33mExpected ":" but found "�"[33m
+342 |          tone: 'direct',
+343 |          text: lang === 'ar'
+344 |            ? `ا� ت ا���` �ررت تح��� ${circleName} - د�! ��ع�` ب� 
+فسْ.`
+    |                                       ^
+345 |            : `You chose to shift ${circleName} - that's self-awareness 
+in action.`,
+346 |        };
+[31m
+    at failureErrorWithLog (C:\Users\moham\Downloads\dawayir-live-agent\client\
+node_modules\esbuild\lib\main.js:1467:15)
+    at C:\Users\moham\Downloads\dawayir-live-agent\client\node_modules\esbuild\
+lib\main.js:736:50
+    at responseCallbacks.<computed> (C:\Users\moham\Downloads\dawayir-live-agen
+t\client\node_modules\esbuild\lib\main.js:603:9)
+    at handleIncomingPacket (C:\Users\moham\Downloads\dawayir-live-agent\client
+\node_modules\esbuild\lib\main.js:658:12)
+    at Socket.readFromStdout (C:\Users\moham\Downloads\dawayir-live-agent\clien
+t\node_modules\esbuild\lib\main.js:581:7)
+    at Socket.emit (node:events:519:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)[39m

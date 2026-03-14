@@ -182,12 +182,12 @@ function CognitiveFingerprint({ reportContent = '', sessionId = '', lang = 'ar',
         transform-origin: center;
       }
       @keyframes cfp-breathe {
-        0%, 100% { transform: scale(0.92); filter: drop-shadow(0 0 10px rgba(0,245,255,0.2)); }
-        50% { transform: scale(1.08); filter: drop-shadow(0 0 35px rgba(0,245,255,0.9)); }
+        0%, 100% { transform: scale(0.92); filter: drop-shadow(0 0 10px rgba(56,178,216,0.2)); }
+        50% { transform: scale(1.08); filter: drop-shadow(0 0 35px rgba(56,178,216,0.9)); }
       }
       @keyframes cfp-pulse {
-        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 12px rgba(255,0,229,0.3)); }
-        50% { transform: scale(1.02); filter: drop-shadow(0 0 18px rgba(255,0,229,0.5)); }
+        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 12px rgba(155,89,182,0.3)); }
+        50% { transform: scale(1.02); filter: drop-shadow(0 0 18px rgba(155,89,182,0.5)); }
       }
       @keyframes cfp-rotate {
         0% { transform: rotate(0deg); }
@@ -199,11 +199,11 @@ function CognitiveFingerprint({ reportContent = '', sessionId = '', lang = 'ar',
       }
       @keyframes cfp-shatter {
         0% { transform: scale(1) rotate(0deg); opacity: 1; filter: drop-shadow(0 0 12px rgba(255,255,255,0.8)) blur(0px); }
-        15% { transform: scale(1.3) rotate(15deg); opacity: 0.9; filter: drop-shadow(0 0 40px rgba(0,245,255,1)) blur(2px); }
+        15% { transform: scale(1.3) rotate(15deg); opacity: 0.9; filter: drop-shadow(0 0 40px rgba(56,178,216,1)) blur(2px); }
         30% { transform: scale(0.1) rotate(-45deg); opacity: 0; filter: drop-shadow(0 0 0 rgba(0,0,0,0)) blur(10px); }
         55% { transform: scale(0.1) rotate(0deg); opacity: 0; }
-        75% { transform: scale(1.15) rotate(5deg); opacity: 1; filter: drop-shadow(0 0 30px rgba(255,0,229,0.9)) blur(1px); }
-        100% { transform: scale(1) rotate(0deg); opacity: 1; filter: drop-shadow(0 0 12px rgba(255,0,229,0.3)) blur(0px); }
+        75% { transform: scale(1.15) rotate(5deg); opacity: 1; filter: drop-shadow(0 0 30px rgba(155,89,182,0.9)) blur(1px); }
+        100% { transform: scale(1) rotate(0deg); opacity: 1; filter: drop-shadow(0 0 12px rgba(155,89,182,0.3)) blur(0px); }
       }
     `;
   };
@@ -224,22 +224,22 @@ function CognitiveFingerprint({ reportContent = '', sessionId = '', lang = 'ar',
       >
         <defs>
           <radialGradient id={gradId} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#00F5FF" stopOpacity="0.1" />
-            <stop offset="100%" stopColor="#FF00E5" stopOpacity="0.05" />
+            <stop offset="0%" stopColor="#38B2D8" stopOpacity="0.1" />
+            <stop offset="100%" stopColor="#9B59B6" stopOpacity="0.05" />
           </radialGradient>
         </defs>
 
         <circle cx={cx} cy={cy} r={maxR + 10} fill={`url(#${gradId})`} />
 
         <g className="cfp-truth">
-          <circle cx={cx} cy={cy} r={maxR * (0.6 + trRatio * 0.35)} fill="none" stroke="#FF00E5" strokeWidth="1.5" strokeOpacity="0.5" strokeDasharray={`${4 + trRatio * 6} ${3 + (1 - trRatio) * 5}`} />
-          <circle cx={cx} cy={cy} r={maxR * (0.4 + trRatio * 0.25)} fill="none" stroke="#FF00E5" strokeWidth="0.8" strokeOpacity="0.3" strokeDasharray="2 4" />
+          <circle cx={cx} cy={cy} r={maxR * (0.6 + trRatio * 0.35)} fill="none" stroke="#9B59B6" strokeWidth="1.5" strokeOpacity="0.5" strokeDasharray={`${4 + trRatio * 6} ${3 + (1 - trRatio) * 5}`} />
+          <circle cx={cx} cy={cy} r={maxR * (0.4 + trRatio * 0.25)} fill="none" stroke="#9B59B6" strokeWidth="0.8" strokeOpacity="0.3" strokeDasharray="2 4" />
         </g>
 
         <path
           d={awarenessPath}
           fill="none"
-          stroke={voiceTone === 'tense' ? '#FF5032' : voiceTone === 'excited' ? '#FFC800' : '#00F5FF'}
+          stroke={voiceTone === 'tense' ? '#FF5032' : voiceTone === 'excited' ? '#FFC800' : '#38B2D8'}
           strokeWidth={voiceTone === 'tense' ? '1.8' : '1.5'}
           strokeOpacity="0.7"
           strokeLinecap={voiceTone === 'tense' ? 'miter' : 'round'}
@@ -247,10 +247,10 @@ function CognitiveFingerprint({ reportContent = '', sessionId = '', lang = 'ar',
           style={{ transition: 'stroke 1s ease, stroke-width 1s ease, d 1s ease' }}
         />
 
-        <path className="cfp-knowledge" d={knowledgePath} fill="none" stroke="#00FF41" strokeWidth="1.2" strokeOpacity="0.65" strokeLinecap="round" />
+        <path className="cfp-knowledge" d={knowledgePath} fill="none" stroke="#2ECC71" strokeWidth="1.2" strokeOpacity="0.65" strokeLinecap="round" />
 
-        <circle cx={cx} cy={cy} r={6} fill="#FF00E5" opacity="0.8" />
-        <circle cx={cx} cy={cy} r={3} fill="#00F5FF" opacity="0.9" />
+        <circle cx={cx} cy={cy} r={6} fill="#9B59B6" opacity="0.8" />
+        <circle cx={cx} cy={cy} r={3} fill="#38B2D8" opacity="0.9" />
         <circle cx={cx} cy={cy} r={1.5} fill="#ffffff" opacity="1" />
       </svg>
 

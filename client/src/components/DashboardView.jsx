@@ -7,6 +7,7 @@ import SessionReplayPlayer from './SessionReplayPlayer';
 import SessionHighlightReel from './SessionHighlightReel';
 import SessionSignatureCard from './SessionSignatureCard';
 import JudgeModePanel from './JudgeModePanel';
+import SandMandala from './SandMandala';
 import '../dashboard-styles.css';
 
 // ══════════════════════════════════════════════════
@@ -35,7 +36,7 @@ function ProgressTimeline({ lang }) {
     );
   }
 
-  const circleColors = { 1: '#00F5FF', 2: '#00FF41', 3: '#FF00E5' };
+  const circleColors = { 1: '#38B2D8', 2: '#2ECC71', 3: '#9B59B6' };
   const circleNames = lang === 'ar'
     ? { 1: 'أنت', 2: 'العلم', 3: 'الواقع' }
     : { 1: 'You', 2: 'Science', 3: 'Reality' };
@@ -715,12 +716,11 @@ function DashboardView({
           ) : (
             <div className="cognitive-museum-container">
               <div className="museum-header">
-                <h3>{lang === 'ar' ? 'المعرض الفني لوعيك' : 'The Art Gallery of Your Consciousness'}</h3>
-                <p>{lang === 'ar' ? 'هنا تُحفظ ذكرياتك ومشاعرك כمنحوتات إدراكية حية. كل بصمة هي أنت في لحظة زمنية مختلفة.' : 'Here your memories and feelings are preserved as living cognitive sculptures. Each footprint is you at a different moment in time.'}</p>
+                <h3>{lang === 'ar' ? 'المتحف الإدراكي' : 'The Cognitive Museum'}</h3>
+                <p>{lang === 'ar' ? 'هنا تُحفظ ذكرياتك ومشاعرك كمنحوتات إدراكية ثلاثية الأبعاد. كل منصة تحمل نسخة منك في لحظة زمنية مختلفة، محفوظة في الفضاء الرقمي.' : 'Here your memories and feelings are preserved as 3D cognitive sculptures. Each pedestal holds a version of you from a different moment in time, suspended in digital space.'}</p>
               </div>
-              <div className="reports-grid cognitive-museum-grid">
+              <div className="cognitive-museum-grid">
                 {filteredReports.map((report, idx) => {
-                  // Use name as seed, but maybe add pseudo-random voiceTone for art variations
                   const mockTones = ['calm', 'focused', 'tense', 'excited'];
                   const seedNum = report.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
                   const tone = mockTones[seedNum % mockTones.length];
@@ -728,40 +728,55 @@ function DashboardView({
                   return (
                     <div
                       key={report.name}
-                      className={`ds-card ds-card--glass ds-card--interactive ${scatteredReports.has(report.name) ? 'sand-mandala-effect' : ''}`}
+                      className={`museum-artifact ${scatteredReports.has(report.name) ? 'sand-mandala-effect' : ''}`}
                       onClick={() => !scatteredReports.has(report.name) && viewReport(report.name)}
                       style={{ animationDelay: `${idx * 0.15}s` }}
                     >
-                      <div className="artifact-pedestal">
-                        <div className="artifact-glow"></div>
-                        <div className="artifact-canvas">
-                          <CognitiveFingerprint
-                            sessionId={report.name}
-                            reportContent={report.name}
-                            lang={lang}
-                            size={120}
-                            voiceTone={tone}
-                            liveState="static"
-                          />
+                      <SandMandala
+                        elementId={`artifact-content-${report.name}`}
+                        isActive={scatteredReports.has(report.name)}
+                      />
+                      <div id={`artifact-content-${report.name}`} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div className="artifact-pedestal">
+                          <div className="artifact-glow"></div>
+                          <div className="artifact-canvas" style={{ transform: 'translateZ(40px)' }}>
+                            <CognitiveFingerprint
+                              sessionId={report.name}
+                              reportContent={report.name}
+                              lang={lang}
+                              size={140}
+                              voiceTone={tone}
+                              liveState="static"
+                            />
+                          </div>
+                        </div>
+                        <div className="artifact-plaque" style={{ transform: 'translateZ(20px)', textAlign: 'center', zIndex: 10 }}>
+                          <div className="report-name" style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '8px' }}>
+                            {report.name.replace('.md', '').replace('session_report_', lang === 'ar' ? 'طية ادراكية #' : 'Cognitive Fold #')}
+                          </div>
+                          <div className="report-date" style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '20px', letterSpacing: '1px' }}>
+                            {new Date(report.updated).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
+                          <div className="museum-explore-btn" style={{ 
+                            padding: '8px 24px', background: 'var(--ds-bg-panel)', border: '1px solid var(--ds-border)', 
+                            borderRadius: '30px', fontSize: '12px', color: 'var(--ds-cyan-400)', textTransform: 'uppercase', letterSpacing: '2px',
+                            transition: 'all 0.3s ease', cursor: 'pointer'
+                          }}>
+                            {lang === 'ar' ? 'تأمل الطية ✦' : 'Focus Artifact ✦'}
+                          </div>
                         </div>
                       </div>
-                      <div className="artifact-plaque">
-                        <div className="report-name">
-                          {report.name.replace('.md', '').replace('session_report_', lang === 'ar' ? 'طية ادراكية #' : 'Cognitive Fold #')}
-                        </div>
-                        <div className="report-date">
-                          {new Date(report.updated).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </div>
-                        <div className="museum-explore-btn">
-                          {lang === 'ar' ? 'تأمل الطية ✦' : 'Contemplate Fold ✦'}
-                        </div>
-                        <div
-                          className="scatter-btn"
-                          onClick={(e) => handleScatterSand(e, report.name)}
-                          title={lang === 'ar' ? 'تدمير الطية ونثر الرمال' : 'Scatter the fold like sand'}
-                        >
-                          {lang === 'ar' ? 'انثر الرمال 💨' : 'Scatter Sand 💨'}
-                        </div>
+                      <div
+                        className="scatter-btn"
+                        onClick={(e) => handleScatterSand(e, report.name)}
+                        title={lang === 'ar' ? 'انثر الرمال' : 'Scatter Sand'}
+                        style={{
+                           position: 'absolute', top: '15px', right: '15px', background: 'transparent',
+                           border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5,
+                           transition: 'all 0.3s', zIndex: 20
+                        }}
+                      >
+                       💨
                       </div>
                     </div>
                   );

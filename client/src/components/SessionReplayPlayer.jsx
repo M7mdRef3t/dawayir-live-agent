@@ -44,14 +44,14 @@ const drawExportFrame = ({ ctx, width, height, step, stepIndex, totalSteps, lang
   ctx.fillRect(0, 0, width, height);
 
   const cyanAura = ctx.createRadialGradient(width * 0.18, height * 0.22, 0, width * 0.18, height * 0.22, width * 0.38);
-  cyanAura.addColorStop(0, 'rgba(0,245,255,0.14)');
-  cyanAura.addColorStop(1, 'rgba(0,245,255,0)');
+  cyanAura.addColorStop(0, 'rgba(56,178,216,0.14)');
+  cyanAura.addColorStop(1, 'rgba(56,178,216,0)');
   ctx.fillStyle = cyanAura;
   ctx.fillRect(0, 0, width, height);
 
   const pinkAura = ctx.createRadialGradient(width * 0.82, height * 0.2, 0, width * 0.82, height * 0.2, width * 0.32);
-  pinkAura.addColorStop(0, 'rgba(255,0,229,0.12)');
-  pinkAura.addColorStop(1, 'rgba(255,0,229,0)');
+  pinkAura.addColorStop(0, 'rgba(155,89,182,0.12)');
+  pinkAura.addColorStop(1, 'rgba(155,89,182,0)');
   ctx.fillStyle = pinkAura;
   ctx.fillRect(0, 0, width, height);
 
@@ -69,7 +69,7 @@ const drawExportFrame = ({ ctx, width, height, step, stepIndex, totalSteps, lang
       x: positions[id].x,
       y: positions[id].y,
       label: raw.label || labels[id],
-      color: typeof raw.color === 'string' ? raw.color : (id === 1 ? '#00F5FF' : id === 2 ? '#00FF41' : '#FF00E5'),
+      color: typeof raw.color === 'string' ? raw.color : (id === 1 ? '#38B2D8' : id === 2 ? '#2ECC71' : '#9B59B6'),
       radius: clamp(Number(raw.radius) || 60, 30, 100),
     };
   });
@@ -139,9 +139,9 @@ const drawExportFrame = ({ ctx, width, height, step, stepIndex, totalSteps, lang
 
   const metrics = step?.metrics || {};
   const metricCards = [
-    { label: lang === 'ar' ? 'التوازن' : 'Equilibrium', value: metricPercent(metrics.equilibriumScore), color: '#00F5FF' },
+    { label: lang === 'ar' ? 'التوازن' : 'Equilibrium', value: metricPercent(metrics.equilibriumScore), color: '#38B2D8' },
     { label: lang === 'ar' ? 'الضغط' : 'Overload', value: metricPercent(metrics.overloadIndex), color: '#FF8C7C' },
-    { label: lang === 'ar' ? 'الوضوح' : 'Clarity', value: metricPercent(metrics.clarityDelta), color: '#FF00E5' },
+    { label: lang === 'ar' ? 'الوضوح' : 'Clarity', value: metricPercent(metrics.clarityDelta), color: '#9B59B6' },
   ];
 
   metricCards.forEach((item, index) => {
@@ -195,9 +195,9 @@ const drawExportFrame = ({ ctx, width, height, step, stepIndex, totalSteps, lang
   ctx.roundRect(56, height - 36, width - 112, 8, 999);
   ctx.fill();
   const progressGradient = ctx.createLinearGradient(56, 0, width - 56, 0);
-  progressGradient.addColorStop(0, '#00F5FF');
-  progressGradient.addColorStop(0.5, '#00FF41');
-  progressGradient.addColorStop(1, '#FF00E5');
+  progressGradient.addColorStop(0, '#38B2D8');
+  progressGradient.addColorStop(0.5, '#2ECC71');
+  progressGradient.addColorStop(1, '#9B59B6');
   ctx.fillStyle = progressGradient;
   ctx.beginPath();
   ctx.roundRect(56, height - 36, (width - 112) * progress, 8, 999);
@@ -293,7 +293,7 @@ function SessionReplayPlayer({ replayData, lang = 'ar' }) {
         id,
         label: node.label || labels[id],
         radius: clamp(Number(node.radius) || 60, 30, 100),
-        color: typeof node.color === 'string' ? node.color : (id === 1 ? '#00F5FF' : id === 2 ? '#00FF41' : '#FF00E5'),
+        color: typeof node.color === 'string' ? node.color : (id === 1 ? '#38B2D8' : id === 2 ? '#2ECC71' : '#9B59B6'),
         ...NODE_POSITIONS[id],
       };
     });

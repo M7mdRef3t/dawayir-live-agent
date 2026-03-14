@@ -155,7 +155,10 @@
 
 /* Reports List Premium (The Cognitive Museum) */
 .cognitive-museum-container {
-    padding: 20px 0;
+    padding: 60px 40px;
+    background: radial-gradient(circle at top center, rgba(31, 14, 69, 0.4) 0%, transparent 60%),
+                radial-gradient(circle at bottom right, rgba(0, 245, 255, 0.05) 0%, transparent 50%);
+    min-height: calc(100vh - 120px);
 }
 
 .museum-header {
@@ -191,13 +194,13 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: linear-gradient(180deg, rgba(8, 8, 20, 0.4) 0%, rgba(5, 5, 12, 0.9) 100%);
-    border: 1px solid rgba(0, 245, 255, 0.1);
-    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(15, 12, 30, 0.9) 0%, rgba(5, 5, 12, 0.95) 100%);
+    border: 1px solid rgba(138, 43, 226, 0.2);
+    border-radius: 24px;
     padding: 30px 20px;
     cursor: pointer;
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease, border-color 0.4s ease;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.6s ease, border-color 0.6s ease;
     transform-style: preserve-3d;
     position: relative;
     overflow: hidden;
@@ -211,15 +214,21 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.03), transparent 60%);
+    background: radial-gradient(circle at 50% -20%, rgba(200, 100, 255, 0.15), transparent 60%);
     pointer-events: none;
+    transition: opacity 0.5s ease;
+    opacity: 0.5;
 }
 
 .museum-artifact:hover {
-    transform: translateY(-8px) scale(1.02) rotateX(2deg) rotateY(-2deg);
-    border-color: rgba(0, 245, 255, 0.4);
-    box-shadow: 0 25px 45px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 245, 255, 0.2);
+    transform: translateY(-12px) scale(1.03) rotateX(4deg) rotateY(-4deg);
+    border-color: rgba(0, 245, 255, 0.5);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 245, 255, 0.15);
     z-index: 2;
+}
+
+.museum-artifact:hover::before {
+    opacity: 1;
 }
 
 .artifact-pedestal {
@@ -250,6 +259,18 @@
     width: 140px;
     height: 140px;
     background: radial-gradient(circle, rgba(0, 245, 255, 0.25) 0%, transparent 70%);
+}
+
+@keyframes sand-shatter {
+    0% { transform: scale(1); filter: blur(0) grayscale(0); opacity: 1; }
+    20% { transform: scale(1.05) translateY(-5px); filter: blur(2px) grayscale(0.5); opacity: 0.8; }
+    50% { transform: scale(1.1) translateY(-20px) rotateZ(5deg); filter: blur(15px) sepia(1) hue-rotate(-50deg); opacity: 0.5; letter-spacing: 12px; }
+    100% { transform: scale(1.5) translateY(-80px) rotateZ(-10deg); filter: blur(40px) opacity(0); opacity: 0; letter-spacing: 30px; }
+}
+
+.sand-mandala-effect {
+    animation: sand-shatter 2.5s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
+    pointer-events: none;
 }
 
 .artifact-canvas {
@@ -806,7 +827,7 @@
 .session-replay-progress-bar {
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, #00F5FF, #00FF41, #FF00E5);
+    background: linear-gradient(90deg, #38B2D8, #2ECC71, #9B59B6);
     transform-origin: left center;
 }
 
@@ -900,13 +921,13 @@
 
 .session-replay-dot:hover {
     transform: scale(1.08);
-    border-color: rgba(0, 245, 255, 0.45);
+    border-color: rgba(56, 178, 216, 0.45);
 }
 
 .session-replay-dot.is-active {
-    background: #00F5FF;
+    background: #38B2D8;
     border-color: rgba(255, 255, 255, 0.85);
-    box-shadow: 0 0 14px rgba(0, 245, 255, 0.45);
+    box-shadow: 0 0 14px rgba(56, 178, 216, 0.45);
 }
 
 .session-diff-section {
@@ -1085,8 +1106,8 @@
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: rgba(191, 246, 255, 0.96);
-    background: rgba(0, 245, 255, 0.08);
-    border: 1px solid rgba(0, 245, 255, 0.18);
+    background: rgba(56, 178, 216, 0.08);
+    border: 1px solid rgba(56, 178, 216, 0.18);
 }
 
 .highlight-reel-header h3,
@@ -1125,7 +1146,7 @@
 .judge-mode-btn:hover {
     transform: translateY(-1px);
     background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(0, 245, 255, 0.24);
+    border-color: rgba(56, 178, 216, 0.24);
 }
 
 .highlight-reel-grid {
@@ -1135,7 +1156,7 @@
 }
 
 .highlight-reel-card {
-    --highlight-color: #00F5FF;
+    --highlight-color: #38B2D8;
     padding: 16px;
     border-radius: 18px;
     background: rgba(255, 255, 255, 0.035);
@@ -1271,7 +1292,7 @@
 }
 
 .signature-moment-card {
-    --signature-color: #00F5FF;
+    --signature-color: #38B2D8;
     background:
         radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--signature-color) 18%, transparent), transparent 32%),
         radial-gradient(circle at 85% 22%, rgba(255, 255, 255, 0.05), transparent 22%),
@@ -1780,18 +1801,18 @@
 }
 
 .nlg-dot.awareness {
-    background: #00F5FF;
-    box-shadow: 0 0 8px rgba(0, 245, 255, 0.6);
+    background: #38B2D8;
+    box-shadow: 0 0 8px rgba(56, 178, 216, 0.6);
 }
 
 .nlg-dot.knowledge {
-    background: #00FF41;
-    box-shadow: 0 0 8px rgba(0, 255, 65, 0.6);
+    background: #2ECC71;
+    box-shadow: 0 0 8px rgba(46, 204, 113, 0.6);
 }
 
 .nlg-dot.truth {
-    background: #FF00E5;
-    box-shadow: 0 0 8px rgba(255, 0, 229, 0.6);
+    background: #9B59B6;
+    box-shadow: 0 0 8px rgba(155, 89, 182, 0.6);
 }
 
 .neural-graph-wrapper canvas {

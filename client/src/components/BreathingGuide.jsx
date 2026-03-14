@@ -82,7 +82,7 @@ function BreathingGuide({ active, lang = 'ar', onComplete, reducedMotion = false
   const currentPhase = PHASES[phase];
   const circumference = 2 * Math.PI * 44;
   const strokeDash = circumference * progress;
-  const colors = { inhale: '#00F5FF', hold: '#FFC800', exhale: '#00FF41' }; // DS: awareness, joyful, knowledge
+  const colors = { inhale: '#38B2D8', hold: '#FFC800', exhale: '#2ECC71' }; // DS: awareness-ocean, joyful-gold, knowledge-forest
   const color = colors[currentPhase.key];
 
   const dismiss = () => {

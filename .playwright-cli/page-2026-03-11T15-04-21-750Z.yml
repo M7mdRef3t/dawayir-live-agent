@@ -1,0 +1,117 @@
+- application "Dawayir live session application" [ref=e3]:
+  - link "تخطي إلى المحتوى الرئيسي" [ref=e4] [cursor=pointer]:
+    - /url: "#main-canvas-content"
+  - complementary "لوحة التحكم":
+    - heading "الجلسة الحية" [active] [level=2]
+    - generic:
+      - generic:
+        - generic:
+          - img "Dawayir"
+          - generic: دواير
+          - generic: صوتك يتحوّل إلى رؤية حيّة.
+        - generic:
+          - generic "الأفكار متشابكة":
+            - img "عاصفة": 🌪️
+            - generic: عاصفة
+          - button "Switch to English": EN
+      - status: الجلسة شغالة
+    - generic:
+      - generic:
+        - generic:
+          - generic: ١. التشتت
+        - generic:
+          - generic: ٢. التركيز
+        - generic:
+          - generic: ٣. الوضوح
+      - generic: دواير بيرد عليك...
+      - generic:
+        - generic:
+          - generic "بصمتك الإدراكية الخاصة":
+            - img "بصمتك الإدراكية الخاصة"
+            - paragraph: بصمتك الإدراكية
+            - button "⬇ احفظها كصورة"
+        - generic:
+          - generic: هادي دلوقتي
+          - img "شكل موجة الصوت"
+        - generic:
+          - generic: 🌀
+          - generic: بتستوعب بهدوء
+        - generic:
+          - generic:
+            - generic: التوازن
+            - generic: 60%
+          - generic:
+            - generic: الضغط
+            - generic: 0%
+          - generic:
+            - generic: الوضوح Δ
+            - generic: +0%
+        - generic "معنى الدوائر الحالية":
+          - generic:
+            - generic: 🔮
+            - generic: دواير اللحظة دي
+          - generic:
+            - generic:
+              - generic: أنت
+              - paragraph: وعيك بنفسك مرتفع دلوقتي — كيف بتدرك اللي بيحصل معاك.
+          - generic:
+            - generic:
+              - meter "أنت"
+              - generic: أنت
+            - generic:
+              - meter "العلم"
+              - generic: العلم
+            - generic:
+              - meter "الواقع"
+              - generic: الواقع
+      - generic:
+        - generic:
+          - button "شغّل الكاميرا": شغّل الكاميرا
+        - button "تشغيل الديمو الهجين"
+        - button "أنهي الجلسة": أنهي الجلسة
+  - region "الدردشة" [ref=e86]:
+    - button "▼ المحادثة" [expanded] [ref=e87] [cursor=pointer]
+    - log [ref=e89]:
+      - generic [ref=e90]:
+        - generic [ref=e91]: دواير
+        - generic [ref=e92]: ٠٥:٠٤ م
+        - generic [ref=e93]: ياهلا بيك، الدنيا ساعات بتخبط
+  - toolbar "أدوات الجلسة":
+    - button "إظهار اللوحة"
+    - button "المحادثة"
+    - button "أنهي الجلسة"
+  - generic:
+    - generic:
+      - generic: 🗣️
+      - generic: أول رد — دواير جاوبت
+      - generic: ✓
+  - status "الإنجازات":
+    - generic [ref=e94]: 1/11
+    - list:
+      - listitem "أول كلمة — بدأت الجلسة" [ref=e95]:
+        - generic [ref=e96]: 🎤
+      - listitem "أول رد — دواير جاوبت" [ref=e97]:
+        - generic [ref=e98]: 🗣️
+      - listitem "الوعي اتحرك — دايرة الوعي اتبدلت" [ref=e99]:
+        - generic [ref=e100]: 🔵
+      - listitem "العلم اتحرك — دايرة العلم اتبدلت" [ref=e101]:
+        - generic [ref=e102]: 🟢
+      - listitem "الحقيقة اتحركت — دايرة الحقيقة اتبدلت" [ref=e103]:
+        - generic [ref=e104]: 🟣
+      - listitem "محادثة عميقة — أكتر من ٥ ردود" [ref=e105]:
+        - generic [ref=e106]: 💬
+      - listitem "تحول في الإحساس — الألوان اتغيرت مع حالتك" [ref=e107]:
+        - generic [ref=e108]: 💡
+      - listitem "مقاطعة ناجحة — وقفت دواير في وقتها" [ref=e109]:
+        - generic [ref=e110]: ✋
+      - listitem "قراءة بالصورة — دواير قرأت حالتك من الصورة" [ref=e111]:
+        - generic [ref=e112]: 👁️
+      - listitem "أمر صوتي — حرّكت الدواير بصوتك" [ref=e113]:
+        - generic [ref=e114]: 🎯
+      - listitem "رجع الاتصال — الجلسة كملت تلقائي" [ref=e115]:
+        - generic [ref=e116]: 🔄
+  - generic: الصوت مستقر حاليًا.
+  - main "مساحة الدوائر":
+    - heading "تطبيق دواير للجلسات الصوتية" [level=1] [ref=e19]
+    - 'img "خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة" [ref=e20]'
+  - status [ref=e21]: تم الانتقال إلى الجلسة الحية

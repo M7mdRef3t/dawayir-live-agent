@@ -9,9 +9,9 @@
 import React from 'react';
 
 const NODE_CONFIG = {
-    1: { label_ar: 'وعي', label_en: 'Awareness', color: '#00F5FF', icon: '◉' },
-    2: { label_ar: 'علم', label_en: 'Knowledge', color: '#00FF41', icon: '◈' },
-    3: { label_ar: 'حقيقة', label_en: 'Truth', color: '#FF00E5', icon: '◆' },
+    1: { label_ar: 'وعي', label_en: 'Awareness', color: '#38B2D8', icon: '◉' },
+    2: { label_ar: 'علم', label_en: 'Knowledge', color: '#2ECC71', icon: '◈' },
+    3: { label_ar: 'حقيقة', label_en: 'Truth', color: '#9B59B6', icon: '◆' },
 };
 
 function JourneyTimeline({ journeyPath = [1], transitionCount = 0, sessionDurationMs = 0, lang = 'ar' }) {

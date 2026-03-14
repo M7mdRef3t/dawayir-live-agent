@@ -1,0 +1,20 @@
+- application "Dawayir live session application" [ref=e3]:
+  - link "تخطي إلى المحتوى الرئيسي" [ref=e4] [cursor=pointer]:
+    - /url: "#main-canvas-content"
+  - generic [ref=e5]:
+    - heading "الترحيب" [level=2] [ref=e6]
+    - generic [ref=e7]:
+      - button "عربى" [ref=e8] [cursor=pointer]
+      - button "EN" [ref=e9] [cursor=pointer]
+    - img "Dawayir" [ref=e10]
+    - generic [ref=e11]: دواير
+    - generic [ref=e12]: صوتك يتحوّل إلى رؤية حيّة.
+    - generic [ref=e13]: اتكلّم... وشوف حالتك وهي بتتشكّل.
+    - generic [ref=e15]:
+      - button "شاهد التجربة" [ref=e16] [cursor=pointer]
+      - button "ادخل في السكون" [ref=e17] [cursor=pointer]
+      - generic [ref=e18]: يفتح التجربة فورًا ويورّيك كيف يتحوّل الصوت إلى رؤية.
+  - main "مساحة الدوائر":
+    - heading "تطبيق دواير للجلسات الصوتية" [level=1] [ref=e19]
+    - 'img "خريطة دوائر الذهنية بثلاث دوائر: الوعي والعلم والحقيقة" [ref=e20]'
+  - status [ref=e21]

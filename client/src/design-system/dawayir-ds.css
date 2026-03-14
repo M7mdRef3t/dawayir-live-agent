@@ -4,17 +4,17 @@
    ============================================================ */
 
 :root {
-  /* ── Cyan Scale ── */
-  --ds-cyan-50: #e0fcff;
-  --ds-cyan-100: #b3f6ff;
-  --ds-cyan-200: #80efff;
-  --ds-cyan-300: #4de8ff;
-  --ds-cyan-400: #1ae1ff;
-  --ds-cyan-500: #00f5ff;
-  --ds-cyan-600: #00CED1;
-  --ds-cyan-700: #00A3A6;
-  --ds-cyan-800: #00787A;
-  --ds-cyan-900: #004D4F;
+  /* ── Cyan / Ocean Blue Scale ── */
+  --ds-cyan-50: #e6f6fb;
+  --ds-cyan-100: #c2e8f5;
+  --ds-cyan-200: #96d6ed;
+  --ds-cyan-300: #6ac4e5;
+  --ds-cyan-400: #4db8de;
+  --ds-cyan-500: #38B2D8;
+  --ds-cyan-600: #2a8fae;
+  --ds-cyan-700: #1e6c85;
+  --ds-cyan-800: #124a5c;
+  --ds-cyan-900: #072733;
 
   /* ── Green Scale ── */
   --ds-green-50: #e0fff0;
@@ -33,7 +33,7 @@
   --ds-magenta-100: #ffb3f5;
   --ds-magenta-200: #ff80ee;
   --ds-magenta-300: #ff4de7;
-  --ds-magenta-400: #FF00E5;
+  --ds-magenta-400: #9B59B6;
   --ds-magenta-500: #b600ff;
   --ds-magenta-600: #9200cc;
   --ds-magenta-700: #6e0099;
@@ -93,8 +93,8 @@
   --ds-bg-mid: var(--ds-neutral-800);
   --ds-bg-surface: rgba(8, 8, 28, 0.82);
   --ds-bg-elevated: rgba(255, 255, 255, 0.04);
-  --ds-bg-hover: rgba(0, 245, 255, 0.08);
-  --ds-bg-active: rgba(0, 245, 255, 0.15);
+  --ds-bg-hover: rgba(56, 178, 216, 0.08);
+  --ds-bg-active: rgba(56, 178, 216, 0.15);
   --ds-bg-overlay: rgba(0, 0, 0, 0.5);
 
   /* ── Text ── */
@@ -105,8 +105,8 @@
   --ds-text-link: var(--ds-cyan-500);
 
   /* ── Borders ── */
-  --ds-border-default: rgba(0, 245, 255, 0.12);
-  --ds-border-hover: rgba(0, 245, 255, 0.3);
+  --ds-border-default: rgba(56, 178, 216, 0.12);
+  --ds-border-hover: rgba(56, 178, 216, 0.3);
   --ds-border-focus: var(--ds-cyan-500);
   --ds-border-subtle: rgba(255, 255, 255, 0.06);
   --ds-border-strong: rgba(255, 255, 255, 0.15);
@@ -116,22 +116,22 @@
   --ds-status-warning: var(--ds-gold-400);
   --ds-status-error: var(--ds-red-500);
   --ds-status-info: var(--ds-cyan-500);
-  --ds-status-success-bg: rgba(0, 255, 148, 0.07);
+  --ds-status-success-bg: rgba(46, 204, 113, 0.07);
   --ds-status-warning-bg: rgba(255, 209, 102, 0.07);
   --ds-status-error-bg: rgba(255, 95, 109, 0.07);
-  --ds-status-info-bg: rgba(0, 245, 255, 0.07);
-  --ds-status-success-border: rgba(0, 255, 148, 0.25);
+  --ds-status-info-bg: rgba(56, 178, 216, 0.07);
+  --ds-status-success-border: rgba(46, 204, 113, 0.25);
   --ds-status-warning-border: rgba(255, 209, 102, 0.25);
   --ds-status-error-border: rgba(255, 95, 109, 0.25);
-  --ds-status-info-border: rgba(0, 245, 255, 0.25);
+  --ds-status-info-border: rgba(56, 178, 216, 0.25);
 
   /* ── Circle Domain Colors ── */
-  --ds-circle-awareness: #00F5FF;
-  --ds-circle-awareness-glow: rgba(0, 245, 255, 0.15);
-  --ds-circle-knowledge: #00FF41;
-  --ds-circle-knowledge-glow: rgba(0, 255, 65, 0.15);
-  --ds-circle-truth: #FF00E5;
-  --ds-circle-truth-glow: rgba(255, 0, 229, 0.15);
+  --ds-circle-awareness: #38B2D8;
+  --ds-circle-awareness-glow: rgba(56, 178, 216, 0.15);
+  --ds-circle-knowledge: #2ECC71;
+  --ds-circle-knowledge-glow: rgba(46, 204, 113, 0.15);
+  --ds-circle-truth: #9B59B6;
+  --ds-circle-truth-glow: rgba(155, 89, 182, 0.15);
 
   /* ── Emotion Colors ── */
   --ds-emotion-calm: #00CED1;

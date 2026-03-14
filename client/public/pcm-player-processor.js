@@ -20,6 +20,9 @@ class PcmPlayerProcessor extends AudioWorkletProcessor {
     // starting playback. Smooths the initial burst without noticeable delay.
     this.prebufferThreshold = 6000;
     this.prebuffering = true;
+    // Amplitude reporting for Divine Voice Orb sync
+    this.ampFrameCount = 0;
+    this.AMP_REPORT_EVERY = 4; // report every 4 frames (~21ms)
 
     this.port.onmessage = (e) => {
       if (e.data.type === 'audio') {
@@ -64,12 +67,29 @@ class PcmPlayerProcessor extends AudioWorkletProcessor {
         for (let i = 0; i < len; i++) {
           channel[i] = 0;
         }
+        // Report zero amplitude when pre-buffering
+        this.ampFrameCount++;
+        if (this.ampFrameCount >= this.AMP_REPORT_EVERY) {
+          this.ampFrameCount = 0;
+          this.port.postMessage({ type: 'amplitude', rms: 0 });
+        }
         return true;
       }
     }
 
     if (this.samplesAvailable > 0) {
       const toRead = Math.min(len, this.samplesAvailable);
+
+      // ── Calculate RMS amplitude for Divine Voice Orb ─────────────────
+      // RMS = root mean square of the samples being played right now.
+      // This is the actual "energy" of the audio at this moment.
+      let sumSq = 0;
+      for (let i = 0; i < toRead; i++) {
+        const s = this.buffer[(this.readPos + i) % this.bufferSize];
+        sumSq += s * s;
+      }
+      const rms = toRead > 0 ? Math.sqrt(sumSq / toRead) : 0;
+
       for (let i = 0; i < toRead; i++) {
         channel[i] = this.buffer[this.readPos];
         this.readPos = (this.readPos + 1) % this.bufferSize;
@@ -81,12 +101,28 @@ class PcmPlayerProcessor extends AudioWorkletProcessor {
       this.totalSamplesPlayed += toRead;
       this.wasPlaying = true;
       this.emptyFrameCount = 0;
+
+      // Post amplitude to main thread every AMP_REPORT_EVERY frames
+      this.ampFrameCount++;
+      if (this.ampFrameCount >= this.AMP_REPORT_EVERY) {
+        this.ampFrameCount = 0;
+        // Clamp rms to [0,1] — typical speech PCM RMS is 0.01-0.3
+        const clampedRms = Math.min(1, rms * 3.5); // scale up for visual impact
+        this.port.postMessage({ type: 'amplitude', rms: clampedRms });
+      }
     } else {
       // No data — output silence
       for (let i = 0; i < len; i++) {
         channel[i] = 0;
       }
       this.emptyFrameCount++;
+
+      // Report decaying amplitude when silent
+      this.ampFrameCount++;
+      if (this.ampFrameCount >= this.AMP_REPORT_EVERY) {
+        this.ampFrameCount = 0;
+        this.port.postMessage({ type: 'amplitude', rms: 0 });
+      }
 
       // Only notify ONCE when transitioning from playing to empty.
       // Use a larger threshold to handle network jitter and slow chunk streaming.
