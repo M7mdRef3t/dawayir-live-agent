@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Dawayir icon">
+  <rect width="128" height="128" rx="32" fill="#060618" />
+  <circle cx="42" cy="64" r="18" fill="none" stroke="#7dd3fc" stroke-width="8" />
+  <circle cx="64" cy="64" r="18" fill="none" stroke="#f59e0b" stroke-width="8" />
+  <circle cx="86" cy="64" r="18" fill="none" stroke="#34d399" stroke-width="8" />
+</svg>
