@@ -1735,8 +1735,21 @@ function App() {
         if (call.name === 'update_node') {
           // Smart ID resolution -- handle strings like "circle", "awareness", etc.
           const NAME_TO_ID = {
-            awareness: 1, science: 2, truth: 3, knowledge: 2, circle: 1,
-            'وعي': 1, 'علم': 2, 'حقيقة': 3, 'الوعي': 1, 'العلم': 2, 'الحقيقة': 3,
+            // English — old names
+            awareness: 1, circle: 1,
+            science: 2, knowledge: 2,
+            truth: 3,
+            // English — new names
+            you: 1, self: 1, me: 1,
+            reality: 3, real: 3,
+            // Arabic — old names
+            'وعي': 1, 'الوعي': 1,
+            'علم': 2, 'العلم': 2,
+            'حقيقة': 3, 'الحقيقة': 3,
+            // Arabic — new names
+            'أنت': 1, 'انت': 1, 'النفس': 1, 'الذات': 1,
+            'الواقع': 3, 'واقع': 3,
+            // Numeric fallback
             '1': 1, '2': 2, '3': 3,
           };
           const rawId = args.id ?? args.node_id ?? args.nodeId ?? 1;
